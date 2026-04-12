@@ -1,8 +1,8 @@
-use std::process::Command;
-
 /**
  * Handles building JVM arguments and launching the game.
  */
+pub mod args;
+
 pub struct LaunchService;
 
 impl LaunchService {
