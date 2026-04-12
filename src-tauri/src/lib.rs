@@ -6,6 +6,7 @@ use crate::core::session::{Session, SessionManager};
 use crate::core::sync::SyncService;
 use crate::core::launch::LaunchService;
 use crate::core::launch::args::LaunchArguments;
+use crate::auth::{AuthStrategy, AuthResponse, microsoft::MicrosoftAuth};
 use tauri::Manager;
 use std::path::PathBuf;
 
@@ -37,10 +38,16 @@ async fn launch_game(_session: Session, show_logs: bool) -> Result<(), String> {
     launch_service.launch(dummy_args, show_logs)
 }
 
+#[tauri::command]
+async fn login_microsoft() -> Result<AuthResponse, String> {
+    let auth = MicrosoftAuth;
+    auth.authenticate().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![get_sessions, sync_session, launch_game])
+    .invoke_handler(tauri::generate_handler![get_sessions, sync_session, launch_game, login_microsoft])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
