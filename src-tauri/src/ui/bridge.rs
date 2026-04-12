@@ -1,7 +1,7 @@
 /**
  * Injects a JS bridge into the loaded WebView.
  */
-pub fn inject_bridge(window: &tauri::Window) -> Result<(), String> {
+pub fn inject_bridge(window: &tauri::WebviewWindow) -> Result<(), String> {
     let script = r#"
         document.addEventListener('click', (e) => {
             if (e.target.id === 'playButton') {
