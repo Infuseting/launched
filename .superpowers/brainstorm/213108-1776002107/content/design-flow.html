@@ -1,0 +1,27 @@
+<h2>Design: Data Flow & Error Handling</h2>
+<p class="subtitle">Ensuring robustness and efficiency in the launcher's lifecycle.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Data Flow</div>
+  <div class="mockup-body">
+    <ol>
+      <li><b>Bootstrap:</b> Check for launcher updates. If available, self-update and restart.</li>
+      <li><b>Session Discovery:</b> Fetch <code>servers.json</code>. Determine current session (last used or <code>isDefault: true</code>).</li>
+      <li><b>UI Setup:</b> Load <code>htmlPath</code> into WebView. Inject Bridge Script.</li>
+      <li><b>Authentication:</b> Execute <code>AuthStrategy</code> (Microsoft/SSO/etc.).</li>
+      <li><b>Sync:</b> Fetch <code>syncUrl</code> manifest. Compare MD5s in <code>syncDir</code>. Download/Cleanup as needed.</li>
+      <li><b>Installation:</b> Check <code>.minecraft/versions</code> for required Minecraft/Forge JARs. Download if missing.</li>
+      <li><b>Launch:</b> Build JVM arguments (merging global and session-specific overrides). Spawn Java process.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Error Handling Scenarios</h3>
+  <ul>
+    <li><b>Invalid Session:</b> Both Forge and Fabric specified? Log error and fallback to next session/default.</li>
+    <li><b>Network Failure:</b> Remote <code>htmlPath</code> unreachable? Fallback to local default index.html.</li>
+    <li><b>Sync Error:</b> MD5 mismatch or download failure? Alert user and prevent game launch.</li>
+    <li><b>Launch Failure:</b> Invalid JVM arguments or missing Java? Display logs if "with logs" enabled.</li>
+  </ul>
+</div>

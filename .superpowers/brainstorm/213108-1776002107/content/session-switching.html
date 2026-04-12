@@ -1,0 +1,19 @@
+<h2>Session Switching & Bootstrapping</h2>
+<p class="subtitle">How users move between different modpack environments.</p>
+
+<div class="options">
+  <div class="option" data-choice="session-in-html" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Session Switcher in Remote HTML</h3>
+      <p>The session's own UI (from <code>htmlPath</code>) includes the buttons/UI to switch to other sessions. The Rust backend provides an API (e.g., <code>window.__TAURI__.invoke('switch_session', { name: '...' })</code>) for the HTML to call.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="core-overlay" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Core Launcher Overlay</h3>
+      <p>The launcher has a "system" overlay or a specific keybinding/button (e.g., top-right corner) that opens a native or core-provided UI to switch sessions, regardless of the loaded HTML.</p>
+    </div>
+  </div>
+</div>

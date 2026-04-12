@@ -1,0 +1,20 @@
+<h2>Sync Logic Detail</h2>
+<p class="subtitle">Defining how the <code>syncDir</code> and <code>syncUrl</code> interact to keep files updated.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Sync Process Flow</div>
+  <div class="mockup-body">
+    <ol>
+      <li>Fetch <code>servers.json</code></li>
+      <li>For current session, fetch <code>syncUrl</code> metadata</li>
+      <li>Identify local files in <code>syncDir</code> folders (e.g., <code>mods/</code>)</li>
+      <li><b>Match & Update:</b> Compare local MD5 with server MD5. Download if different or missing.</li>
+      <li><b>Cleanup:</b> If a local file is in a <code>syncDir</code> folder but NOT in the server manifest (and not excluded via <code>!</code>), <b>delete it</b>.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Is this cleanup logic correct?</h3>
+  <p>Example: <code>syncDir = "mods"</code>. A user manually adds <code>Optifine.jar</code> to their local <code>mods</code> folder. If <code>Optifine.jar</code> is NOT in the <code>syncUrl</code> manifest, the launcher will automatically delete it on start.</p>
+</div>

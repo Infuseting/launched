@@ -1,0 +1,38 @@
+<h2>Design: Standards & Styling</h2>
+<p class="subtitle">Ensuring maintainability and modern aesthetics.</p>
+
+<div class="section">
+  <h3>Styling with Tailwind CSS</h3>
+  <ul>
+    <li><b>Framework:</b> Tailwind CSS for utility-first, rapid UI development.</li>
+    <li><b>Implementation:</b> Since remote HTML is loaded, the launcher will provide a base Tailwind configuration/runtime or expect remote sessions to include their own compiled Tailwind CSS for maximum flexibility.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>Engineering Standards</h3>
+  <ul>
+    <li><b>SOLID:</b> Single Responsibility (services), Open/Closed (Auth Strategy), Liskov Substitution, Interface Segregation, Dependency Inversion.</li>
+    <li><b>KISS:</b> Keep It Simple, Stupid. Avoid over-engineering the sync logic or UI bridge.</li>
+    <li><b>Maintainability:</b> Clear modular structure in Rust (modules for <code>auth</code>, <code>sync</code>, <code>launch</code>, <code>ui</code>). Thorough logging and error messages.</li>
+  </ul>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Code Organization Concept</div>
+  <div class="mockup-body">
+    <pre><code>
+src-tauri/src/
+├── main.rs          # Entry point
+├── core/            # High-level engine
+│   ├── session.rs   # Session management
+│   ├── sync.rs      # MD5 & syncDir logic
+│   └── launch.rs    # Java process management
+├── auth/            # Auth Strategy Pattern
+│   ├── mod.rs       # Strategy trait
+│   └── microsoft.rs # Microsoft implementation
+└── ui/              # Bridge & Window management
+    └── bridge.rs    # JS Injection logic
+    </code></pre>
+  </div>
+</div>

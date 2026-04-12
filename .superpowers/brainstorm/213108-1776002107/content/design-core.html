@@ -1,0 +1,29 @@
+<h2>Design: Core Architecture</h2>
+<p class="subtitle">A lightweight Tauri shell managing high-performance Rust services.</p>
+
+<div class="mockup">
+  <div class="mockup-header">System Components</div>
+  <div class="mockup-body">
+    <ul>
+      <li><b>Tauri Frontend:</b> A thin <code>WebView</code> shell that loads remote HTML.
+        <ul>
+          <li><i>Bridge Script:</i> Injected into the WebView to bind IDs (<code>#playButton</code>, <code>#sessionSwitcher</code>, etc.) to Rust commands.</li>
+        </ul>
+      </li>
+      <li><b>Rust Core Engine:</b>
+        <ul>
+          <li><b>Session Manager:</b> Fetches <code>servers.json</code> and manages session state.</li>
+          <li><b>Sync Service:</b> Handles MD5-based file synchronization and <code>syncDir</code> cleanup.</li>
+          <li><b>Launch Service:</b> Builds JVM arguments and manages the Java process (with/without logs).</li>
+          <li><b>Auth Manager:</b> Implements the <code>AuthStrategy</code> pattern (Microsoft, SSO, etc.).</li>
+          <li><b>Storage Optimizer:</b> Ensures shared versions are stored in <code>.minecraft/versions</code> and modpacks in isolated directories.</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Does this high-level architecture look correct?</h3>
+  <p>The "Bridge Script" is the key to Approach 1, making the remote HTML interactive without requiring the session creator to know Tauri's internals.</p>
+</div>

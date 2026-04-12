@@ -1,0 +1,25 @@
+<h2>UI Loading Strategy</h2>
+<p class="subtitle">How the session-specific UI interacts with the launcher core.</p>
+
+<div class="options">
+  <div class="option" data-choice="complete-replacement" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Complete UI Replacement</h3>
+      <p>The session's HTML replaces the entire launcher view. The core Rust backend listens for specific <code>id</code> interactions (e.g., <code>#playButton</code>) to trigger actions like launching the game.</p>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Interaction Example</div>
+  <div class="mockup-body">
+    <pre><code>
+&lt;!-- Remote HTML from session --&gt;
+&lt;div id="playButton"&gt;PLAY NOW&lt;/div&gt;
+
+// Rust (Tauri) handles the click automatically
+// by binding to that ID in the loaded webview.
+    </code></pre>
+  </div>
+</div>

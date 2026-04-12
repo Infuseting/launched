@@ -1,0 +1,38 @@
+<h2>Architectural Approaches</h2>
+<p class="subtitle">Choosing how to build the core launcher engine.</p>
+
+<div class="options">
+  <div class="option" data-choice="approach-1" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>"Shell & Event Bindings" (Recommended)</h3>
+      <p>A minimal Tauri shell that loads the remote <code>htmlPath</code>. A Rust background service handles auth, sync, and game launching. We inject a small JavaScript bridge that maps <code>#playButton</code> and other IDs to Rust <code>invokes</code>.</p>
+      <ul>
+        <li><b>Pros:</b> Fast, lightweight, matches the requested "ID-based" interaction perfectly.</li>
+        <li><b>Cons:</b> Requires careful injection of scripts into remote HTML.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="option" data-choice="approach-2" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>"Proxy & API First"</h3>
+      <p>The launcher acts as a local server/proxy. The remote HTML is treated as a web app that calls a structured API. Instead of IDs, the HTML must explicitly call <code>invoke('launch_game')</code>.</p>
+      <ul>
+        <li><b>Pros:</b> More robust, easier to test and debug, clearer boundaries.</li>
+        <li><b>Cons:</b> Requires session creators to know the API; doesn't use the "auto-bind" ID magic as much.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros">
+    <h4>Recommendation: Approach 1</h4>
+    <ul>
+      <li>Most flexible for remote session creators.</li>
+      <li>Minimal "magic" — just HTML with standard IDs.</li>
+      <li>Fits the "Ultra Optimized" goal by doing less.</li>
+    </ul>
+  </div>
+</div>
