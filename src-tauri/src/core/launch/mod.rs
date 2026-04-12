@@ -2,6 +2,7 @@
  * Handles building JVM arguments and launching the game.
  */
 pub mod args;
+pub mod models;
 
 use std::process::{Command, Stdio};
 use crate::core::launch::args::LaunchArguments;
