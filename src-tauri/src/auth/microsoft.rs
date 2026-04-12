@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use crate::auth::{AuthStrategy, AuthResponse};
 
+pub mod models;
+
 /**
  * Microsoft authentication strategy.
  */
