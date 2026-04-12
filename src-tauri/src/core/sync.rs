@@ -3,12 +3,21 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, BufReader};
 use tokio::io::AsyncWriteExt;
+use tauri::Emitter;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SyncFile {
     pub name: String,
     pub size: String,
     pub md5: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SyncProgress {
+    pub current_file: String,
+    pub files_done: usize,
+    pub total_files: usize,
+    pub percentage: f64,
 }
 
 /**
@@ -50,7 +59,7 @@ impl SyncService {
     /**
      * Synchronizes directories based on server manifest.
      */
-    pub async fn sync(&self, base_dir: &Path, manifest_url: &str, sync_dirs: &str) -> Result<(), String> {
+    pub async fn sync(&self, window: &tauri::Window, base_dir: &Path, manifest_url: &str, sync_dirs: &str) -> Result<(), String> {
         let manifest = self.fetch_manifest(manifest_url).await?;
         let sync_dir_list: Vec<&str> = sync_dirs.split(',').collect();
 
@@ -70,9 +79,18 @@ impl SyncService {
             manifest_url
         };
 
+        // Pre-filter manifest to only include files that need action
+        let mut files_to_sync = Vec::new();
         for sync_file in manifest {
-            let local_file_path = base_dir.join(&sync_file.name);
-            
+            let normalized_name = sync_file.name.replace('\\', "/");
+            let is_dir = normalized_name.ends_with('/') || sync_file.size == "0";
+            let local_file_path = base_dir.join(&normalized_name);
+
+            if is_dir {
+                tokio::fs::create_dir_all(&local_file_path).await.map_err(|e| e.to_string())?;
+                continue;
+            }
+
             let mut needs_download = !local_file_path.exists();
             if !needs_download {
                 let local_md5 = self.calculate_md5(&local_file_path)?;
@@ -82,14 +100,43 @@ impl SyncService {
             }
 
             if needs_download {
-                // Ensure parent directory exists
-                if let Some(parent) = local_file_path.parent() {
-                    tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
-                }
-                
-                let file_url = format!("{}/{}", base_download_url, sync_file.name.replace('\\', "/"));
-                self.download_file(&file_url, &local_file_path).await?;
+                files_to_sync.push((sync_file, local_file_path));
             }
+        }
+
+        let total_files = files_to_sync.len();
+        let mut files_done = 0;
+
+        if total_files == 0 {
+            let _ = window.emit("sync-progress", SyncProgress {
+                current_file: "All files up to date".to_string(),
+                files_done: 0,
+                total_files: 0,
+                percentage: 100.0,
+            });
+            return Ok(());
+        }
+
+        for (sync_file, local_file_path) in files_to_sync {
+            let normalized_name = sync_file.name.replace('\\', "/");
+            
+            // Emit progress event
+            files_done += 1;
+            let percentage = (files_done as f64 / total_files as f64) * 100.0;
+            let _ = window.emit("sync-progress", SyncProgress {
+                current_file: normalized_name.clone(),
+                files_done,
+                total_files,
+                percentage,
+            });
+
+            // Ensure parent directory exists
+            if let Some(parent) = local_file_path.parent() {
+                tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+            }
+            
+            let file_url = format!("{}/{}", base_download_url, normalized_name);
+            self.download_file(&file_url, &local_file_path).await?;
         }
 
         Ok(())
@@ -103,23 +150,38 @@ impl SyncService {
         
         while let Some(entry) = entries.next_entry().await.map_err(|e| e.to_string())? {
             let path = entry.path();
+            let relative_path = path.strip_prefix(base_dir).map_err(|e| e.to_string())?;
+            let mut relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
+
             if path.is_dir() {
+                // Ensure directory path ends with / for comparison
+                if !relative_path_str.ends_with('/') {
+                    relative_path_str.push('/');
+                }
+
                 // Recurse into directory
                 Box::pin(self.cleanup_local_files(&path, manifest, base_dir)).await?;
                 
-                // Remove directory if empty (optional but clean)
+                // Remove directory if empty AND not in manifest
                 let mut sub_entries = tokio::fs::read_dir(&path).await.map_err(|e| e.to_string())?;
                 if sub_entries.next_entry().await.map_err(|e| e.to_string())?.is_none() {
-                    tokio::fs::remove_dir(&path).await.map_err(|e| e.to_string())?;
+                    let in_manifest = manifest.iter().any(|f| {
+                        let f_name = f.name.replace('\\', "/");
+                        f_name == relative_path_str
+                    });
+                    if !in_manifest {
+                        tokio::fs::remove_dir(&path).await.map_err(|e| e.to_string())?;
+                    }
                 }
             } else {
-                // Check if file is in manifest
-                let relative_path = path.strip_prefix(base_dir).map_err(|e| e.to_string())?;
-                let relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
-                
                 let file_name = path.file_name().unwrap().to_string_lossy();
                 
-                if !manifest.iter().any(|f| f.name.replace('\\', "/") == relative_path_str) {
+                let in_manifest = manifest.iter().any(|f| {
+                    let f_name = f.name.replace('\\', "/");
+                    f_name == relative_path_str
+                });
+
+                if !in_manifest {
                     // Ignore files starting with '!'
                     if !file_name.starts_with('!') {
                         tokio::fs::remove_file(path).await.map_err(|e| e.to_string())?;

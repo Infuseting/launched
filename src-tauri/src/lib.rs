@@ -8,7 +8,6 @@ use crate::core::launch::LaunchService;
 use crate::core::launch::args::LaunchArguments;
 use crate::auth::{AuthStrategy, AuthResponse, microsoft::MicrosoftAuth};
 use tauri::Manager;
-use std::path::PathBuf;
 
 #[tauri::command]
 async fn get_sessions() -> Result<Vec<Session>, String> {
@@ -16,26 +15,26 @@ async fn get_sessions() -> Result<Vec<Session>, String> {
 }
 
 #[tauri::command]
-async fn sync_session(session: Session, app_handle: tauri::AppHandle) -> Result<(), String> {
+async fn sync_session(session: Session, app_handle: tauri::AppHandle, window: tauri::Window) -> Result<(), String> {
     let sync_service = SyncService;
     let base_dir = app_handle.path().app_data_dir().unwrap();
-    sync_service.sync(&base_dir, &session.sync_url, &session.sync_dir).await
+    sync_service.sync(&window, &base_dir, &session.sync_url, &session.sync_dir).await
 }
 
 #[tauri::command]
-async fn launch_game(_session: Session, show_logs: bool) -> Result<(), String> {
+async fn launch_game(session: Option<Session>, show_logs: bool, app_handle: tauri::AppHandle) -> Result<(), String> {
     let launch_service = LaunchService;
+    let base_dir = app_handle.path().app_data_dir().unwrap();
+
+    let session = session.ok_or_else(|| "No session provided".to_string())?;
+    let args = LaunchArguments::from_session(&session, &base_dir)?;
     
-    // Create dummy LaunchArguments for now as requested.
-    let dummy_args = LaunchArguments {
-        java_path: PathBuf::from("java"),
-        jvm_args: vec![],
-        classpath: vec![],
-        main_class: "net.minecraft.launchwrapper.Launch".to_string(),
-        minecraft_args: vec![],
-    };
-    
-    launch_service.launch(dummy_args, show_logs)
+    launch_service.launch(args, show_logs)
+}
+
+#[tauri::command]
+async fn open_session_switcher(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.eval("window.location.href = '/'").map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -47,7 +46,10 @@ async fn login_microsoft() -> Result<AuthResponse, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![get_sessions, sync_session, launch_game, login_microsoft])
+    .invoke_handler(tauri::generate_handler![get_sessions, sync_session, launch_game, login_microsoft, open_session_switcher])
+    .on_page_load(|window, _payload| {
+      let _ = crate::ui::bridge::inject_bridge(window);
+    })
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
