@@ -4,7 +4,10 @@ pub mod ui;
 
 use crate::core::session::{Session, SessionManager};
 use crate::core::sync::SyncService;
+use crate::core::launch::LaunchService;
+use crate::core::launch::args::LaunchArguments;
 use tauri::Manager;
+use std::path::PathBuf;
 
 #[tauri::command]
 async fn get_sessions() -> Result<Vec<Session>, String> {
@@ -18,10 +21,26 @@ async fn sync_session(session: Session, app_handle: tauri::AppHandle) -> Result<
     sync_service.sync(&base_dir, &session.sync_url, &session.sync_dir).await
 }
 
+#[tauri::command]
+async fn launch_game(_session: Session, show_logs: bool) -> Result<(), String> {
+    let launch_service = LaunchService;
+    
+    // Create dummy LaunchArguments for now as requested.
+    let dummy_args = LaunchArguments {
+        java_path: PathBuf::from("java"),
+        jvm_args: vec![],
+        classpath: vec![],
+        main_class: "net.minecraft.launchwrapper.Launch".to_string(),
+        minecraft_args: vec![],
+    };
+    
+    launch_service.launch(dummy_args, show_logs)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![get_sessions, sync_session])
+    .invoke_handler(tauri::generate_handler![get_sessions, sync_session, launch_game])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
