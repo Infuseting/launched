@@ -1,5 +1,6 @@
 pub mod core;
 pub mod auth;
+pub mod ui;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
