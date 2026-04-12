@@ -2,6 +2,12 @@ import './style.css';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+interface AuthResponse {
+  uuid: string;
+  name: string;
+  access_token: string;
+}
+
 interface SyncProgress {
   current_file: string;
   files_done: number;
@@ -51,44 +57,103 @@ async function syncAndLoad(session: Session, index: number) {
   const percentEl = document.getElementById(`progress-percent-${index}`)!;
   const barEl = document.getElementById(`progress-bar-${index}`)!;
 
-  const unlisten = await listen<SyncProgress>("sync-progress", (event) => {
-    const { current_file, percentage } = event.payload;
-    statusEl.textContent = current_file;
-    percentEl.textContent = `${Math.round(percentage)}%`;
-    barEl.style.width = `${percentage}%`;
-  });
-
   try {
+    // ── Step 1: Auth check BEFORE sync ──────────────────────────────────────────
+    let auth = await invoke<AuthResponse | null>("get_auth");
+
+    if (!auth) {
+      statusEl.textContent = `Waiting for Microsoft Login...`;
+      console.log("Starting Microsoft Auth...");
+
+      // Listen for the device code to show it to the user
+      const unlistenCode = await listen<any>("ms-device-code", (event) => {
+        const { user_code, verification_uri } = event.payload;
+        statusEl.innerHTML = `Login at <span class="text-blue-400 underline">${verification_uri}</span><br>Code: <span class="text-white font-mono bg-black px-2 py-1 rounded">${user_code}</span> <span class="text-[8px] text-green-400 font-bold ml-1 animate-pulse">(Copied!)</span>`;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(user_code).catch(err => {
+          console.error("Failed to copy to clipboard:", err);
+        });
+      });
+
+      try {
+        const authResponse = await invoke<AuthResponse>("login_microsoft");
+        statusEl.textContent = `Login Successful! Welcome, ${authResponse.name}`;
+        auth = authResponse;
+        // Short pause to let the user see the success message
+        await new Promise(r => setTimeout(r, 1000));
+      } catch (authError) {
+        console.error("Auth failed:", authError);
+        alert("Microsoft Authentication failed. Please try again.");
+        loadSessions();
+        return;
+      } finally {
+        unlistenCode();
+      }
+    } else {
+      statusEl.textContent = `Authenticated as ${auth.name}`;
+    }
+
+    // ── Step 2: Sync ────────────────────────────────────────────────────────────
+    statusEl.textContent = `Starting sync...`;
+
+    const unlisten = await listen<SyncProgress>("sync-progress", (event) => {
+      const { current_file, percentage } = event.payload;
+      statusEl.textContent = current_file;
+      percentEl.textContent = `${Math.round(percentage)}%`;
+      barEl.style.width = `${percentage}%`;
+    });
+
     console.log(`Syncing session: ${session.name}`);
-    await invoke("sync_session", { session });
+    
+    // Store session globally for the bridge to access after navigation
+    (window as any).__LAUNCHED_CURRENT_SESSION__ = session;
+
+    try {
+      await invoke("sync_session", { session });
+    } finally {
+      unlisten();
+    }
     
     // Ensure 100% visibility
     percentEl.textContent = `100%`;
     barEl.style.width = `100%`;
     statusEl.textContent = `Sync Complete`;
-    
-    let htmlUrl = session.htmlPath || "index.html";
-    if (htmlUrl.startsWith("http")) {
-       // Requirement: "Note: The user said "htmlPath load by default is index.html"."
-       // "So if `html_path` is `https://galade.fr/installateur/html`, then the full URL would be `https://galade.fr/installateur/html/index.html`."
-       if (!htmlUrl.endsWith(".html")) {
-         if (!htmlUrl.endsWith("/")) htmlUrl += "/";
-         htmlUrl += "index.html";
-       }
+
+    // ── Step 3: Launch or Navigate ───────────────────────────────────────────────
+    if (!session.htmlPath) {
+      // No external launcher: launch the game directly from here
+      statusEl.textContent = `Launching game...`;
+      console.log(`No htmlPath defined, launching game directly for session: ${session.name}`);
+      try {
+        await invoke("launch_game", { session, showLogs: true });
+        statusEl.textContent = `Game launched! ✓`;
+        // Re-enable buttons after game is launched so user can open it again
+        setTimeout(() => loadSessions(), 3000);
+      } catch (launchError) {
+        console.error("Failed to launch game:", launchError);
+        alert(`Failed to launch game: ${launchError}`);
+        loadSessions();
+      }
+    } else {
+      // External launcher page: navigate to it
+      let htmlUrl = session.htmlPath;
+      if (htmlUrl.startsWith("http")) {
+        if (!htmlUrl.endsWith(".html")) {
+          if (!htmlUrl.endsWith("/")) htmlUrl += "/";
+          htmlUrl += "index.html";
+        }
+      }
+      console.log(`Navigating to external launcher: ${htmlUrl}`);
+      setTimeout(() => {
+        window.location.href = htmlUrl;
+      }, 1500);
     }
-    
-    console.log(`Navigating to: ${htmlUrl}`);
-    // Short delay to let the user see the 100%
-    setTimeout(() => {
-      window.location.href = htmlUrl;
-    }, 600);
   } catch (error) {
     console.error("Failed to sync or load session:", error);
     alert(`Error: ${error}`);
     // Re-enable everything on error
     loadSessions();
-  } finally {
-    unlisten();
   }
 }
 

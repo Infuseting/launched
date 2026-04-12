@@ -23,10 +23,11 @@ This project is a high-performance, multi-session Minecraft launcher built with 
 - [2026-04-12] Project scaffolded (Tauri + Vite + Tailwind CSS v4).
 - [2026-04-12] Session management implemented (fetch `servers.json`).
 - [2026-04-12] Sync service implemented (MD5-based directory sync with cleanup).
-- [2026-04-12] Launch engine implemented (argument builder and process management).
+- [2026-04-12] Launch engine implemented (real argument resolution and process management).
 - [2026-04-12] Microsoft authentication implemented (full token exchange flow).
-- [2026-04-12] Tauri commands for sessions, sync, launch, and auth registered.
-- [2026-04-12] Ready to begin UI Bridge refinements or Frontend implementation.
+- [2026-04-12] UI Bridge implemented (dynamic ID-based injection for remote HTML).
+- [2026-04-12] Frontend session selector implemented.
+- [2026-04-12] Core launcher features completed and verified.
 
 ## 5. Known Constraints
 - Remote HTML must be reachable or fallback to a local default.

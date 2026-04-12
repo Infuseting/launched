@@ -88,6 +88,18 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
     Ok(())
 }
 
+pub async fn is_fabric_installed(mc_version: &str, loader_version: &str) -> bool {
+    if let Ok(mc_path) = get_official_mc_path().await {
+        let fabric_version_id = format!("fabric-loader-{}-{}", loader_version, mc_version);
+        let version_dir = mc_path.join("versions").join(&fabric_version_id);
+        let version_json_path = version_dir.join(format!("{}.json", fabric_version_id));
+        
+        version_dir.exists() && version_json_path.exists()
+    } else {
+        false
+    }
+}
+
 fn package_path_to_maven_path(name: &str) -> String {
     let parts: Vec<&str> = name.split(':').collect();
     if parts.len() < 3 { return String::new(); }

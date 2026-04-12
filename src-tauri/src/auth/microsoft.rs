@@ -5,10 +5,11 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::sleep;
+use tauri::Emitter;
 
 pub mod models;
 
-const CLIENT_ID: &str = "00000000402b5328";
+const CLIENT_ID: &str = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
 
 /**
  * Microsoft authentication strategy.
@@ -20,27 +21,52 @@ impl AuthStrategy for MicrosoftAuth {
     /**
      * Authenticates using Microsoft account.
      */
-    async fn authenticate(&self) -> Result<AuthResponse, String> {
-        let client = Client::new();
+    async fn authenticate(&self, window: &tauri::Window) -> Result<AuthResponse, String> {
+        let client = Client::builder()
+            .user_agent("PrismLauncher/1.0")
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+        log::info!("Starting Microsoft Device Code flow...");
 
         // 1. Get Device Code
         let device_code_resp = self.get_device_code(&client).await?;
-        println!("{}", device_code_resp.message);
+        
+        // Copy to clipboard from Rust
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            let _ = clipboard.set_text(device_code_resp.user_code.clone());
+            log::info!("Device code copied to clipboard: {}", device_code_resp.user_code);
+        }
+
+        // Emit event to frontend to show the code
+        window.emit("ms-device-code", &device_code_resp)
+            .map_err(|e: tauri::Error| format!("Failed to emit device code event: {}", e))?;
+        
+        log::info!("Device code received: {}. Waiting for user...", device_code_resp.user_code);
 
         // 2. Poll for Token
         let ms_token_resp = self.poll_for_token(&client, &device_code_resp).await?;
+        log::info!("Microsoft token received.");
 
         // 3. Get Xbox Live Token
         let xbl_resp = self.get_xbl_token(&client, &ms_token_resp.access_token).await?;
+        log::info!("Xbox Live token received.");
 
         // 4. Get XSTS Token
         let xsts_resp = self.get_xsts_token(&client, &xbl_resp.Token).await?;
+        log::info!("XSTS token received.");
 
         // 5. Get Minecraft Token
-        let mc_token = self.get_mc_token(&client, &xsts_resp.Token, &xsts_resp.DisplayClaims.xui[0].uhs).await?;
+        let uhs = xsts_resp.DisplayClaims.xui.first()
+            .ok_or_else(|| "Missing UHS in XSTS response".to_string())?
+            .uhs.clone();
+            
+        let mc_token = self.get_mc_token(&client, &xsts_resp.Token, &uhs).await?;
+        log::info!("Minecraft token received.");
 
         // 6. Get Minecraft Profile
         let profile = self.get_mc_profile(&client, &mc_token).await?;
+        log::info!("Minecraft profile received for user: {}", profile.name);
 
         Ok(AuthResponse {
             access_token: mc_token,
@@ -60,7 +86,7 @@ impl MicrosoftAuth {
     async fn get_device_code(&self, client: &Client) -> Result<DeviceCodeResponse, String> {
         let params = [
             ("client_id", CLIENT_ID),
-            ("scope", "service::user.auth.xboxlive.com::ABI_S_ACTIVATE"),
+            ("scope", "XboxLive.signin offline_access"),
         ];
 
         let response = client
@@ -70,10 +96,20 @@ impl MicrosoftAuth {
             .await
             .map_err(|e| format!("Failed to request device code: {}", e))?;
 
-        response
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(format!("Microsoft Device Code API returned error: {}", error_text));
+        }
+
+        let resp = response
             .json::<DeviceCodeResponse>()
             .await
-            .map_err(|e| format!("Failed to parse device code response: {}", e))
+            .map_err(|e| format!("Failed to parse device code response: {}", e))?;
+
+        // Automatically open the browser
+        let _ = open::that(&resp.verification_uri);
+
+        Ok(resp)
     }
 
     async fn poll_for_token(
@@ -88,20 +124,23 @@ impl MicrosoftAuth {
         ];
 
         let interval = Duration::from_secs(device_code.interval as u64);
-        let mut expires_in = device_code.expires_in;
+        let mut total_waited = 0;
 
-        while expires_in > 0 {
+        log::info!("Polling for Microsoft token every {}s (expires in {}s)...", device_code.interval, device_code.expires_in);
+
+        while total_waited < device_code.expires_in {
             sleep(interval).await;
-            expires_in = expires_in.saturating_sub(device_code.interval);
+            total_waited += device_code.interval;
 
             let response = client
                 .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
                 .form(&params)
                 .send()
                 .await
-                .map_err(|e| format!("Failed to poll for token: {}", e))?;
+                .map_err(|e| format!("Network error while polling for token: {}", e))?;
 
-            if response.status().is_success() {
+            let status = response.status();
+            if status.is_success() {
                 return response
                     .json::<MicrosoftTokenResponse>()
                     .await
@@ -110,19 +149,23 @@ impl MicrosoftAuth {
                 let error_resp: serde_json::Value = response
                     .json()
                     .await
-                    .map_err(|e| format!("Failed to parse error response: {}", e))?;
+                    .map_err(|e| format!("Failed to parse Microsoft error response (status {}): {}", status, e))?;
 
-                if let Some(error) = error_resp.get("error") {
+                if let Some(error) = error_resp.get("error").and_then(|v| v.as_str()) {
                     if error == "authorization_pending" {
                         continue;
+                    } else if error == "slow_down" {
+                        // Double the interval if requested
+                        sleep(interval).await;
+                        continue;
                     } else {
-                        return Err(format!("Token request failed: {}", error));
+                        return Err(format!("Microsoft Token API error: {} ({})", error, error_resp.get("error_description").and_then(|v| v.as_str()).unwrap_or("no description")));
                     }
                 }
             }
         }
 
-        Err("Authentication timed out".to_string())
+        Err("Microsoft authentication timed out. Please try again.".to_string())
     }
 
     async fn get_xbl_token(&self, client: &Client, ms_token: &str) -> Result<XboxLiveResponse, String> {

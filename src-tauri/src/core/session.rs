@@ -9,6 +9,7 @@ pub struct Session {
     pub name: String,
     pub minecraft: String,
     pub forge: Option<String>,
+    pub fabric: Option<String>,
     pub sync_dir: String,
     pub sync_url: String,
     pub welcome: String,
