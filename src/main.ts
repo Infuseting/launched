@@ -1,5 +1,13 @@
 import './style.css';
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
+interface SyncProgress {
+  current_file: string;
+  files_done: number;
+  total_files: number;
+  percentage: number;
+}
 
 interface Session {
   name: string;
@@ -16,10 +24,48 @@ interface Session {
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
-async function syncAndLoad(session: Session) {
+async function syncAndLoad(session: Session, index: number) {
+  const allButtons = document.querySelectorAll<HTMLButtonElement>('.session-btn');
+  const actionArea = document.querySelector<HTMLDivElement>(`#action-area-${index}`)!;
+  
+  // Disable all buttons to prevent multiple syncs
+  allButtons.forEach(btn => {
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed', 'active:scale-100');
+    btn.classList.remove('active:scale-[0.98]', 'hover:bg-gray-800', 'hover:border-blue-500/50');
+  });
+
+  // Replace "Sync & Play" with progress bar
+  actionArea.className = "pt-6 border-t border-white/5 space-y-3 block";
+  actionArea.innerHTML = `
+    <div class="flex justify-between text-[10px] font-bold uppercase tracking-widest text-gray-500">
+      <span id="progress-status-${index}" class="truncate mr-4">Initializing...</span>
+      <span id="progress-percent-${index}">0%</span>
+    </div>
+    <div class="h-1.5 w-full bg-gray-900/50 rounded-full overflow-hidden border border-white/5">
+      <div id="progress-bar-${index}" class="h-full bg-blue-500 transition-all duration-300 shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width: 0%"></div>
+    </div>
+  `;
+
+  const statusEl = document.getElementById(`progress-status-${index}`)!;
+  const percentEl = document.getElementById(`progress-percent-${index}`)!;
+  const barEl = document.getElementById(`progress-bar-${index}`)!;
+
+  const unlisten = await listen<SyncProgress>("sync-progress", (event) => {
+    const { current_file, percentage } = event.payload;
+    statusEl.textContent = current_file;
+    percentEl.textContent = `${Math.round(percentage)}%`;
+    barEl.style.width = `${percentage}%`;
+  });
+
   try {
     console.log(`Syncing session: ${session.name}`);
     await invoke("sync_session", { session });
+    
+    // Ensure 100% visibility
+    percentEl.textContent = `100%`;
+    barEl.style.width = `100%`;
+    statusEl.textContent = `Sync Complete`;
     
     let htmlUrl = session.htmlPath || "index.html";
     if (htmlUrl.startsWith("http")) {
@@ -32,10 +78,17 @@ async function syncAndLoad(session: Session) {
     }
     
     console.log(`Navigating to: ${htmlUrl}`);
-    window.location.href = htmlUrl;
+    // Short delay to let the user see the 100%
+    setTimeout(() => {
+      window.location.href = htmlUrl;
+    }, 600);
   } catch (error) {
     console.error("Failed to sync or load session:", error);
     alert(`Error: ${error}`);
+    // Re-enable everything on error
+    loadSessions();
+  } finally {
+    unlisten();
   }
 }
 
@@ -65,9 +118,10 @@ function renderSessions(sessions: Session[]) {
       </header>
       
       <main class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
-        ${sessions.map(s => `
+        ${sessions.map((s, i) => `
           <button 
-            data-session='${JSON.stringify(s)}'
+            data-index="${i}"
+            id="session-btn-${i}"
             class="session-btn group p-8 rounded-3xl bg-gray-800/50 border border-gray-700/50 hover:border-blue-500/50 hover:bg-gray-800 transition-all duration-300 text-left focus:outline-none focus:ring-4 focus:ring-blue-500/20 active:scale-[0.98]"
           >
             <div class="flex items-center justify-between mb-6">
@@ -88,7 +142,7 @@ function renderSessions(sessions: Session[]) {
               ` : ''}
             </div>
             
-            <div class="pt-6 border-t border-white/5 flex items-center gap-2 text-blue-400 font-bold text-sm">
+            <div id="action-area-${i}" class="pt-6 border-t border-white/5 flex items-center gap-2 text-blue-400 font-bold text-sm">
               <span>Sync & Play</span>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -102,8 +156,8 @@ function renderSessions(sessions: Session[]) {
 
   document.querySelectorAll('.session-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const session = JSON.parse((btn as HTMLElement).dataset.session!);
-      syncAndLoad(session);
+      const index = parseInt((btn as HTMLElement).dataset.index!);
+      syncAndLoad(sessions[index], index);
     });
   });
 }
