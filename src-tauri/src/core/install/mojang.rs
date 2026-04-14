@@ -1,8 +1,8 @@
-use std::path::PathBuf;
-use serde::Deserialize;
 use reqwest::Client;
-use tokio::io::AsyncWriteExt;
+use serde::Deserialize;
+use std::path::PathBuf;
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 const JRE_MANIFEST_URL: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
@@ -37,7 +37,8 @@ pub struct JavaVersionRequirement {
 #[derive(Debug, Deserialize)]
 pub struct JreManifestIndex {
     #[serde(flatten)]
-    pub platforms: std::collections::HashMap<String, std::collections::HashMap<String, Vec<JrePlatformEntry>>>,
+    pub platforms:
+        std::collections::HashMap<String, std::collections::HashMap<String, Vec<JrePlatformEntry>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,18 +133,34 @@ pub async fn get_official_mc_path() -> Result<PathBuf, String> {
 
 /// Returns the current OS name as Minecraft knows it ("windows", "osx", "linux")
 fn current_os_name() -> &'static str {
-    if cfg!(target_os = "windows") { "windows" }
-    else if cfg!(target_os = "macos") { "osx" }
-    else { "linux" }
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "osx"
+    } else {
+        "linux"
+    }
 }
 
 fn get_jre_platform_id() -> &'static str {
     if cfg!(target_os = "windows") {
-        if cfg!(target_arch = "x86_64") { "windows-x64" } else { "windows-x86" }
+        if cfg!(target_arch = "x86_64") {
+            "windows-x64"
+        } else {
+            "windows-x86"
+        }
     } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") { "mac-os-arm64" } else { "mac-os" }
+        if cfg!(target_arch = "aarch64") {
+            "mac-os-arm64"
+        } else {
+            "mac-os"
+        }
     } else {
-        if cfg!(target_arch = "x86_64") { "linux" } else { "linux-i386" }
+        if cfg!(target_arch = "x86_64") {
+            "linux"
+        } else {
+            "linux-i386"
+        }
     }
 }
 
@@ -175,11 +192,13 @@ async fn download_file(client: &Client, url: &str, path: &PathBuf) -> Result<boo
     }
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).await
+        fs::create_dir_all(parent)
+            .await
             .map_err(|e| format!("Failed to create dir {:?}: {}", parent, e))?;
     }
 
-    let mut response = client.get(url)
+    let mut response = client
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Failed to download {}: {}", url, e))?;
@@ -188,13 +207,17 @@ async fn download_file(client: &Client, url: &str, path: &PathBuf) -> Result<boo
         return Err(format!("HTTP {} for {}", response.status(), url));
     }
 
-    let mut file = fs::File::create(path).await
+    let mut file = fs::File::create(path)
+        .await
         .map_err(|e| format!("Failed to create file {:?}: {}", path, e))?;
 
-    while let Some(chunk) = response.chunk().await
+    while let Some(chunk) = response
+        .chunk()
+        .await
         .map_err(|e| format!("Chunk error from {}: {}", url, e))?
     {
-        file.write_all(&chunk).await
+        file.write_all(&chunk)
+            .await
             .map_err(|e| format!("Write error: {}", e))?;
     }
 
@@ -220,35 +243,46 @@ pub async fn install_version(version: &str) -> Result<(), String> {
     let version_json_path = version_dir.join(format!("{}.json", version));
     let version_jar_path = version_dir.join(format!("{}.jar", version));
 
-    fs::create_dir_all(&version_dir).await
+    fs::create_dir_all(&version_dir)
+        .await
         .map_err(|e| format!("Failed to create version directory: {}", e))?;
 
     // ── Step 1: Fetch version manifest index ───────────────────────────────────
-    let manifest: VersionManifestIndex = client.get(VERSION_MANIFEST_URL)
-        .send().await
+    let manifest: VersionManifestIndex = client
+        .get(VERSION_MANIFEST_URL)
+        .send()
+        .await
         .map_err(|e| format!("Failed to fetch version manifest: {}", e))?
-        .json().await
+        .json()
+        .await
         .map_err(|e| format!("Failed to parse version manifest: {}", e))?;
 
-    let version_info = manifest.versions.iter()
+    let version_info = manifest
+        .versions
+        .iter()
         .find(|v| v.id == version)
         .ok_or_else(|| format!("Version {} not found in Mojang manifest", version))?;
 
     // ── Step 2: Download version JSON ─────────────────────────────────────────
     if !version_json_path.exists() {
         log::info!("Downloading version JSON for {}...", version);
-        let content = client.get(&version_info.url)
-            .send().await
+        let content = client
+            .get(&version_info.url)
+            .send()
+            .await
             .map_err(|e| format!("Failed to fetch version JSON: {}", e))?
-            .text().await
+            .text()
+            .await
             .map_err(|e| format!("Failed to read version JSON: {}", e))?;
 
-        fs::write(&version_json_path, &content).await
+        fs::write(&version_json_path, &content)
+            .await
             .map_err(|e| format!("Failed to save version JSON: {}", e))?;
     }
 
     // ── Step 3: Parse version JSON ────────────────────────────────────────────
-    let content = fs::read_to_string(&version_json_path).await
+    let content = fs::read_to_string(&version_json_path)
+        .await
         .map_err(|e| format!("Failed to read version JSON: {}", e))?;
 
     let detail: VersionDetail = serde_json::from_str(&content)
@@ -257,17 +291,23 @@ pub async fn install_version(version: &str) -> Result<(), String> {
     // ── Step 4: Download client JAR ───────────────────────────────────────────
     if !version_jar_path.exists() {
         log::info!("Downloading Minecraft {} client JAR...", version);
-        let mut response = client.get(&detail.downloads.client.url)
-            .send().await
+        let mut response = client
+            .get(&detail.downloads.client.url)
+            .send()
+            .await
             .map_err(|e| format!("Failed to start JAR download: {}", e))?;
 
-        let mut file = fs::File::create(&version_jar_path).await
+        let mut file = fs::File::create(&version_jar_path)
+            .await
             .map_err(|e| format!("Failed to create JAR file: {}", e))?;
 
-        while let Some(chunk) = response.chunk().await
+        while let Some(chunk) = response
+            .chunk()
+            .await
             .map_err(|e| format!("JAR download chunk error: {}", e))?
         {
-            file.write_all(&chunk).await
+            file.write_all(&chunk)
+                .await
                 .map_err(|e| format!("JAR write error: {}", e))?;
         }
         log::info!("Minecraft {} JAR downloaded.", version);
@@ -309,7 +349,12 @@ pub async fn install_version(version: &str) -> Result<(), String> {
                                 Ok(true) => downloaded += 1,
                                 Ok(false) => already_present += 1,
                                 Err(e) => {
-                                    log::warn!("Native {} for {} failed: {}", native_key, lib.name, e);
+                                    log::warn!(
+                                        "Native {} for {} failed: {}",
+                                        native_key,
+                                        lib.name,
+                                        e
+                                    );
                                     failed += 1;
                                 }
                             }
@@ -321,7 +366,10 @@ pub async fn install_version(version: &str) -> Result<(), String> {
 
         log::info!(
             "Libraries for {}: {} newly downloaded, {} already present, {} failed.",
-            version, downloaded, already_present, failed
+            version,
+            downloaded,
+            already_present,
+            failed
         );
     }
 
@@ -341,38 +389,66 @@ pub async fn download_jre(component: &str) -> Result<PathBuf, String> {
     let client = Client::new();
     let mc_path = get_official_mc_path().await?;
     let platform = get_jre_platform_id();
-    
+
     // Path where this component will be stored: .minecraft/runtime/<component>/<platform>/<component>
-    let jre_base_path = mc_path.join("runtime").join(component).join(platform).join(component);
-    let java_bin = if cfg!(windows) { jre_base_path.join("bin/java.exe") } else { jre_base_path.join("bin/java") };
+    let jre_base_path = mc_path
+        .join("runtime")
+        .join(component)
+        .join(platform)
+        .join(component);
+    let java_bin = if cfg!(windows) {
+        jre_base_path.join("bin/java.exe")
+    } else {
+        jre_base_path.join("bin/java")
+    };
 
     if java_bin.exists() {
         return Ok(jre_base_path);
     }
 
-    log::info!("Downloading Java runtime component: {} for {}", component, platform);
+    log::info!(
+        "Downloading Java runtime component: {} for {}",
+        component,
+        platform
+    );
 
     // 1. Fetch JRE manifest index
-    let index: JreManifestIndex = client.get(JRE_MANIFEST_URL)
-        .send().await
+    let index: JreManifestIndex = client
+        .get(JRE_MANIFEST_URL)
+        .send()
+        .await
         .map_err(|e| format!("Failed to fetch JRE manifest index: {}", e))?
-        .json().await
+        .json()
+        .await
         .map_err(|e| format!("Failed to parse JRE manifest index: {}", e))?;
 
-    let platform_map = index.platforms.get(platform)
+    let platform_map = index
+        .platforms
+        .get(platform)
         .ok_or_else(|| format!("Platform {} not found in JRE manifest index", platform))?;
 
-    let component_list = platform_map.get(component)
-        .ok_or_else(|| format!("Component {} not found for platform {} in JRE manifest index", component, platform))?;
+    let component_list = platform_map.get(component).ok_or_else(|| {
+        format!(
+            "Component {} not found for platform {} in JRE manifest index",
+            component, platform
+        )
+    })?;
 
-    let component_entry = component_list.first()
-        .ok_or_else(|| format!("No entries for component {} on platform {}", component, platform))?;
+    let component_entry = component_list.first().ok_or_else(|| {
+        format!(
+            "No entries for component {} on platform {}",
+            component, platform
+        )
+    })?;
 
     // 2. Fetch component manifest
-    let component_manifest: JreComponentManifest = client.get(&component_entry.manifest.url)
-        .send().await
+    let component_manifest: JreComponentManifest = client
+        .get(&component_entry.manifest.url)
+        .send()
+        .await
         .map_err(|e| format!("Failed to fetch JRE component manifest: {}", e))?
-        .json().await
+        .json()
+        .await
         .map_err(|e| format!("Failed to parse JRE component manifest: {}", e))?;
 
     // 3. Download all files
@@ -413,6 +489,12 @@ pub async fn download_jre(component: &str) -> Result<PathBuf, String> {
         }
     }
 
-    log::info!("JRE {} downloaded: {} new files, {} skipped out of {}.", component, downloaded, skipped, total_files);
+    log::info!(
+        "JRE {} downloaded: {} new files, {} skipped out of {}.",
+        component,
+        downloaded,
+        skipped,
+        total_files
+    );
     Ok(jre_base_path)
 }

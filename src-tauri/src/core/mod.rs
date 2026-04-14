@@ -1,4 +1,5 @@
+pub mod install;
+pub mod launch;
 pub mod session;
 pub mod sync;
-pub mod launch;
-pub mod install;
+pub mod settings;

@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::fs;
-use crate::core::session::Session;
-use crate::core::launch::models::{VersionManifest, LibraryRule};
 use crate::auth::AuthResponse;
+use crate::core::launch::models::{LibraryRule, VersionManifest};
+use crate::core::session::Session;
+use std::fs;
+use std::path::{Path, PathBuf};
 use which::which;
 
 pub struct LaunchArguments {
@@ -17,9 +17,13 @@ pub struct LaunchArguments {
 
 /// Returns the current OS name as Minecraft knows it.
 fn current_os_name() -> &'static str {
-    if cfg!(target_os = "windows") { "windows" }
-    else if cfg!(target_os = "macos") { "osx" }
-    else { "linux" }
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "osx"
+    } else {
+        "linux"
+    }
 }
 
 /// Evaluates library rules to check if it should be included on the current OS.
@@ -53,7 +57,8 @@ fn extract_natives(jar_path: &Path, natives_dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("Failed to read ZIP {:?}: {}", jar_path, e))?;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
+        let mut entry = archive
+            .by_index(i)
             .map_err(|e| format!("ZIP entry error: {}", e))?;
 
         let name = entry.name().to_string();
@@ -91,9 +96,12 @@ fn extract_natives(jar_path: &Path, natives_dir: &Path) -> Result<(), String> {
 
 /// Finds the best Java binary for the given required major version.
 /// Prefers exact match, falls back to any available java.
-fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf, Option<PathBuf>), String> {
+fn find_java(
+    required_major: Option<u8>,
+    mc_path: &Path,
+) -> Result<(u8, PathBuf, Option<PathBuf>), String> {
     let mut search_paths = Vec::new();
-    
+
     // 1. Check Mojang's downloaded runtimes in .minecraft/runtime
     let runtime_base = mc_path.join("runtime");
     if runtime_base.exists() {
@@ -106,7 +114,11 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
                         if let Ok(variants) = std::fs::read_dir(platform.path()) {
                             for variant in variants.flatten() {
                                 let java_home = variant.path();
-                                let java_bin = if cfg!(windows) { java_home.join("bin/java.exe") } else { java_home.join("bin/java") };
+                                let java_bin = if cfg!(windows) {
+                                    java_home.join("bin/java.exe")
+                                } else {
+                                    java_home.join("bin/java")
+                                };
                                 if java_bin.exists() {
                                     search_paths.push(java_home);
                                 }
@@ -136,9 +148,18 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
     let mut candidates: Vec<(u8, PathBuf)> = Vec::new();
     for path in search_paths {
         // Try to parse major version from directory name or binary
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         // Common patterns: java-8-openjdk, java-1.8.0-openjdk, jre-legacy, java-runtime-alpha
-        let major = if name.contains("-1.8") || name.contains("-8-") || name.ends_with("-8") || name.contains(".1.8") || name.contains("jre-legacy") {
+        let major = if name.contains("-1.8")
+            || name.contains("-8-")
+            || name.ends_with("-8")
+            || name.contains(".1.8")
+            || name.contains("jre-legacy")
+        {
             8u8
         } else if name.contains("java-runtime-alpha") {
             16u8
@@ -148,8 +169,15 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
             n
         } else {
             // Fallback: try to run java -version
-            let java_bin = if cfg!(windows) { path.join("bin/java.exe") } else { path.join("bin/java") };
-            if let Ok(output) = std::process::Command::new(&java_bin).arg("-version").output() {
+            let java_bin = if cfg!(windows) {
+                path.join("bin/java.exe")
+            } else {
+                path.join("bin/java")
+            };
+            if let Ok(output) = std::process::Command::new(&java_bin)
+                .arg("-version")
+                .output()
+            {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 if stderr.contains("1.8.0") || stderr.contains("\"1.8") {
                     8u8
@@ -184,7 +212,11 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
             // Sort by closeness to required version
             filtered.sort_by_key(|(v, _)| (*v as i16 - required as i16).abs());
             if let Some((v, java_home)) = filtered.first() {
-                let java_bin = if cfg!(windows) { java_home.join("bin/java.exe") } else { java_home.join("bin/java") };
+                let java_bin = if cfg!(windows) {
+                    java_home.join("bin/java.exe")
+                } else {
+                    java_home.join("bin/java")
+                };
                 log::info!("Selected JVM: {:?} (detected major: {})", java_home, v);
                 return Ok((*v, java_bin, Some(java_home.clone())));
             }
@@ -197,15 +229,24 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
         // No required version, just pick highest
         candidates.sort_by_key(|(v, _)| std::cmp::Reverse(*v));
         if let Some((v, java_home)) = candidates.first() {
-            let java_bin = if cfg!(windows) { java_home.join("bin/java.exe") } else { java_home.join("bin/java") };
-            log::info!("Selected JVM (Highest): {:?} (detected major: {})", java_home, v);
+            let java_bin = if cfg!(windows) {
+                java_home.join("bin/java.exe")
+            } else {
+                java_home.join("bin/java")
+            };
+            log::info!(
+                "Selected JVM (Highest): {:?} (detected major: {})",
+                java_home,
+                v
+            );
             return Ok((*v, java_bin, Some(java_home.clone())));
         }
     }
 
     // Fallback to system java only if no version is required or if we're desperate
-    let java_bin = which("java").map_err(|_| "Java binary not found in PATH. Please install Java.".to_string())?;
-    
+    let java_bin = which("java")
+        .map_err(|_| "Java binary not found in PATH. Please install Java.".to_string())?;
+
     // Check if the system default java matches requirements
     let mut detected_major = 0u8;
     let output = std::process::Command::new(&java_bin)
@@ -213,7 +254,7 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
         .output()
         .map_err(|e| format!("Failed to check java version: {}", e))?;
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     if stderr.contains("1.8.0") || stderr.contains("\"1.8") {
         detected_major = 8;
     } else if stderr.contains("version \"17") {
@@ -230,12 +271,19 @@ fn find_java(required_major: Option<u8>, mc_path: &Path) -> Result<(u8, PathBuf,
         }
     }
 
-    let java_home = java_bin.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf());
+    let java_home = java_bin
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf());
     Ok((detected_major, java_bin, java_home))
 }
 
 impl LaunchArguments {
-    pub fn from_session(session: &Session, session_dir: &Path, auth: &AuthResponse) -> Result<Self, String> {
+    pub fn from_session(
+        session: &Session,
+        session_dir: &Path,
+        auth: &AuthResponse,
+    ) -> Result<Self, String> {
         // Resolve the official .minecraft path
         let official_mc_path = if cfg!(windows) {
             PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join(".minecraft")
@@ -257,20 +305,28 @@ impl LaunchArguments {
             .join(format!("{}.json", version_id));
 
         if !version_json_path.exists() {
-            return Err(format!("Version JSON not found at {:?}. Please ensure the version is installed.", version_json_path));
+            return Err(format!(
+                "Version JSON not found at {:?}. Please ensure the version is installed.",
+                version_json_path
+            ));
         }
 
         let content = fs::read_to_string(&version_json_path)
             .map_err(|e| format!("Failed to read version JSON: {}", e))?;
-        
+
         let mut manifest: VersionManifest = serde_json::from_str(&content)
             .map_err(|e| format!("Failed to parse version JSON: {}", e))?;
 
         if let Some(parent_id) = &manifest.inherits_from {
-            let parent_json_path = official_mc_path.join("versions").join(parent_id).join(format!("{}.json", parent_id));
+            let parent_json_path = official_mc_path
+                .join("versions")
+                .join(parent_id)
+                .join(format!("{}.json", parent_id));
             if parent_json_path.exists() {
                 if let Ok(parent_content) = fs::read_to_string(&parent_json_path) {
-                    if let Ok(parent_manifest) = serde_json::from_str::<VersionManifest>(&parent_content) {
+                    if let Ok(parent_manifest) =
+                        serde_json::from_str::<VersionManifest>(&parent_content)
+                    {
                         if manifest.asset_index.is_none() {
                             manifest.asset_index = parent_manifest.asset_index;
                         }
@@ -279,7 +335,11 @@ impl LaunchArguments {
                         }
                         let parent_libs_len = parent_manifest.libraries.len();
                         manifest.libraries.extend(parent_manifest.libraries);
-                        log::info!("Merged {} libraries from parent {}", parent_libs_len, parent_id);
+                        log::info!(
+                            "Merged {} libraries from parent {}",
+                            parent_libs_len,
+                            parent_id
+                        );
                     }
                 }
             }
@@ -317,13 +377,19 @@ impl LaunchArguments {
                 }
 
                 // Natives → extract to natives_dir (do NOT add to classpath)
-                if let (Some(natives_map), Some(classifiers)) = (&lib.natives, &downloads.classifiers) {
+                if let (Some(natives_map), Some(classifiers)) =
+                    (&lib.natives, &downloads.classifiers)
+                {
                     if let Some(native_key) = natives_map.get(os) {
                         if let Some(native_art) = classifiers.get(native_key) {
                             let native_jar = lib_base.join(&native_art.path);
                             if native_jar.exists() {
                                 if let Err(e) = extract_natives(&native_jar, &natives_dir) {
-                                    log::warn!("Failed to extract natives from {:?}: {}", native_jar, e);
+                                    log::warn!(
+                                        "Failed to extract natives from {:?}: {}",
+                                        native_jar,
+                                        e
+                                    );
                                 }
                             } else {
                                 missing_libs.push(native_art.path.clone());
@@ -339,7 +405,11 @@ impl LaunchArguments {
                     let artifact_name = parts[1];
                     let ver = parts[2];
                     let jar_name = format!("{}-{}.jar", artifact_name, ver);
-                    let p = lib_base.join(&group).join(artifact_name).join(ver).join(&jar_name);
+                    let p = lib_base
+                        .join(&group)
+                        .join(artifact_name)
+                        .join(ver)
+                        .join(&jar_name);
                     if p.exists() {
                         classpath.push(p);
                     }
@@ -354,7 +424,11 @@ impl LaunchArguments {
                 &missing_libs[..missing_libs.len().min(3)]
             );
         }
-        log::info!("Classpath: {} libraries. Natives dir: {:?}", classpath.len(), natives_dir);
+        log::info!(
+            "Classpath: {} libraries. Natives dir: {:?}",
+            classpath.len(),
+            natives_dir
+        );
 
         // 2. Add client JAR last
         let root_jar_id = manifest.jar.as_deref().unwrap_or(version_id);
@@ -362,7 +436,7 @@ impl LaunchArguments {
             .join("versions")
             .join(root_jar_id)
             .join(format!("{}.jar", root_jar_id));
-        
+
         if client_jar_path.exists() {
             classpath.push(client_jar_path);
         } else {
@@ -386,15 +460,31 @@ impl LaunchArguments {
 
         // Minecraft game args
         let mut minecraft_args = Vec::new();
-        
+
         if let Some(arg_line) = manifest.minecraft_arguments {
             // Old format: single string with placeholders
             let map = [
                 ("${auth_player_name}", auth.name.clone()),
                 ("${version_name}", version_id.clone()),
-                ("${game_directory}", session_dir.to_string_lossy().to_string()),
-                ("${assets_root}", official_mc_path.join("assets").to_string_lossy().to_string()),
-                ("${assets_index_name}", manifest.asset_index.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| "1.12".to_string())),
+                (
+                    "${game_directory}",
+                    session_dir.to_string_lossy().to_string(),
+                ),
+                (
+                    "${assets_root}",
+                    official_mc_path
+                        .join("assets")
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                (
+                    "${assets_index_name}",
+                    manifest
+                        .asset_index
+                        .as_ref()
+                        .map(|a| a.id.clone())
+                        .unwrap_or_else(|| "1.12".to_string()),
+                ),
                 ("${auth_uuid}", auth.uuid.clone()),
                 ("${auth_access_token}", auth.access_token.clone()),
                 ("${user_type}", "msa".to_string()),
@@ -418,9 +508,20 @@ impl LaunchArguments {
             minecraft_args.push("--gameDir".to_string());
             minecraft_args.push(session_dir.to_string_lossy().to_string());
             minecraft_args.push("--assetsDir".to_string());
-            minecraft_args.push(official_mc_path.join("assets").to_string_lossy().to_string());
+            minecraft_args.push(
+                official_mc_path
+                    .join("assets")
+                    .to_string_lossy()
+                    .to_string(),
+            );
             minecraft_args.push("--assetIndex".to_string());
-            minecraft_args.push(manifest.asset_index.as_ref().map(|a| a.id.clone()).unwrap_or_else(|| "1.12".to_string()));
+            minecraft_args.push(
+                manifest
+                    .asset_index
+                    .as_ref()
+                    .map(|a| a.id.clone())
+                    .unwrap_or_else(|| "1.12".to_string()),
+            );
             minecraft_args.push("--uuid".to_string());
             minecraft_args.push(auth.uuid.clone());
             minecraft_args.push("--accessToken".to_string());
@@ -432,7 +533,11 @@ impl LaunchArguments {
         }
 
         // Find correct Java version (MC 1.12.2 needs Java 8)
-        let required_java = manifest.java_version.as_ref().map(|j| j.major_version).or(Some(8));
+        let required_java = manifest
+            .java_version
+            .as_ref()
+            .map(|j| j.major_version)
+            .or(Some(8));
         let (java_major, java_path, java_home) = find_java(required_java, &official_mc_path)?;
         log::info!("Using java: {:?}, home: {:?}", java_path, java_home);
 
@@ -454,21 +559,23 @@ impl LaunchArguments {
 
     pub fn build(&self) -> Vec<String> {
         let mut args = self.jvm_args.clone();
-        
+
         // Add classpath
         args.push("-cp".to_string());
-        let cp = self.classpath.iter()
+        let cp = self
+            .classpath
+            .iter()
             .map(|p| p.to_string_lossy().into_owned())
             .collect::<Vec<String>>()
             .join(if cfg!(windows) { ";" } else { ":" });
         args.push(cp);
-        
+
         // Add main class
         args.push(self.main_class.clone());
-        
+
         // Add Minecraft args
         args.extend(self.minecraft_args.clone());
-        
+
         args
     }
 }

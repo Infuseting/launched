@@ -15,7 +15,8 @@ pub struct Session {
     pub welcome: String,
     pub jvm_arg: String,
     pub credits: String,
-    pub html_path: Option<String>,
+    pub assets_path: Option<String>,
+    pub hostname: Option<String>,
     pub is_default: bool,
 }
 

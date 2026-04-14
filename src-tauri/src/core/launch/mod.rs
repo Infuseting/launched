@@ -4,8 +4,10 @@
 pub mod args;
 pub mod models;
 
-use std::process::{Command, Stdio};
 use crate::core::launch::args::LaunchArguments;
+use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
+use tauri::Emitter;
 
 pub struct LaunchService;
 
@@ -13,10 +15,14 @@ impl LaunchService {
     /**
      * Launches the game process.
      */
-    pub fn launch(&self, args: LaunchArguments, show_logs: bool) -> Result<(), String> {
+    pub fn launch(&self, args: LaunchArguments, show_logs: bool, app_handle: &tauri::AppHandle) -> Result<(), String> {
         let jvm_args = args.build();
-        log::info!("Launching game with command: {} {}", args.java_path.display(), jvm_args.join(" "));
-        
+        log::info!(
+            "Launching game with command: {} {}",
+            args.java_path.display(),
+            jvm_args.join(" ")
+        );
+
         let mut cmd = Command::new(&args.java_path);
         cmd.args(jvm_args);
         cmd.current_dir(&args.game_dir);
@@ -62,20 +68,47 @@ impl LaunchService {
                 cmd.env("LD_LIBRARY_PATH", ld_path);
             }
         }
-        
+
         if show_logs {
-            cmd.stdout(Stdio::inherit())
-               .stderr(Stdio::inherit());
+            cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         } else {
-            cmd.stdout(Stdio::null())
-               .stderr(Stdio::null());
+            cmd.stdout(Stdio::null()).stderr(Stdio::null());
         }
-        
+
         match cmd.spawn() {
-            Ok(_) => {
+            Ok(mut child) => {
                 log::info!("Game process spawned successfully.");
+                if show_logs {
+                    let app_clone_out = app_handle.clone();
+                    if let Some(stdout) = child.stdout.take() {
+                        let reader = BufReader::new(stdout);
+                        std::thread::spawn(move || {
+                            for line in reader.lines() {
+                                if let Ok(l) = line {
+                                    let _ = app_clone_out.emit("game-log", l);
+                                }
+                            }
+                        });
+                    }
+                    let app_clone_err = app_handle.clone();
+                    if let Some(stderr) = child.stderr.take() {
+                        let reader = BufReader::new(stderr);
+                        std::thread::spawn(move || {
+                            for line in reader.lines() {
+                                if let Ok(l) = line {
+                                    let _ = app_clone_err.emit("game-log", l);
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+
                 Ok(())
-            },
+            }
             Err(e) => {
                 let err_msg = format!("Failed to spawn game process: {}", e);
                 log::error!("{}", err_msg);
