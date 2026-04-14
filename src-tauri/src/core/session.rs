@@ -5,6 +5,14 @@ use serde::{Deserialize, Serialize};
  */
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct SessionLink {
+    pub name: String,
+    pub url: String,
+    pub icon: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Session {
     pub name: String,
     pub minecraft: String,
@@ -18,6 +26,7 @@ pub struct Session {
     pub assets_path: Option<String>,
     pub hostname: Option<String>,
     pub is_default: bool,
+    pub links: Option<Vec<SessionLink>>,
 }
 
 /**

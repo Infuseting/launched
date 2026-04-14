@@ -53,7 +53,7 @@ async fn get_sessions(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Session>, String> {
     let sessions =
-        SessionManager::fetch_sessions("https://galade.fr/installateur/servers.json").await?;
+        SessionManager::fetch_sessions("https://galade.fr/launched/servers.json").await?;
 
     // Check if we have a last session to restore
     let prefs = load_prefs(&app_handle);
@@ -261,11 +261,24 @@ async fn ping_service(url: String) -> Result<bool, String> {
 }
 
 
+#[tauri::command]
+async fn fetch_json(url: String) -> Result<serde_json::Value, String> {
+    reqwest::get(url)
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_sessions,
@@ -282,7 +295,8 @@ pub fn run() {
             get_system_ram,
             get_all_accounts,
             set_active_account,
-            remove_account
+            remove_account,
+            fetch_json
         ])
         .on_page_load(|window, _payload| {
             let _ = crate::ui::bridge::inject_bridge(window);

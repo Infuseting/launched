@@ -460,15 +460,16 @@ body {
 
 .mediaSVG {
     fill: #ffffff;
-    height: 12px;
+    height: 15px;
     transition: 0.25s ease;
     cursor: pointer;
-    width: 25px;
+    width: auto;
+    object-fit: contain;
 }
 
-.mediaSVG:hover,
-.mediaURL:focus .mediaSVG,
-.mediaSVG:active {
+.mediaButton:hover .mediaSVG,
+.mediaButton:focus .mediaSVG,
+.mediaSVG:hover {
     height: 20px;
 }
 

@@ -2,6 +2,8 @@ import './style.css';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 interface AuthResponse {
   uuid: string;
@@ -14,6 +16,18 @@ interface SyncProgress {
   files_done: number;
   total_files: number;
   percentage: number;
+}
+
+interface AssetMetadata {
+  background: string;
+  logo?: string;
+  links: { name: string; url: string; icon: string; }[];
+}
+
+interface SessionLink {
+  name: string;
+  url: string;
+  icon: string;
 }
 
 interface Session {
@@ -29,6 +43,8 @@ interface Session {
   assetsPath?: string;
   hostname?: string;
   isDefault: boolean;
+  links?: SessionLink[];
+  assetsData?: AssetMetadata;
 }
 
 interface AppSettings {
@@ -297,7 +313,11 @@ async function loadSessions() {
       updateMicrosoftStatus(false);
     }
 
+    // Load assets for initial session if available
+    await fetchAssetMetadata(activeSessionIndex);
+
     renderApp();
+    checkForUpdates();
     updateUserDisplay();
 
     // Start periodic tasks
@@ -347,14 +367,30 @@ function updateServerButton() {
   }
 }
 
+async function fetchAssetMetadata(index: number) {
+  const session = globalSessions[index];
+  if (!session || !session.assetsPath || session.assetsData) return;
+
+  try {
+    // Invoke Rust command to bypass CORS
+    const data = await invoke<AssetMetadata>("fetch_json", { url: session.assetsPath });
+    session.assetsData = data;
+    console.log(`Assets loaded for ${session.name}`);
+  } catch (e) {
+    console.error(`Failed to fetch assets for ${session.name}:`, e);
+  }
+}
+
 // ─── Render the main app ────────────────────────────────────────────────────
 
 function renderApp() {
   if (globalSessions.length === 0) return;
   const activeSession = globalSessions[activeSessionIndex];
 
+  const bgUrl = activeSession.assetsData?.background || (activeSession.assetsPath && !activeSession.assetsPath.endsWith('.json') ? `${activeSession.assetsPath}/background.png` : '');
+
   app.innerHTML = `
-    <div id="landingContainer">
+    <div id="landingContainer" style="${bgUrl ? `background-image: url('${bgUrl}'); background-size: cover; background-position: center;` : ''}">
       <!-- Upper area -->
       <div id="upper">
         <div id="left">
@@ -382,15 +418,21 @@ function renderApp() {
               </div>
               <div class="mediaDivider"></div>
               <div id="externalMedia">
-                <div class="mediaContainer">
-                  <button class="mediaButton" id="discordURL">
-                    <svg class="mediaSVG" viewBox="35.34 34.3575 70.68 68.71500">
-                      <g>
-                        <path d="M81.23,78.48a6.14,6.14,0,1,1,6.14-6.14,6.14,6.14,0,0,1-6.14,6.14M60,78.48a6.14,6.14,0,1,1,6.14-6.14A6.14,6.14,0,0,1,60,78.48M104.41,73c-.92-7.7-8.24-22.9-8.24-22.9A43,43,0,0,0,88,45.59a17.88,17.88,0,0,0-8.38-1.27l-.13,1.06a23.52,23.52,0,0,1,5.8,1.95,87.59,87.59,0,0,1,8.17,4.87s-10.32-5.63-22.27-5.63a51.32,51.32,0,0,0-23.2,5.63,87.84,87.84,0,0,1,8.17-4.87,23.57,23.57,0,0,1,5.8-1.95l-.13-1.06a17.88,17.88,0,0,0-8.38,1.27,42.84,42.84,0,0,0-8.21,4.56S37.87,65.35,37,73s-.37,11.54-.37,11.54,4.22,5.68,9.9,7.14,7.7,1.47,7.7,1.47l3.75-4.68a21.22,21.22,0,0,1-4.65-2A24.47,24.47,0,0,1,47.93,82S61.16,88.4,70.68,88.4c10,0,22.75-6.44,22.75-6.44a24.56,24.56,0,0,1-5.35,4.56,21.22,21.22,0,0,1-4.65,2l3.75,4.68s2,0,7.7-1.47,9.89-7.14,9.89-7.14.55-3.85-.37-11.54"/>
-                      </g>
-                    </svg>
-                  </button>
-                </div>
+                ${(activeSession.assetsData?.links || activeSession.links || []).map(link => {
+                  let iconUrl = link.icon;
+                  // If it's not a URL and we have assetsPath (legacy)
+                  if (!iconUrl.startsWith('http') && activeSession.assetsPath && !activeSession.assetsPath.endsWith('.json')) {
+                    iconUrl = `${activeSession.assetsPath}/${link.icon}`;
+                  }
+                  
+                  return `
+                    <div class="mediaContainer">
+                      <button class="mediaButton externalLink" data-url="${link.url}" title="${link.name}">
+                        ${iconUrl.startsWith('http') || iconUrl.startsWith('data:') ? `<img src="${iconUrl}" class="mediaSVG" style="filter: brightness(0) invert(1);" />` : `<span style="font-size:10px">${link.name}</span>`}
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
               </div>
             </div>
           </div>
@@ -632,6 +674,21 @@ function renderApp() {
         <button id="msLoginModalCancel" style="margin-top: 15px; padding: 8px 16px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer;">Hide Modal</button>
       </div>
     </div>
+
+    <!-- Update Modal -->
+    <div id="updateModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center; flex-direction: column;">
+      <div style="background: #222; padding: 30px; border-radius: 8px; text-align: center; border: 1px solid #4CAF50; max-width: 450px; box-shadow: 0 4px 25px rgba(76,175,80,0.2);">
+        <h2 style="margin-top: 0; color: white;">Update Available!</h2>
+        <p id="updateModalText" style="color: white; font-size: 14px; margin-bottom: 20px;">A new version of Charged is available.</p>
+        <div id="updateProgressContainer" style="display: none; width: 100%; height: 6px; background: #333; border-radius: 3px; margin-bottom: 20px; overflow: hidden;">
+          <div id="updateProgressBar" style="width: 0%; height: 100%; background: #4CAF50; transition: width 0.3s ease;"></div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button id="btn-update-install" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Update Now</button>
+          <button id="btn-update-later" style="padding: 10px 20px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer;">Later</button>
+        </div>
+      </div>
+    </div>
   `;
 
   // Apply Background using assetsPath
@@ -710,12 +767,16 @@ function renderApp() {
   // Overlay: confirm
   const confirmBtn = document.getElementById('serverSelectConfirm');
   if (confirmBtn) {
-    confirmBtn.addEventListener('click', () => {
+    confirmBtn.addEventListener('click', async () => {
       const selected = document.querySelector('.serverListing[selected]') as HTMLElement;
       if (selected) {
         const idx = parseInt(selected.dataset.index!);
         activeSessionIndex = idx;
         updateServerButton();
+        
+        // Load assets for new session
+        await fetchAssetMetadata(idx);
+        renderApp();
       }
       toggleServerSelection(false);
     });
@@ -889,6 +950,82 @@ function toggleSettings(show: boolean) {
   }
 }
 
+async function checkForUpdates() {
+  try {
+    const update = await check();
+    if (update) {
+      console.log(`Update available: ${update.version}`);
+      const modal = document.getElementById('updateModal');
+      const text = document.getElementById('updateModalText');
+      const installBtn = document.getElementById('btn-update-install');
+      const laterBtn = document.getElementById('btn-update-later');
+      const progressContainer = document.getElementById('updateProgressContainer');
+      const progressBar = document.getElementById('updateProgressBar');
+
+      if (modal && text) {
+        text.innerText = `Version ${update.version} is available. \n\n${update.body || ''}`;
+        modal.style.display = 'flex';
+
+        laterBtn?.addEventListener('click', () => {
+          modal.style.display = 'none';
+        });
+
+        installBtn?.addEventListener('click', async () => {
+          if (installBtn) installBtn.style.display = 'none';
+          if (laterBtn) laterBtn.style.display = 'none';
+          if (progressContainer) progressContainer.style.display = 'block';
+          if (text) text.innerText = 'Downloading update...';
+
+          try {
+            let downloaded = 0;
+            let contentLength = 0;
+
+            await update.downloadAndInstall((event) => {
+              switch (event.event) {
+                case 'Started':
+                  contentLength = event.data.contentLength || 0;
+                  console.log(`started downloading ${contentLength} bytes`);
+                  break;
+                case 'Progress':
+                  downloaded += event.data.chunkLength;
+                  if (contentLength > 0 && progressBar) {
+                    const pct = (downloaded / contentLength) * 100;
+                    progressBar.style.width = `${pct}%`;
+                  }
+                  break;
+                case 'Finished':
+                  console.log('download finished');
+                  break;
+              }
+            });
+
+            if (text) text.innerText = 'Update installed! Restarting...';
+            setTimeout(async () => {
+              await relaunch();
+            }, 2000);
+
+          } catch (e) {
+            console.error('Update failed:', e);
+            if (text) text.innerText = `Update failed: ${e}`;
+            if (laterBtn) laterBtn.style.display = 'block';
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Failed to check for updates:', e);
+  }
+}
+
 // ─── Boot ───────────────────────────────────────────────────────────────────
+
+// Handle dynamic external links
+app.addEventListener('click', (e) => {
+  const target = (e.target as HTMLElement).closest('.externalLink') as HTMLElement;
+  if (target) {
+    const url = target.getAttribute('data-url');
+    if (url) open(url);
+  }
+});
 
 loadSessions();

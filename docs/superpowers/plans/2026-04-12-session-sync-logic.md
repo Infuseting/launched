@@ -115,7 +115,7 @@ Run: `git add src-tauri/src/core/sync.rs && git commit -m "feat: implement core 
 ```rust
 #[tauri::command]
 async fn get_sessions() -> Result<Vec<Session>, String> {
-    SessionManager::fetch_sessions("https://galade.fr/installateur/servers.json").await
+    SessionManager::fetch_sessions("https://galade.fr/launched/servers.json").await
 }
 
 #[tauri::command]
