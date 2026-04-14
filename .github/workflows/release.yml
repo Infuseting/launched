@@ -66,3 +66,21 @@ jobs:
           echo "Listing build artifacts:"
           ls -R src-tauri/target/release/bundle || echo "Bundle dir not found"
 
+      - name: Deploy Update Metadata
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          cp src-tauri/target/release/bundle/latest.json src-tauri/target/release/bundle/update.json || echo "latest.json not found"
+
+      - name: Publish to GitHub Pages
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: src-tauri/target/release/bundle
+          publish_branch: gh-pages
+          destination_dir: .
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          force_orphan: false
+          keep_files: true
+
