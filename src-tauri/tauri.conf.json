@@ -36,7 +36,8 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "publisher": "Infuseting",
-    "shortDescription": "Un launcher personnalisé",
+    "copyright": "Infuseting",
+    "shortDescription": "Launcher de différents serveurRP faisant référence de près ou de loin au serveur Galade",
     "license": "MIT",
     "category": "Game",
     "icon": [
@@ -44,7 +45,8 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.png"
     ]
   }
 }
