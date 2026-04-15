@@ -74,53 +74,14 @@ jobs:
 
       - name: Deploy Update Metadata
         if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const tag = context.ref.replace('refs/tags/', '');
-
-            const releases = await github.paginate(github.rest.repos.listReleases, {
-              owner,
-              repo,
-              per_page: 100,
-            });
-
-            const release = releases.find(r => r.tag_name === tag);
-            if (!release) {
-              core.setFailed(`Release not found for tag ${tag}`);
-              return;
-            }
-
-            const latestAsset = release.assets.find(a => a.name === 'latest.json');
-            if (!latestAsset) {
-              core.setFailed(`latest.json asset not found on release ${tag}`);
-              return;
-            }
-
-            const response = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
-              owner,
-              repo,
-              asset_id: latestAsset.id,
-              headers: {
-                accept: 'application/octet-stream',
-              },
-            });
-
-            const outDir = path.join(process.cwd(), 'src-tauri', 'target', 'release', 'bundle');
-            fs.mkdirSync(outDir, { recursive: true });
-            const outFile = path.join(outDir, 'update.json');
-
-            const content = typeof response.data === 'string'
-              ? response.data
-              : JSON.stringify(response.data);
-
-            fs.writeFileSync(outFile, content, 'utf8');
-            core.info(`Wrote updater manifest to ${outFile}`);
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p src-tauri/target/release/bundle
+          gh release download "${{ github.ref_name }}" -p "latest.json"
+          mv latest.json src-tauri/target/release/bundle/update.json
+          echo "Contenu de update.json :"
+          cat src-tauri/target/release/bundle/update.json
 
       - name: Upload updater manifest artifact
         if: matrix.platform == 'ubuntu-22.04'
