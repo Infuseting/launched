@@ -1,1 +1,23 @@
-{}
+{
+  "version": "0.1.0",
+  "notes": "See the assets to download this version and install.",
+  "pub_date": "2026-04-15T19:07:04.494Z",
+  "platforms": {
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVROWxnbit4ZEVubC83cTkwV3pYYm4zL3VIRDZaMmJDMkR0M1U1UXc2dzRGclNURTlSMVFtN0lPUUdYaTVJNXluQmVENjA3Rk5iS2ZZdzRObUJTWHNHWk1RLzZ5Wk80OXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc2MjgwMDE1CWZpbGU6bGF1bmNoZWRfMC4xLjBfYW1kNjQuQXBwSW1hZ2UKTEJLU0h0UGw3OWpIY3BXelB2RHNaZDI4SGtWUDVzbTZQZmErMDdEbmpQdzRVY01JKzNvRlVPVnZabmJzTTZOOEtEcUN3cklFbkpnU3Q0R0dJWmpZQ0E9PQo=",
+      "url": "https://github.com/Infuseting/launched/releases/download/v0.1.14/launched_0.1.0_amd64.AppImage"
+    },
+    "linux-x86_64-appimage": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVROWxnbit4ZEVubC83cTkwV3pYYm4zL3VIRDZaMmJDMkR0M1U1UXc2dzRGclNURTlSMVFtN0lPUUdYaTVJNXluQmVENjA3Rk5iS2ZZdzRObUJTWHNHWk1RLzZ5Wk80OXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc2MjgwMDE1CWZpbGU6bGF1bmNoZWRfMC4xLjBfYW1kNjQuQXBwSW1hZ2UKTEJLU0h0UGw3OWpIY3BXelB2RHNaZDI4SGtWUDVzbTZQZmErMDdEbmpQdzRVY01JKzNvRlVPVnZabmJzTTZOOEtEcUN3cklFbkpnU3Q0R0dJWmpZQ0E9PQo=",
+      "url": "https://github.com/Infuseting/launched/releases/download/v0.1.14/launched_0.1.0_amd64.AppImage"
+    },
+    "linux-x86_64-deb": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVROWxnbit4ZEVubC9URnhQWkE2eXFyR3dYZlRqdVNDdHd5aytDVGpzYlQrMTdTTlhGc0hMbWdoc0ZSQk1DUkFqVzNBdFA0cjl1ZHVRMmtvK0Z4K0dHZVhhTFY2QUJRU0FvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc2MjgwMDE1CWZpbGU6bGF1bmNoZWRfMC4xLjBfYW1kNjQuZGViCkFjQVVLdGJ5TDR2K2NsclYzQlV6cUNOTnpsR0FxVVZDOXcwUzJGN1A5RWVPN2RacXFMdSswMnN1N0VPZkkrZ3F2ZmhaQmNSNTNMYnJWN3RlV2FMNkFBPT0K",
+      "url": "https://github.com/Infuseting/launched/releases/download/v0.1.14/launched_0.1.0_amd64.deb"
+    },
+    "linux-x86_64-rpm": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVROWxnbit4ZEVubHdWL2tPWDJzOHlpY0d3VFdtd1duU3JEUFhWUCs3WUFMRExSNkUvUVorMWdKODVSZzhwZlRDbnBVREl6Vk94NDFOcWYySjlVYUFYOW1RSVBsc21WRmdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc2MjgwMDE1CWZpbGU6bGF1bmNoZWQtMC4xLjAtMS54ODZfNjQucnBtCnBNcDlWYUxYSk1GZkNaMlJlZ2FLRmNicGdoUTNyaGFyY0xINXdQNFYvSk1YczdITDZyb3ozWGhZUEM4N1Y5Ny9nd2UvMkdUR2Zxb0p2czdYMDE1NUFRPT0K",
+      "url": "https://github.com/Infuseting/launched/releases/download/v0.1.14/launched-0.1.0-1.x86_64.rpm"
+    }
+  }
+}
