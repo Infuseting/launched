@@ -78,7 +78,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p src-tauri/target/release/bundle
-          gh release download "${{ github.ref_name }}" -p "latest.json"
+          gh release download "${{ github.ref_name }}" -p "latest.json" --clobber
           mv latest.json src-tauri/target/release/bundle/update.json
           echo "Contenu de update.json :"
           cat src-tauri/target/release/bundle/update.json
