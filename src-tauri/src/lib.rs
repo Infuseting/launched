@@ -124,7 +124,7 @@ async fn launch_game(
 
     // Get auth: try keychain first
     let settings = SettingsManager::load(&app_handle);
-    let accounts = crate::auth::secrets::SecretManager::get_all_accounts().unwrap_or_default();
+    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
     
     let auth = if let Some(ref active_uuid) = settings.active_account_uuid {
         accounts.into_iter().find(|a| a.uuid == *active_uuid)
@@ -165,7 +165,7 @@ async fn get_system_ram() -> Result<u32, String> {
 #[tauri::command]
 async fn get_auth(app_handle: tauri::AppHandle) -> Result<Option<AuthResponse>, String> {
     let settings = SettingsManager::load(&app_handle);
-    let accounts = crate::auth::secrets::SecretManager::get_all_accounts().unwrap_or_default();
+    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
     
     // Return active if saved in settings
     if let Some(ref active_uuid) = settings.active_account_uuid {
@@ -186,8 +186,8 @@ async fn get_auth(app_handle: tauri::AppHandle) -> Result<Option<AuthResponse>, 
 }
 
 #[tauri::command]
-async fn get_all_accounts() -> Result<Vec<AuthResponse>, String> {
-    crate::auth::secrets::SecretManager::get_all_accounts()
+async fn get_all_accounts(app_handle: tauri::AppHandle) -> Result<Vec<AuthResponse>, String> {
+    crate::auth::secrets::SecretManager::get_all_accounts(&app_handle)
 }
 
 #[tauri::command]
@@ -198,13 +198,13 @@ async fn set_active_account(app_handle: tauri::AppHandle, uuid: String) -> Resul
 }
 
 #[tauri::command]
-async fn remove_account(uuid: String) -> Result<(), String> {
-    crate::auth::secrets::SecretManager::remove_account(&uuid)
+async fn remove_account(app_handle: tauri::AppHandle, uuid: String) -> Result<(), String> {
+    crate::auth::secrets::SecretManager::remove_account(&app_handle, &uuid)
 }
 
 #[tauri::command]
-async fn has_auth(_app_handle: tauri::AppHandle) -> Result<bool, String> {
-    let accounts = crate::auth::secrets::SecretManager::get_all_accounts().unwrap_or_default();
+async fn has_auth(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
     Ok(!accounts.is_empty())
 }
 
@@ -216,7 +216,7 @@ async fn login_microsoft(
     let auth_strategy = MicrosoftAuth;
     let response = auth_strategy.authenticate(&window).await?;
 
-    let _ = crate::auth::secrets::SecretManager::add_account(response.clone());
+    let _ = crate::auth::secrets::SecretManager::add_account(&app_handle, response.clone());
     
     let mut settings = SettingsManager::load(&app_handle);
     settings.active_account_uuid = Some(response.uuid.clone());
@@ -229,7 +229,7 @@ async fn login_microsoft(
 async fn logout(app_handle: tauri::AppHandle) -> Result<(), String> {
     let settings = SettingsManager::load(&app_handle);
     if let Some(active) = &settings.active_account_uuid {
-        let _ = crate::auth::secrets::SecretManager::remove_account(active);
+        let _ = crate::auth::secrets::SecretManager::remove_account(&app_handle, active);
     }
     let mut new_settings = settings.clone();
     new_settings.active_account_uuid = None;

@@ -2,6 +2,9 @@
   "name": "launched",
   "private": true,
   "version": "0.0.0",
+  "description": "Launcher Minecraft personnalisé",
+  "author": "Infuseting",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
