@@ -1,7 +1,7 @@
 Package: launched
 Version: 1.0.0
 Architecture: amd64
-Installed-Size: 26088
+Installed-Size: 26105
 Maintainer: you
 Priority: optional
 Depends: libwebkit2gtk-4.1-0, libgtk-3-0
