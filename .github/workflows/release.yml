@@ -66,16 +66,61 @@ jobs:
           echo "Listing build artifacts:"
           ls -R src-tauri/target/release/bundle || echo "Bundle dir not found"
 
-      - name: Deploy Update Metadata
+      - name: Locate updater files
         if: matrix.platform == 'ubuntu-22.04'
         run: |
-          set -e
-          LATEST_JSON=$(find src-tauri/target/release/bundle -type f -name latest.json | head -n 1)
-          if [ -z "$LATEST_JSON" ]; then
-            echo "latest.json not found in bundle output"
-            exit 1
-          fi
-          cp "$LATEST_JSON" src-tauri/target/release/bundle/update.json
+          echo "Searching for updater manifests in workspace..."
+          find . -type f \( -name "latest.json" -o -name "update.json" \) | sed -n '1,200p'
+
+      - name: Deploy Update Metadata
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            const release = releases.find(r => r.tag_name === tag);
+            if (!release) {
+              core.setFailed(`Release not found for tag ${tag}`);
+              return;
+            }
+
+            const latestAsset = release.assets.find(a => a.name === 'latest.json');
+            if (!latestAsset) {
+              core.setFailed(`latest.json asset not found on release ${tag}`);
+              return;
+            }
+
+            const response = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+              owner,
+              repo,
+              asset_id: latestAsset.id,
+              headers: {
+                accept: 'application/octet-stream',
+              },
+            });
+
+            const outDir = path.join(process.cwd(), 'src-tauri', 'target', 'release', 'bundle');
+            fs.mkdirSync(outDir, { recursive: true });
+            const outFile = path.join(outDir, 'update.json');
+
+            const content = typeof response.data === 'string'
+              ? response.data
+              : JSON.stringify(response.data);
+
+            fs.writeFileSync(outFile, content, 'utf8');
+            core.info(`Wrote updater manifest to ${outFile}`);
 
       - name: Upload updater manifest artifact
         if: matrix.platform == 'ubuntu-22.04'
