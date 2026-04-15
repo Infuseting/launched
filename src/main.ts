@@ -200,6 +200,10 @@ async function loadSessions() {
     } catch { state.maxSystemRam = 8192; }
 
     try {
+      state.appVersion = await updaterService.appVersion();
+    } catch { state.appVersion = "1.0.0"; }
+
+    try {
       const auth = await authService.getAuth();
       if (auth) {
         state.authCache = auth;
@@ -238,52 +242,77 @@ async function loadSessions() {
   }
 }
 
-async function checkForUpdates() {
+async function checkForUpdates(silent: boolean = false) {
+  state.isCheckingUpdate = true;
+  if (!silent) renderApp(handlers);
+  
   try {
     const update = await updaterService.checkForAppUpdates();
-    if (update) {
-      const modal = document.getElementById('updateModal');
-      const text = document.getElementById('updateModalText');
-      const installBtn = document.getElementById('btn-update-install');
-      const laterBtn = document.getElementById('btn-update-later');
-      const progressContainer = document.getElementById('updateProgressContainer');
-      const progressBar = document.getElementById('updateProgressBar');
-
-      if (modal && text) {
-        text.innerText = `Version ${update.version} is available. \n\n${update.body || ''}`;
-        modal.style.display = 'flex';
-        laterBtn?.addEventListener('click', () => { modal.style.display = 'none'; });
-        installBtn?.addEventListener('click', async () => {
-          if (installBtn) installBtn.style.display = 'none';
-          if (laterBtn) laterBtn.style.display = 'none';
-          if (progressContainer) progressContainer.style.display = 'block';
-          if (text) text.innerText = 'Downloading update...';
-
-          try {
-            let downloaded = 0;
-            let contentLength = 0;
-            await update.downloadAndInstall((event) => {
-              switch (event.event) {
-                case 'Started': contentLength = event.data.contentLength || 0; break;
-                case 'Progress':
-                  downloaded += event.data.chunkLength;
-                  if (contentLength > 0 && progressBar) {
-                    const pct = (downloaded / contentLength) * 100;
-                    progressBar.style.width = `${pct}%`;
-                  }
-                  break;
-              }
-            });
-            if (text) text.innerText = 'Update installed! Restarting...';
-            setTimeout(async () => { await updaterService.relaunchApp(); }, 2000);
-          } catch (e) {
-            if (text) text.innerText = `Update failed: ${e}`;
-            if (laterBtn) laterBtn.style.display = 'block';
-          }
-        });
-      }
+    state.updateManifest = update;
+    
+    if (update && !silent) {
+       // Only show modal if NOT silent and we found one
+       // Actually, we'll let the settings tab handle the display if possible
+       // but for backwards compatibility with the existing modal:
+       showUpdateModal(update);
     }
-  } catch (e) { console.error('Failed to check for updates:', e); }
+  } catch (e) { 
+    console.error('Failed to check for updates:', e); 
+  } finally {
+    state.isCheckingUpdate = false;
+    renderApp(handlers);
+  }
+}
+
+function showUpdateModal(update: any) {
+  const modal = document.getElementById('updateModal');
+  const text = document.getElementById('updateModalText');
+  const installBtn = document.getElementById('btn-update-install');
+  const laterBtn = document.getElementById('btn-update-later');
+  const progressContainer = document.getElementById('updateProgressContainer');
+  const progressBar = document.getElementById('updateProgressBar');
+
+  if (modal && text) {
+    text.innerText = `Version ${update.version} is available. \n\n${update.body || ''}`;
+    modal.style.display = 'flex';
+    if (laterBtn) {
+      laterBtn.onclick = () => { if (modal) modal.style.display = 'none'; };
+    }
+    if (installBtn) {
+      installBtn.onclick = async () => {
+        if (installBtn) installBtn.style.display = 'none';
+        if (laterBtn) laterBtn.style.display = 'none';
+        if (progressContainer) progressContainer.style.display = 'block';
+        if (text) text.innerText = 'Downloading update...';
+
+        await performUpdate(update, (pct) => {
+          if (progressBar) progressBar.style.width = `${pct}%`;
+          if (text) text.innerText = `Downloading... ${Math.round(pct)}%`;
+        });
+      };
+    }
+  }
+}
+
+async function performUpdate(update: any, onProgress?: (pct: number) => void) {
+  try {
+    let downloaded = 0;
+    let contentLength = 0;
+    await update.downloadAndInstall((event: any) => {
+      switch (event.event) {
+        case 'Started': contentLength = event.data.contentLength || 0; break;
+        case 'Progress':
+          downloaded += event.data.chunkLength;
+          if (contentLength > 0 && onProgress) {
+            onProgress((downloaded / contentLength) * 100);
+          }
+          break;
+      }
+    });
+    setTimeout(async () => { await updaterService.relaunchApp(); }, 1500);
+  } catch (e) {
+    alert(`Update failed: ${e}`);
+  }
 }
 
 const handlers = {
@@ -327,6 +356,25 @@ const handlers = {
   },
   saveSettings: async () => {
     await settingsService.saveSettingsInternal(state.currentSettings);
+  },
+  handleCheckUpdate: async () => {
+    await checkForUpdates(false);
+  },
+  handleInstallUpdate: async () => {
+    if (state.updateManifest) {
+      await performUpdate(state.updateManifest);
+    }
+  },
+  handleTabChange: (tabId: string) => {
+    state.activeSettingsTab = tabId;
+    renderApp(handlers);
+  },
+  handleSettingsToggle: (show: boolean) => {
+    // Import dynamically to avoid circular dependencies if any
+    import("./render/ui").then(ui => {
+      ui.toggleSettings(show);
+      renderApp(handlers);
+    });
   }
 };
 

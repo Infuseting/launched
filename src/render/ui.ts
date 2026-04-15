@@ -19,25 +19,7 @@ export function toggleServerSelection(show: boolean) {
 }
 
 export function toggleSettings(show: boolean) {
-  const settings = document.getElementById('settingsContainer');
-  const landing = document.getElementById('landingContainer');
-  if (!settings || !landing) return;
-
-  if (show) {
-    landing.style.opacity = '0';
-    setTimeout(() => {
-      landing.style.display = 'none';
-      settings.style.display = 'flex';
-      setTimeout(() => settings.style.opacity = '1', 50);
-    }, 250);
-  } else {
-    settings.style.opacity = '0';
-    setTimeout(() => {
-      settings.style.display = 'none';
-      landing.style.display = 'flex';
-      setTimeout(() => landing.style.opacity = '1', 50);
-    }, 250);
-  }
+  state.isSettingsOpen = show;
 }
 
 export function updateUserDisplay() {

@@ -16,5 +16,10 @@ export const state = {
   } as AppSettings,
   allAccounts: [] as AuthResponse[],
   maxSystemRam: 8192,
-  serverStatusInterval: null as number | null
+  serverStatusInterval: null as number | null,
+  appVersion: "1.0.0",
+  updateManifest: null as any,
+  isCheckingUpdate: false,
+  activeSettingsTab: "account",
+  isSettingsOpen: false
 };

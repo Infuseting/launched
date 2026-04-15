@@ -1,7 +1,6 @@
 import { state } from "../state";
 import { 
   toggleServerSelection, 
-  toggleSettings, 
   updateServerButton
 } from "./ui";
 
@@ -13,6 +12,10 @@ export function renderApp(
     handleAccountRemove: (uuid: string) => Promise<void>;
     handleLoginAdd: () => Promise<void>;
     saveSettings: () => Promise<void>;
+    handleCheckUpdate: () => Promise<void>;
+    handleInstallUpdate: () => Promise<void>;
+    handleTabChange: (tabId: string) => void;
+    handleSettingsToggle: (show: boolean) => void;
   }
 ) {
   const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -22,7 +25,7 @@ export function renderApp(
   const bgUrl = activeSession.assetsData?.background || (activeSession.assetsPath && !activeSession.assetsPath.endsWith('.json') ? `${activeSession.assetsPath}/background.png` : '');
 
   app.innerHTML = `
-    <div id="landingContainer" style="${bgUrl ? `background-image: url('${bgUrl}'); background-size: cover; background-position: center;` : ''}">
+    <div id="landingContainer" style="${bgUrl ? `background-image: url('${bgUrl}'); background-size: cover; background-position: center;` : ''}; display: ${state.isSettingsOpen ? 'none' : 'flex'}; opacity: ${state.isSettingsOpen ? '0' : '1'};">
       <!-- Upper area -->
       <div id="upper">
         <div id="left"></div>
@@ -145,125 +148,208 @@ export function renderApp(
     </div>
 
     <!-- Settings Overlay -->
-    <div id="settingsContainer" style="display: none;">
+    <div id="settingsContainer" style="display: ${state.isSettingsOpen ? 'flex' : 'none'}; opacity: ${state.isSettingsOpen ? '1' : '0'}; ${bgUrl ? `background-image: url('${bgUrl}'); background-size: cover; background-position: center;` : ''}">
       <div id="settingsContainerLeft">
-        <div id="settingsNavContainer">
-          <div id="settingsNavHeader"><span id="settingsNavHeaderText">Settings</span></div>
-          <div id="settingsNavItemsContainer">
-            <div id="settingsNavItemsContent">
-              <button class="settingsNavItem" data-tab="account" selected>Account</button>
-              <button class="settingsNavItem" data-tab="minecraft">Minecraft</button>
-              <div class="settingsNavSpacer"></div>
-              <div id="settingsNavContentBottom">
-                <div class="settingsNavDivider"></div>
-                <button id="settingsNavDone">DONE</button>
-              </div>
-            </div>
-          </div>
+        <span id="settingsNavHeaderText">Settings</span>
+        <div id="settingsNavItemsContent">
+          <button class="settingsNavItem" data-tab="account" ${state.activeSettingsTab === 'account' ? 'selected' : ''}>Account</button>
+          <button class="settingsNavItem" data-tab="minecraft" ${state.activeSettingsTab === 'minecraft' ? 'selected' : ''}>Minecraft</button>
+          <button class="settingsNavItem" data-tab="mods" ${state.activeSettingsTab === 'mods' ? 'selected' : ''}>Mods</button>
+          <button class="settingsNavItem" data-tab="java" ${state.activeSettingsTab === 'java' ? 'selected' : ''}>Java</button>
+          <button class="settingsNavItem" data-tab="launcher" ${state.activeSettingsTab === 'launcher' ? 'selected' : ''}>Launcher</button>
+          <div class="settingsNavDivider"></div>
+          <button class="settingsNavItem" data-tab="about" ${state.activeSettingsTab === 'about' ? 'selected' : ''}>About</button>
+          <button class="settingsNavItem" data-tab="updates" ${state.activeSettingsTab === 'updates' ? 'selected' : ''}>Updates</button>
+        </div>
+        <div id="settingsNavContentBottom">
+          <button id="settingsNavDone">Done</button>
         </div>
       </div>
       <div id="settingsContainerRight">
         <!-- Account Tab -->
-        <div id="tab-account" class="settingsTab">
+        <div id="tab-account" class="settingsTab" style="display:${state.activeSettingsTab === 'account' ? 'block' : 'none'};">
           <div class="settingsTabHeader">
             <span class="settingsTabHeaderText">Account Management</span>
-            <span class="settingsTabHeaderDesc">Manage your authenticated Microsoft account.</span>
+            <span class="settingsTabHeaderDesc">Manage your authenticated Microsoft accounts.</span>
           </div>
-          <div class="settingsAuthAccountTypeContainer">
-            <div class="settingsCurrentAccounts">
-              ${state.allAccounts.map(acc => `
-                <div class="settingsAuthAccount settingsAccountItem" data-uuid="${acc.uuid}" style="cursor:pointer; margin-bottom: 10px; border: ${acc.uuid === state.authCache?.uuid ? '2px solid #55aa55' : '1px solid #333'}; padding: 5px;">
-                  <div class="settingsAuthAccountLeft">
-                    <div class="settingsAuthAccountImage" style="width: 40px; height: 80px; background-color: rgba(255,255,255,0.05); background-image: url('https://mc-heads.net/body/${acc.uuid}/right'); background-size: contain; background-repeat: no-repeat; background-position: center;"></div>
+          <div class="settingsCurrentAccounts">
+            ${state.allAccounts.map(acc => `
+              <div class="settingsAuthAccount settingsAccountItem" data-uuid="${acc.uuid}" style="cursor:pointer; margin-bottom: 12px; border: ${acc.uuid === state.authCache?.uuid ? '1px solid var(--accent-green)' : '1px solid var(--glass-border)'}; padding: 15px; border-radius: 4px; background: rgba(255,255,255,0.03);">
+                <div style="display:flex; align-items:center;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background-image: url('https://mc-heads.net/avatar/${acc.uuid}'); background-size: cover; margin-right: 15px;"></div>
+                  <div style="flex:1;">
+                    <div style="font-weight:700; color:${acc.uuid === state.authCache?.uuid ? 'var(--accent-green)' : 'white'}">${acc.name}</div>
+                    <div style="font-size:10px; color:rgba(255,255,255,0.4)">${acc.uuid === state.authCache?.uuid ? 'ACTIVE ACCOUNT' : 'STORED ACCOUNT'}</div>
                   </div>
-                  <div class="settingsAuthAccountRight">
-                    <div class="settingsAuthAccountDetails">
-                      <div class="settingsAuthAccountDetailPane">
-                        <span class="settingsAuthAccountDetailTitle">USERNAME</span>
-                        <span class="settingsAuthAccountDetailValue" style="color: ${acc.uuid === state.authCache?.uuid ? '#55aa55' : '#fff'};">${acc.name}</span>
-                      </div>
-                    </div>
-                    <div class="settingsAuthAccountActions">
-                      <button class="settingsAccountRemove settingsAuthAccountLogOut" data-uuid="${acc.uuid}">REMOVE</button>
-                    </div>
-                  </div>
+                  <button class="settingsAccountRemove" data-uuid="${acc.uuid}" style="background:none; border:none; color:rgba(255,255,255,0.2); cursor:pointer; font-size:10px; font-weight:700;">REMOVE</button>
                 </div>
-              `).join('')}
-              ${state.allAccounts.length === 0 ? `<div style="text-align:center; padding: 20px; opacity: 0.7;">No accounts found.</div>` : ''}
-              <div style="margin-top: 20px; display: flex; justify-content: center;">
-                <button class="settingsAuthAccountSelect" style="opacity:1" id="btn-login-add">ADD ACCOUNT</button>
               </div>
+            `).join('')}
+            <div style="margin-top: 30px; display: flex; justify-content: center;">
+              <button class="settingsFileButton" id="btn-login-add" style="background:var(--accent-green); color:black; font-weight:900; letter-spacing:1px;">ADD ACCOUNT</button>
             </div>
           </div>
         </div>
 
+        <!-- Java Tab -->
+        <div id="tab-java" class="settingsTab" style="display:${state.activeSettingsTab === 'java' ? 'block' : 'none'};">
+          <div class="settingsTabHeader">
+            <span class="settingsTabHeaderText">Java Settings</span>
+            <span class="settingsTabHeaderDesc">Manage the Java configuration (advanced).</span>
+          </div>
+
+          <div class="settingsSection">
+            <div class="settingsSectionTitle">Memory</div>
+            <div class="settingsSeparator"></div>
+            
+            <div style="display:flex;">
+              <div style="flex:1;">
+                <div class="settingsSliderRow">
+                  <span class="settingsSliderLabel">Maximum RAM</span>
+                  <div class="slider-container">
+                    <input type="range" class="premium-slider" id="maxRamSlider" min="1024" max="${state.maxSystemRam}" step="512" value="${state.currentSettings.maxRam}">
+                    <span class="slider-value" id="maxRamDisplay">${(state.currentSettings.maxRam / 1024).toFixed(1)}G</span>
+                  </div>
+                </div>
+
+                <div class="settingsSliderRow">
+                  <span class="settingsSliderLabel">Minimum RAM</span>
+                  <div class="slider-container">
+                    <input type="range" class="premium-slider" id="minRamSlider" min="512" max="${state.maxSystemRam}" step="512" value="${state.currentSettings.minRam || 1024}">
+                    <span class="slider-value" id="minRamDisplay">${((state.currentSettings.minRam || 1024) / 1024).toFixed(1)}G</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settingsStatsContainer">
+                <div class="settingsStatItem">
+                  <span class="settingsStatLabel">Total</span>
+                  <span class="settingsStatValue">${(state.maxSystemRam / 1024).toFixed(1)}G</span>
+                </div>
+              </div>
+            </div>
+
+            <p class="settingsHelpText">
+              The recommended minimum RAM is 3 gigabytes. Setting the minimum and maximum values to the same value may reduce lag.
+            </p>
+          </div>
+
+          <div class="settingsSection">
+            <div class="settingsSectionTitle">Java Executable</div>
+            <div class="settingsFilePicker">
+              <div class="settingsFileIcon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </div>
+              <div class="settingsFilePath" id="javaExecPathDisplay">${state.currentSettings.wrapperCommand || 'Default (Auto-detected)'}</div>
+              <button class="settingsFileButton">Choose File</button>
+            </div>
+            <p class="settingsHelpText">
+              The Java executable is validated before game launch. Requires Java ${activeSession.minecraft.split('.')[1] === '17' || activeSession.minecraft.startsWith('1.18') ? '17' : '8'} x64.
+            </p>
+          </div>
+
+          <div class="settingsSection">
+            <div class="settingsSectionTitle">Additional JVM Options</div>
+            <textarea class="settingsTextArea" id="jvmArgsInput" placeholder="-XX:+UseG1GC ...">${state.currentSettings.jvmArgs || ''}</textarea>
+          </div>
+        </div>
+
+        <!-- Placeholder Tabs -->
         <!-- Minecraft Tab -->
-        <div id="tab-minecraft" class="settingsTab" style="display:none;">
+        <div id="tab-minecraft" class="settingsTab" style="display:${state.activeSettingsTab === 'minecraft' ? 'block' : 'none'};">
           <div class="settingsTabHeader">
             <span class="settingsTabHeaderText">Minecraft Settings</span>
-            <span class="settingsTabHeaderDesc">Modify game options such as memory and resolution.</span>
+            <span class="settingsTabHeaderDesc">General game configuration.</span>
           </div>
-          <div id="settingsMemoryContainer">
-            <div id="settingsMemoryTitle">Java Memory (RAM)</div>
-            <div id="settingsMemoryContent">
-              <div class="settingsFieldLeft">
-                <span class="settingsFieldTitle">Maximum Memory (MB)</span>
-                <span class="settingsFieldDesc">Slide to allocate system memory to Minecraft. System Max: ${state.maxSystemRam} MB</span>
+          <div style="opacity:0.5; padding:40px; text-align:center;">General Minecraft settings coming soon.</div>
+        </div>
+        
+        <div id="tab-mods" class="settingsTab" style="display:${state.activeSettingsTab === 'mods' ? 'block' : 'none'};">
+          <div class="settingsTabHeader">
+            <span class="settingsTabHeaderText">Mod Management</span>
+            <span class="settingsTabHeaderDesc">Enable or disable specific modifications.</span>
+          </div>
+          <div style="opacity:0.5; padding:40px; text-align:center;">Mod management is automatically handled by the server profile.</div>
+        </div>
+
+        <div id="tab-launcher" class="settingsTab" style="display:${state.activeSettingsTab === 'launcher' ? 'block' : 'none'};">
+          <div class="settingsTabHeader">
+            <span class="settingsTabHeaderText">Launcher Settings</span>
+            <span class="settingsTabHeaderDesc">Configure the launcher behavior and appearance.</span>
+          </div>
+          <div class="settingsSection">
+             <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <div style="font-weight:700;">Show Console Logs</div>
+                  <div style="font-size:12px; color:rgba(255,255,255,0.4);">Open a log window when the game starts.</div>
+                </div>
+                <input type="checkbox" id="showLogsCheckbox" ${state.currentSettings.showLogs ? 'checked' : ''} style="width:20px; height:20px;">
+             </div>
+          </div>
+        </div>
+
+        <div id="tab-updates" class="settingsTab" style="display:${state.activeSettingsTab === 'updates' ? 'block' : 'none'};">
+          <div class="settingsTabHeader">
+            <span class="settingsTabHeaderText">Updates</span>
+            <span class="settingsTabHeaderDesc">Manage launcher updates and see what's new.</span>
+          </div>
+          <div class="settingsSection">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:12px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Current Version</div>
+                <div style="font-size:18px; font-weight:700;">${state.appVersion}</div>
               </div>
-              <div style="display:flex; align-items:center; flex-direction:column;">
-                <input type="range" id="ramSlider" min="1024" max="${state.maxSystemRam}" step="512" value="${(() => {
-                  let v = state.currentSettings.maxRam;
-                  if (v === 4096 || v === 0) {
-                    const s = state.globalSessions[state.activeSessionIndex]?.jvmArg || "";
-                    const m1 = s.match(/-Xmx(\d+)[mM]/); if (m1) v = parseInt(m1[1]);
-                    const m2 = s.match(/-Xmx(\d+)[gG]/); if (m2) v = parseInt(m2[1]) * 1024;
-                  }
-                  return v;
-                })()}" style="width:200px; margin-bottom: 8px;">
-                <span id="ramDisplay" style="font-weight:bold; font-size: 14px;">...</span>
+              <div style="text-align:right;">
+                <div style="font-size:12px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Latest Version</div>
+                <div style="font-size:18px; font-weight:700; color:${state.updateManifest ? 'var(--accent-green)' : 'rgba(255,255,255,0.4)'}">${state.updateManifest ? state.updateManifest.version : (state.isCheckingUpdate ? 'Checking...' : 'Latest')}</div>
               </div>
             </div>
-          </div>
-          <div class="settingsNavDivider" style="margin: 20px 0;"></div>
-          <div id="settingsJVMContainer">
-            <div id="settingsMemoryTitle">Java Arguments</div>
-            <div id="settingsMemoryContent">
-              <div class="settingsFieldLeft">
-                <span class="settingsFieldTitle">JVM Arguments</span>
-                <span class="settingsFieldDesc">Custom parameters to pass to the Java runtime.</span>
-              </div>
-              <div style="display:flex; align-items:center;">
-                <input type="text" id="jvmInput" value="${state.currentSettings.jvmArgs || ''}" style="width:300px; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid #333; color: white;">
-              </div>
+            
+            <div style="margin-top:30px; padding:20px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+              ${state.updateManifest ? `
+                <div style="color:var(--accent-green); font-weight:700; margin-bottom:10px;">New Update Available!</div>
+                <div style="font-size:13px; color:rgba(255,255,255,0.6); line-height:1.6; max-height:150px; overflow-y:auto;">
+                  ${state.updateManifest.body || 'No release notes provided.'}
+                </div>
+              ` : `
+                <div style="font-size:13px; color:rgba(255,255,255,0.3); text-align:center;">
+                  ${state.isCheckingUpdate ? 'Searching for new versions...' : 'Votre lanceur est à jour.'}
+                </div>
+              `}
             </div>
-          </div>
-          <div class="settingsNavDivider" style="margin: 20px 0;"></div>
-          <div id="settingsResContainer">
-            <div id="settingsMemoryTitle">Game Resolution</div>
-            <div id="settingsMemoryContent">
-              <div class="settingsFieldLeft">
-                <span class="settingsFieldTitle">Game Window Size</span>
-                <span class="settingsFieldDesc">Set the default width and height of the Minecraft window (e.g., 1920x1080).</span>
-              </div>
-              <div style="display:flex; align-items:center;">
-                <input type="text" id="resInput" value="${state.currentSettings.gameResolution || '400x300'}" style="width:150px; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid #333; color: white;">
-              </div>
-            </div>
-          </div>
-          <div class="settingsNavDivider" style="margin: 20px 0;"></div>
-          <div id="settingsLogContainer" style="margin-bottom: 20px;">
-            <div id="settingsMemoryTitle">Developer & Support</div>
-            <div id="settingsMemoryContent">
-              <div class="settingsFieldLeft">
-                <span class="settingsFieldTitle">Show Game Logs</span>
-                <span class="settingsFieldDesc">Display a console overlay when launching the game.</span>
-              </div>
-              <div style="display:flex; align-items:center;">
-                <input type="checkbox" id="showLogsCheckbox" ${state.currentSettings.showLogs ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer;">
-              </div>
+
+            <div style="margin-top:30px; display:flex; gap:15px;">
+              <button class="settingsFileButton" id="btn-check-update" style="flex:1; background:rgba(255,255,255,0.1);" ${state.isCheckingUpdate ? 'disabled' : ''}>
+                ${state.isCheckingUpdate ? 'Checking...' : 'Vérifier les mises à jour'}
+              </button>
+              ${state.updateManifest ? `
+                <button class="settingsFileButton" id="btn-install-update" style="flex:1; background:var(--accent-green); color:black;">
+                  Install Update
+                </button>
+              ` : ''}
             </div>
           </div>
         </div>
+
+        <div id="tab-about" class="settingsTab" style="display:${state.activeSettingsTab === 'about' ? 'block' : 'none'};">
+          <div class="settingsTabHeader">
+            <span class="settingsTabHeaderText">About</span>
+            <span class="settingsTabHeaderDesc">Launcher version and credits.</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.03); padding:30px; border-radius:8px;">
+            <div style="font-weight:900; font-size:24px; color:var(--accent-green);">LAUNCHED</div>
+            <div style="font-size:14px; opacity:0.6; margin-bottom:20px;">Open Source Minecraft Launcher</div>
+            <div style="font-size:13px; margin-bottom:5px;">Version: ${state.appVersion}</div>
+            <div style="font-size:13px;">Author: Infuseting</div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -371,22 +457,26 @@ export function renderApp(
     toggleServerSelection(false);
   });
 
+
   document.getElementById('settingsMediaButton')?.addEventListener('click', () => {
-    toggleSettings(true);
+    handlers.handleSettingsToggle(true);
   });
   document.getElementById('avatarOverlay')?.addEventListener('click', () => {
-    toggleSettings(true);
+    handlers.handleSettingsToggle(true);
+  });
+  document.getElementById('btn-login-add')?.addEventListener('click', () => {
+    handlers.handleLoginAdd();
+  });
+  document.getElementById('msLoginModalCancel')?.addEventListener('click', () => {
+    const modal = document.getElementById('msLoginModal');
+    if (modal) modal.style.display = 'none';
   });
 
   document.querySelectorAll('.settingsNavItem').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.settingsNavItem').forEach(b => b.removeAttribute('selected'));
-      (e.target as HTMLElement).setAttribute('selected', '');
-      const tabId = (e.target as HTMLElement).dataset.tab;
-      document.querySelectorAll('.settingsTab').forEach(tab => {
-        (tab as HTMLElement).style.display = 'none';
-      });
-      document.getElementById(`tab-${tabId}`)!.style.display = 'block';
+      const target = e.currentTarget as HTMLElement;
+      const tabId = target.dataset.tab;
+      if (tabId) handlers.handleTabChange(tabId);
     });
   });
 
@@ -397,31 +487,34 @@ export function renderApp(
     if (modal) modal.style.display = 'none';
   });
 
-  const ramSlider = document.getElementById('ramSlider') as HTMLInputElement;
-  const ramDisplay = document.getElementById('ramDisplay') as HTMLElement;
-  if (ramSlider && ramDisplay) {
-    ramDisplay.innerText = `${ramSlider.value} MB`;
-    ramSlider.addEventListener('input', () => {
-      ramDisplay.innerText = `${ramSlider.value} MB`;
+  const maxRamSlider = document.getElementById('maxRamSlider') as HTMLInputElement;
+  const maxRamDisplay = document.getElementById('maxRamDisplay') as HTMLElement;
+  if (maxRamSlider && maxRamDisplay) {
+    maxRamSlider.addEventListener('input', () => {
+      maxRamDisplay.innerText = `${(parseInt(maxRamSlider.value) / 1024).toFixed(1)}G`;
     });
-    ramSlider.addEventListener('change', () => {
-      state.currentSettings.maxRam = parseInt(ramSlider.value);
+    maxRamSlider.addEventListener('change', () => {
+      state.currentSettings.maxRam = parseInt(maxRamSlider.value);
       handlers.saveSettings();
     });
   }
 
-  const jvmInput = document.getElementById('jvmInput') as HTMLInputElement;
-  if (jvmInput) {
-    jvmInput.addEventListener('change', () => {
-      state.currentSettings.jvmArgs = jvmInput.value;
+  const minRamSlider = document.getElementById('minRamSlider') as HTMLInputElement;
+  const minRamDisplay = document.getElementById('minRamDisplay') as HTMLElement;
+  if (minRamSlider && minRamDisplay) {
+    minRamSlider.addEventListener('input', () => {
+      minRamDisplay.innerText = `${(parseInt(minRamSlider.value) / 1024).toFixed(1)}G`;
+    });
+    minRamSlider.addEventListener('change', () => {
+      state.currentSettings.minRam = parseInt(minRamSlider.value);
       handlers.saveSettings();
     });
   }
 
-  const resInput = document.getElementById('resInput') as HTMLInputElement;
-  if (resInput) {
-    resInput.addEventListener('change', () => {
-      state.currentSettings.gameResolution = resInput.value;
+  const jvmArgsInput = document.getElementById('jvmArgsInput') as HTMLTextAreaElement;
+  if (jvmArgsInput) {
+    jvmArgsInput.addEventListener('change', () => {
+      state.currentSettings.jvmArgs = jvmArgsInput.value;
       handlers.saveSettings();
     });
   }
@@ -435,8 +528,11 @@ export function renderApp(
   }
 
   document.getElementById('settingsNavDone')?.addEventListener('click', () => {
-    toggleSettings(false);
+    handlers.handleSettingsToggle(false);
   });
+
+  document.getElementById('btn-check-update')?.addEventListener('click', handlers.handleCheckUpdate);
+  document.getElementById('btn-install-update')?.addEventListener('click', handlers.handleInstallUpdate);
 
   const overlay = document.getElementById('overlayContainer');
   if (overlay) {

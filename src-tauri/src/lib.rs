@@ -163,6 +163,14 @@ async fn get_system_ram() -> Result<u32, String> {
 }
 
 #[tauri::command]
+async fn get_available_ram() -> Result<u32, String> {
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_memory();
+    Ok((sys.available_memory() / 1024 / 1024) as u32)
+}
+
+#[tauri::command]
 async fn get_auth(app_handle: tauri::AppHandle) -> Result<Option<AuthResponse>, String> {
     let settings = SettingsManager::load(&app_handle);
     let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
@@ -293,6 +301,7 @@ pub fn run() {
             save_settings,
             ping_service,
             get_system_ram,
+            get_available_ram,
             get_all_accounts,
             set_active_account,
             remove_account,
