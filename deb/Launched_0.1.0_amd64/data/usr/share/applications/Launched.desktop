@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Game;
+Comment=Un launcher personnalisé
+Exec=app
+StartupWMClass=app
+Icon=app
+Name=Launched
+Terminal=false
+Type=Application
