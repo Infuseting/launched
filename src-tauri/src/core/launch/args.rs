@@ -283,6 +283,7 @@ impl LaunchArguments {
         session: &Session,
         session_dir: &Path,
         auth: &AuthResponse,
+        settings: &crate::core::settings::AppSettings,
     ) -> Result<Self, String> {
         // Resolve the official .minecraft path
         let official_mc_path = if cfg!(windows) {
@@ -449,13 +450,19 @@ impl LaunchArguments {
         // CRITICAL: tell JVM where to find native .so/.dll files
         jvm_args.push(format!("-Djava.library.path={}", natives_dir.display()));
 
-        // Memory args from session
-        if !session.jvm_arg.is_empty() {
+        // Memory args from settings
+        jvm_args.push(format!("-Xms{}M", settings.min_ram));
+        jvm_args.push(format!("-Xmx{}M", settings.max_ram));
+
+        // Use custom JVM args from settings if provided, else fallback to session
+        if !settings.jvm_args.is_empty() {
+            for arg in settings.jvm_args.split_whitespace() {
+                jvm_args.push(arg.to_string());
+            }
+        } else if !session.jvm_arg.is_empty() {
             for arg in session.jvm_arg.split_whitespace() {
                 jvm_args.push(arg.to_string());
             }
-        } else {
-            jvm_args.push("-Xmx2G".to_string());
         }
 
         // Minecraft game args
@@ -489,6 +496,8 @@ impl LaunchArguments {
                 ("${auth_access_token}", auth.access_token.clone()),
                 ("${user_type}", "msa".to_string()),
                 ("${version_type}", "release".to_string()),
+                ("${resolution_width}", settings.game_resolution.split('x').next().unwrap_or("854").to_string()),
+                ("${resolution_height}", settings.game_resolution.split('x').nth(1).unwrap_or("480").to_string()),
             ];
 
             let mut result_line = arg_line;
@@ -530,6 +539,14 @@ impl LaunchArguments {
             minecraft_args.push("msa".to_string());
             minecraft_args.push("--versionType".to_string());
             minecraft_args.push("release".to_string());
+            
+            // Add resolution
+            if let Some((w, h)) = settings.game_resolution.split_once('x') {
+                minecraft_args.push("--width".to_string());
+                minecraft_args.push(w.to_string());
+                minecraft_args.push("--height".to_string());
+                minecraft_args.push(h.to_string());
+            }
         }
 
         // Find correct Java version (MC 1.12.2 needs Java 8)

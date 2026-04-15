@@ -134,7 +134,7 @@ async fn launch_game(
         None
     }.ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
 
-    let args = LaunchArguments::from_session(&session, &session_dir, &auth)?;
+    let args = LaunchArguments::from_session(&session, &session_dir, &auth, &settings)?;
     
     // Create log window if enabled before launching
     if show_logs {
