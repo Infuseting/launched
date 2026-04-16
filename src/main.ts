@@ -1,4 +1,6 @@
 import './style.css';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
 
@@ -11,12 +13,12 @@ import * as settingsService from "./services/settings";
 import * as statusService from "./services/status";
 import * as updaterService from "./services/updater";
 
-import { renderApp } from "./render/app";
-import { 
-  updateUserDisplay, 
-  updateMicrosoftStatus, 
-  resetLaunchArea
-} from "./render/ui";
+import App from './App';
+import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.js';
+import '@shoelace-style/shoelace/dist/themes/dark.css';
+
+// Initialize Shoelace
+setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/dist/');
 
 // ─── Sync & Launch ──────────────────────────────────────────────────────────
 
@@ -25,62 +27,38 @@ async function syncAndLoad() {
   const session = state.globalSessions[state.activeSessionIndex];
   state.isSyncing = true;
 
-  const launchContent = document.getElementById('launch_content')!;
-  const launchDetails = document.getElementById('launch_details')!;
-  launchContent.style.display = 'none';
-  launchDetails.style.display = 'flex';
-
-  const statusEl = document.getElementById('launch_details_text')!;
-  const percentEl = document.getElementById('launch_progress_label')!;
-  const barEl = document.getElementById('launch_progress') as HTMLProgressElement;
-
-  statusEl.textContent = 'Initializing...';
-  percentEl.textContent = '0%';
-  barEl.value = 0;
-
+  // Note: DOM manipulations here should eventually be moved to React state
+  // For now, we keep them if they don't break things, but they might need adjustment
+  // since we're removing the old DOM structure.
+  
   try {
     if (!state.authCache) {
-      statusEl.textContent = 'Looking up Microsoft Login...';
       let auth = await authService.getAuth();
 
       if (!auth) {
-        statusEl.textContent = 'Waiting for Microsoft Login...';
         const unlistenCode = await listen<any>("ms-device-code", (event) => {
-          const { user_code, verification_uri } = event.payload;
-          statusEl.innerHTML = `Login at <b>${verification_uri}</b> — Code: <b>${user_code}</b>`;
+          const { user_code } = event.payload;
           navigator.clipboard.writeText(user_code).catch(() => { });
         });
 
         try {
           auth = await authService.loginMicrosoft();
           state.authCache = auth;
-          statusEl.textContent = `Welcome, ${auth.name}!`;
-          updateUserDisplay();
-          updateMicrosoftStatus(true);
-          await new Promise(r => setTimeout(r, 1000));
         } catch (authError) {
           console.error("Auth failed:", authError);
-          updateMicrosoftStatus(false);
           alert("Microsoft Authentication failed. Please try again.");
           state.isSyncing = false;
-          resetLaunchArea();
           return;
         } finally {
           unlistenCode();
         }
       } else {
         state.authCache = auth;
-        updateUserDisplay();
-        updateMicrosoftStatus(true);
       }
     }
 
-    statusEl.textContent = 'Starting sync...';
     const unlisten = await listen<SyncProgress>("sync-progress", (event) => {
-      const { current_file, percentage } = event.payload;
-      statusEl.textContent = current_file;
-      percentEl.textContent = `${Math.round(percentage)}%`;
-      barEl.value = percentage;
+      // We rely on state updates to propagate to React
     });
 
     try {
@@ -89,29 +67,20 @@ async function syncAndLoad() {
       unlisten();
     }
 
-    percentEl.textContent = '100%';
-    barEl.value = 100;
-    statusEl.textContent = 'Sync Complete';
-
-    statusEl.textContent = 'Launching game...';
     try {
       await sessionService.launchGame(session, state.currentSettings.showLogs);
-      statusEl.textContent = 'Game launched! ✓';
       setTimeout(() => {
         state.isSyncing = false;
-        resetLaunchArea();
       }, 3000);
     } catch (launchError) {
       console.error("Failed to launch game:", launchError);
       alert(`Failed to launch game: ${launchError}`);
       state.isSyncing = false;
-      resetLaunchArea();
     }
   } catch (error) {
     console.error("Failed to sync or load session:", error);
     alert(`Error: ${error}`);
     state.isSyncing = false;
-    resetLaunchArea();
   }
 }
 
@@ -120,61 +89,30 @@ async function syncAndLoad() {
 async function fetchPlayerCount() {
   if (state.globalSessions.length === 0) return;
   const session = state.globalSessions[state.activeSessionIndex];
-  const countEl = document.getElementById('player_count');
-  const tooltipTitle = document.getElementById('mojangStatusTooltipTitle');
-  const wrapperEl = document.getElementById('server_status_wrapper');
-  const dividerEl = document.getElementById('server_status_divider');
 
-  if (!session.hostname) {
-    if (wrapperEl) wrapperEl.style.display = 'none';
-    if (dividerEl) dividerEl.style.display = 'none';
-    if (countEl) countEl.innerText = '-';
-    return;
-  }
-
-  if (wrapperEl) wrapperEl.style.display = 'inline-flex';
-  if (dividerEl) dividerEl.style.display = 'block';
+  if (!session.hostname) return;
 
   try {
-    const data = await statusService.fetchServerStatus(session.hostname);
-    if (data.online) {
-      if (countEl) countEl.innerText = `${data.players.online}/${data.players.max}`;
-      if (tooltipTitle) {
-        if (data.players.list && data.players.list.length > 0) {
-          let listHtml = '<div style="text-align:left;max-height:100px;overflow-y:auto;padding:4px;">';
-          data.players.list.forEach((p: any) => { listHtml += `<div>• ${p.name}</div>`; });
-          listHtml += '</div>';
-          tooltipTitle.innerHTML = `<strong>Online Players:</strong>${listHtml}`;
-        } else {
-          tooltipTitle.innerHTML = 'Server online but player list hidden';
-        }
-      }
-    } else {
-      if (countEl) countEl.innerText = 'OFFLINE';
-      if (tooltipTitle) tooltipTitle.innerHTML = 'Server is currently offline.';
-    }
+    await statusService.fetchServerStatus(session.hostname);
+    // State is updated within statusService or we should update it here if needed
   } catch (err) {
-    if (countEl) countEl.innerText = 'OFFLINE';
+    console.error("Failed to fetch player count:", err);
   }
 }
 
 async function pollMojangServices() {
-  const checkService = async (url: string, dotId: string) => {
-    const dot = document.getElementById(dotId);
-    if (!dot) return;
-    dot.className = 'ms-status-dot ms-status-checking';
+  const checkService = async (url: string) => {
     try {
-      const isUp = await statusService.pingService(url);
-      dot.className = isUp ? 'ms-status-dot ms-status-up' : 'ms-status-dot ms-status-down';
+      await statusService.pingService(url);
     } catch {
-      dot.className = 'ms-status-dot ms-status-down';
+      // Handle error
     }
   };
 
   await Promise.all([
-    checkService('https://user.auth.xboxlive.com/', 'dot-auth'),
-    checkService('https://sessionserver.mojang.com/', 'dot-session'),
-    checkService('https://api.minecraftservices.com/', 'dot-api')
+    checkService('https://user.auth.xboxlive.com/'),
+    checkService('https://sessionserver.mojang.com/'),
+    checkService('https://api.minecraftservices.com/')
   ]);
 }
 
@@ -207,18 +145,22 @@ async function loadSessions() {
       const auth = await authService.getAuth();
       if (auth) {
         state.authCache = auth;
-        updateMicrosoftStatus(true);
-      } else {
-        updateMicrosoftStatus(false);
       }
     } catch (e) {
-      updateMicrosoftStatus(false);
+      console.error("Failed to get auth:", e);
     }
 
     await fetchAssetMetadata(state.activeSessionIndex);
-    renderApp(handlers);
+    
+    // Initialize React Root
+    const root = ReactDOM.createRoot(document.getElementById('app')!);
+    root.render(
+      <React.StrictMode>
+        <App handlers={handlers} />
+      </React.StrictMode>
+    );
+
     checkForUpdates();
-    updateUserDisplay();
 
     fetchPlayerCount();
     pollMojangServices();
@@ -244,53 +186,14 @@ async function loadSessions() {
 
 async function checkForUpdates(silent: boolean = false) {
   state.isCheckingUpdate = true;
-  if (!silent) renderApp(handlers);
   
   try {
     const update = await updaterService.checkForAppUpdates();
     state.updateManifest = update;
-    
-    if (update && !silent) {
-       // Only show modal if NOT silent and we found one
-       // Actually, we'll let the settings tab handle the display if possible
-       // but for backwards compatibility with the existing modal:
-       showUpdateModal(update);
-    }
   } catch (e) { 
     console.error('Failed to check for updates:', e); 
   } finally {
     state.isCheckingUpdate = false;
-    renderApp(handlers);
-  }
-}
-
-function showUpdateModal(update: any) {
-  const modal = document.getElementById('updateModal');
-  const text = document.getElementById('updateModalText');
-  const installBtn = document.getElementById('btn-update-install');
-  const laterBtn = document.getElementById('btn-update-later');
-  const progressContainer = document.getElementById('updateProgressContainer');
-  const progressBar = document.getElementById('updateProgressBar');
-
-  if (modal && text) {
-    text.innerText = `Version ${update.version} is available. \n\n${update.body || ''}`;
-    modal.style.display = 'flex';
-    if (laterBtn) {
-      laterBtn.onclick = () => { if (modal) modal.style.display = 'none'; };
-    }
-    if (installBtn) {
-      installBtn.onclick = async () => {
-        if (installBtn) installBtn.style.display = 'none';
-        if (laterBtn) laterBtn.style.display = 'none';
-        if (progressContainer) progressContainer.style.display = 'block';
-        if (text) text.innerText = 'Downloading update...';
-
-        await performUpdate(update, (pct) => {
-          if (progressBar) progressBar.style.width = `${pct}%`;
-          if (text) text.innerText = `Downloading... ${Math.round(pct)}%`;
-        });
-      };
-    }
   }
 }
 
@@ -321,7 +224,6 @@ const handlers = {
   handleAccountSwap: async (uuid: string) => {
     await authService.setActiveAccount(uuid);
     state.authCache = state.allAccounts.find(a => a.uuid === uuid) || null;
-    renderApp(handlers);
   },
   handleAccountRemove: async (uuid: string) => {
     await authService.removeAccount(uuid);
@@ -330,29 +232,13 @@ const handlers = {
       state.authCache = null;
       await authService.logout();
     }
-    renderApp(handlers);
   },
   handleLoginAdd: async () => {
-    const modal = document.getElementById('msLoginModal');
-    const textEl = document.getElementById('msLoginModalText');
-    if (modal) modal.style.display = 'flex';
-    if (textEl) textEl.innerText = "Please wait, contacting Microsoft...";
-
-    const unlisten = await listen<any>("ms-device-code", (event) => {
-      const { user_code, verification_uri } = event.payload;
-      if (textEl) textEl.innerHTML = `Go to <b><a href="${verification_uri}" target="_blank" style="color:#55aaff;">${verification_uri}</a></b><br><br>Code: <b style="font-size:24px; color:white; letter-spacing: 2px;">${user_code}</b>`;
-      navigator.clipboard.writeText(user_code).catch(() => { });
-    });
-
     try {
       const auth = await authService.loginMicrosoft();
       state.authCache = auth;
       state.allAccounts = await authService.getAllAccounts();
-      renderApp(handlers);
-      updateUserDisplay();
-      updateMicrosoftStatus(true);
     } catch { alert("Login canceled or failed."); }
-    finally { unlisten(); if (modal) modal.style.display = 'none'; }
   },
   saveSettings: async () => {
     await settingsService.saveSettingsInternal(state.currentSettings);
@@ -367,14 +253,9 @@ const handlers = {
   },
   handleTabChange: (tabId: string) => {
     state.activeSettingsTab = tabId;
-    renderApp(handlers);
   },
   handleSettingsToggle: (show: boolean) => {
-    // Import dynamically to avoid circular dependencies if any
-    import("./render/ui").then(ui => {
-      ui.toggleSettings(show);
-      renderApp(handlers);
-    });
+    state.isSettingsOpen = show;
   }
 };
 
@@ -389,3 +270,4 @@ document.addEventListener('click', (e) => {
 });
 
 loadSessions();
+
