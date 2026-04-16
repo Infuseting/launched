@@ -19,10 +19,16 @@
     "vite": "^8.0.4"
   },
   "dependencies": {
+    "@shoelace-style/shoelace": "^2.20.1",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/cli": "^2.10.1",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
-    "@tauri-apps/plugin-updater": "^2.10.1"
+    "@tauri-apps/plugin-updater": "^2.10.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tailwind-merge": "^3.5.0"
   }
 }
