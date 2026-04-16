@@ -1,6 +1,8 @@
 import React from 'react';
 import { useLauncherState } from './hooks/useLauncherState';
 import Layout from './components/Layout';
+import MainScreen from './screens/MainScreen';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface AppProps {
   handlers: {
@@ -22,46 +24,61 @@ const App: React.FC<AppProps> = ({ handlers }) => {
 
   return (
     <Layout>
-      <div className="min-h-screen text-white flex flex-col items-center justify-center p-8">
-        <h1 className="text-4xl font-bold mb-4">Launched</h1>
-        <p className="text-neutral-400 mb-8">Material UI Redesign in Progress</p>
+      <div className="relative w-full h-screen">
+        <MainScreen handlers={handlers} />
         
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 w-full max-w-md">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center overflow-hidden">
-              {state.authCache ? (
-                <img src={`https://mc-heads.net/avatar/${state.authCache.uuid}`} alt="avatar" />
-              ) : (
-                <span className="text-xs">?</span>
-              )}
-            </div>
-            <div>
-              <div className="font-bold">{state.authCache ? state.authCache.name : 'Not Logged In'}</div>
-              <div className="text-xs text-neutral-500">{state.authCache ? 'Microsoft Account' : 'Please log in'}</div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <button 
-              onClick={() => handlers.syncAndLoad()}
-              disabled={state.isSyncing || !state.authCache}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold transition-colors"
+        {/* We can add overlays here like SettingsModal later in Task 5 */}
+        <AnimatePresence>
+          {state.isSettingsOpen && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-8"
+              onClick={() => handlers.handleSettingsToggle(false)}
             >
-              {state.isSyncing ? 'Syncing...' : 'PLAY'}
-            </button>
-            
-            <button 
-              onClick={() => handlers.handleSettingsToggle(true)}
-              className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm transition-colors"
-            >
-              Settings
-            </button>
-          </div>
-        </div>
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="bg-neutral-900 border border-white/10 rounded-[2.5rem] p-12 max-w-2xl w-full shadow-[0_50px_100px_rgba(0,0,0,0.5)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-black text-white tracking-tight">Settings</h2>
+                  <button 
+                    onClick={() => handlers.handleSettingsToggle(false)}
+                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition-colors cursor-pointer"
+                  >
+                    <sl-icon name="x-lg"></sl-icon>
+                  </button>
+                </div>
+                
+                <div className="text-neutral-400 text-center py-20 border-2 border-dashed border-white/5 rounded-3xl">
+                  <p className="text-lg font-medium italic">Settings are being migrated to Material 3...</p>
+                  <p className="text-sm opacity-50 mt-2">(Task 5: Feature Porting)</p>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <div className="mt-8 text-[10px] text-neutral-600 uppercase tracking-widest">
-          Version {state.appVersion}
-        </div>
+        {/* Global Loading / Sync Overlay (Task 6+) */}
+        <AnimatePresence>
+          {state.isSyncing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed bottom-32 left-0 right-0 z-[60] flex justify-center pointer-events-none"
+            >
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
+                <sl-spinner style={{ fontSize: '1rem', '--indicator-color': 'white' }}></sl-spinner>
+                <span className="text-white text-sm font-bold tracking-widest uppercase">Preparing Game Files...</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </Layout>
   );

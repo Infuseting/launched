@@ -93,8 +93,7 @@ async function fetchPlayerCount() {
   if (!session.hostname) return;
 
   try {
-    await statusService.fetchServerStatus(session.hostname);
-    // State is updated within statusService or we should update it here if needed
+    state.serverStatus = await statusService.fetchServerStatus(session.hostname);
   } catch (err) {
     console.error("Failed to fetch player count:", err);
   }

@@ -14,6 +14,7 @@ export interface LauncherState {
   isCheckingUpdate: boolean;
   activeSettingsTab: string;
   isSettingsOpen: boolean;
+  serverStatus: any;
 }
 
 const listeners = new Set<() => void>();
@@ -63,7 +64,8 @@ const rawState: LauncherState = {
   updateManifest: null,
   isCheckingUpdate: false,
   activeSettingsTab: "account",
-  isSettingsOpen: false
+  isSettingsOpen: false,
+  serverStatus: null
 };
 
 let lastSnapshot: LauncherState = {
