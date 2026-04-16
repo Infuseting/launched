@@ -17,6 +17,8 @@ declare global {
       'sl-tab-group': any;
       'sl-tab': any;
       'sl-tab-panel': any;
+      'sl-range': any;
+      'sl-textarea': any;
     }
   }
 }
