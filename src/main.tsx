@@ -57,7 +57,7 @@ async function syncAndLoad() {
       }
     }
 
-    const unlisten = await listen<SyncProgress>("sync-progress", (event) => {
+    const unlisten = await listen<SyncProgress>("sync-progress", () => {
       // We rely on state updates to propagate to React
     });
 
@@ -183,7 +183,7 @@ async function loadSessions() {
   }
 }
 
-async function checkForUpdates(silent: boolean = false) {
+async function checkForUpdates() {
   state.isCheckingUpdate = true;
   
   try {
@@ -243,7 +243,7 @@ const handlers = {
     await settingsService.saveSettingsInternal(state.currentSettings);
   },
   handleCheckUpdate: async () => {
-    await checkForUpdates(false);
+    await checkForUpdates();
   },
   handleInstallUpdate: async () => {
     if (state.updateManifest) {
