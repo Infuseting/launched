@@ -1,0 +1,57 @@
+<h2>Refining the Classic Layout (No News)</h2>
+<p class="subtitle">Focusing on pure immersion: just the background, the server info, and the Play action.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Launched - Material 3 Clean</div>
+  <div class="mockup-body" style="background: url('/mnt/Divers/dev/perso/launched/src/assets/hero.png'); background-size: cover; height: 300px; display: flex; flex-direction: column; justify-content: space-between;">
+    <!-- Top Bar: User and Settings -->
+    <div style="display: flex; justify-content: space-between; padding: 15px; background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent);">
+       <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: #444; border: 2px solid rgba(255,255,255,0.2);"></div>
+          <span style="font-size: 14px; font-weight: 500; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">User_Name</span>
+       </div>
+       <button class="mock-button" style="width: 36px; height: 36px; border-radius: 50%; padding: 0; background: rgba(255,255,255,0.1); backdrop-filter: blur(4px);">⚙️</button>
+    </div>
+
+    <!-- Center: Empty (Immersive) -->
+    <div style="flex: 1;"></div>
+
+    <!-- Bottom Bar: Play and Server Info -->
+    <div style="padding: 20px; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent); display: flex; flex-direction: column; align-items: center; gap: 15px;">
+       
+       <!-- Server Info Row -->
+       <div style="display: flex; align-items: center; gap: 30px;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+             <span style="font-size: 9px; font-weight: 900; opacity: 0.7; letter-spacing: 1.5px; text-transform: uppercase;">Server</span>
+             <span style="font-size: 14px; font-weight: 500;">Survival MC</span>
+          </div>
+          <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.2);"></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+             <span style="font-size: 9px; font-weight: 900; opacity: 0.7; letter-spacing: 1.5px; text-transform: uppercase;">Players</span>
+             <span style="font-size: 14px; font-weight: 500;">12 / 20</span>
+          </div>
+       </div>
+
+       <!-- Action Button -->
+       <button class="mock-button" style="background: #4caf50; color: white; padding: 12px 60px; border-radius: 28px; font-weight: 900; letter-spacing: 2px; font-size: 18px; box-shadow: 0 8px 25px rgba(76,175,80,0.5); border: none; cursor: pointer;">PLAY</button>
+       
+       <!-- Secondary Info (Version) -->
+       <span style="font-size: 10px; opacity: 0.5; letter-spacing: 1px;">MINECRAFT 1.20.1</span>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="centered" onclick="toggleSelect(this)">
+    <div class="content">
+       <h3>Fully Centered Action</h3>
+       <p>Server info and Play button stacked in the center bottom for maximum focus.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="split" onclick="toggleSelect(this)">
+    <div class="content">
+       <h3>Split Bottom Bar</h3>
+       <p>Server info on the left, Play button on the right (like the current UI but modernized).</p>
+    </div>
+  </div>
+</div>

@@ -14,9 +14,10 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
+    "@vitejs/plugin-react": "^4.3.4",
     "tailwindcss": "^4.2.2",
-    "typescript": "~6.0.2",
-    "vite": "^8.0.4"
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0"
   },
   "dependencies": {
     "@shoelace-style/shoelace": "^2.20.1",

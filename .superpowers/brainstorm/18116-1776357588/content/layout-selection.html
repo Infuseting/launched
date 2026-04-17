@@ -1,0 +1,40 @@
+<h2>Choose a Navigation Structure</h2>
+<p class="subtitle">Both layouts will use Material Design 3 (M3) principles, React, and Motion.</p>
+
+<div class="options">
+  <div class="option" data-choice="classic" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Classic Launcher (Modernized)</h3>
+      <p>Focused on the background image. Minimalist overlay, large "PLAY" button at the bottom. Great for highlighting server-specific artwork.</p>
+      <div class="mockup" style="height: 120px; overflow: hidden; transform: scale(0.8); transform-origin: top left;">
+        <div class="mockup-header">Launched</div>
+        <div class="mockup-body" style="background: #111; height: 100px; display: flex; flex-direction: column; justify-content: flex-end; padding: 10px;">
+          <div style="background: rgba(255,255,255,0.1); border-radius: 8px; height: 30px; display: flex; align-items: center; justify-content: center;">
+            <div class="mock-button" style="width: 60px; height: 20px;">PLAY</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="rail" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>App-Style (Navigation Rail)</h3>
+      <p>Uses a Material 3 Navigation Rail (side menu). More structured, easier to navigate between many servers and settings. Backgrounds are used as subtle accents.</p>
+      <div class="mockup" style="height: 120px; overflow: hidden; transform: scale(0.8); transform-origin: top left;">
+        <div class="mockup-header">Launched</div>
+        <div class="mockup-body" style="background: #111; height: 100px; display: flex;">
+          <div class="mock-sidebar" style="width: 25px; height: 100%; border-right: 1px solid rgba(255,255,255,0.1);">
+            <div style="width: 15px; height: 15px; border-radius: 50%; background: #444; margin: 5px auto;"></div>
+            <div style="width: 15px; height: 15px; border-radius: 50%; background: #444; margin: 5px auto;"></div>
+          </div>
+          <div class="mock-content" style="flex: 1; padding: 10px; display: flex; align-items: flex-end; justify-content: center;">
+             <div class="mock-button" style="width: 50px; height: 20px;">PLAY</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

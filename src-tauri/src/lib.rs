@@ -71,6 +71,20 @@ async fn get_sessions(
 }
 
 #[tauri::command]
+async fn get_active_session_name(app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
+    let prefs = load_prefs(&app_handle);
+    Ok(prefs.last_session_name)
+}
+
+#[tauri::command]
+async fn set_active_session(app_handle: tauri::AppHandle, name: String) -> Result<(), String> {
+    let mut prefs = load_prefs(&app_handle);
+    prefs.last_session_name = Some(name);
+    save_prefs(&app_handle, &prefs);
+    Ok(())
+}
+
+#[tauri::command]
 async fn sync_session(
     session: Session,
     app_handle: tauri::AppHandle,
@@ -136,12 +150,22 @@ async fn launch_game(
 
     let args = LaunchArguments::from_session(&session, &session_dir, &auth, &settings)?;
     
-    // Create log window if enabled before launching
+    // Create or focus log window if enabled before launching
     if show_logs {
-        let _ = WebviewWindowBuilder::new(&app_handle, "logs", WebviewUrl::App("logs.html".into()))
-            .title("Minecraft Output Console")
-            .inner_size(700.0, 450.0)
-            .build();
+        if let Some(window) = app_handle.get_webview_window("logs") {
+            let _ = window.set_focus();
+            let _ = window.eval("document.getElementById('log-container').innerHTML = ''");
+        } else {
+            match WebviewWindowBuilder::new(&app_handle, "logs", WebviewUrl::App("logs.html".into()))
+                .title("Minecraft Output Console")
+                .inner_size(800.0, 600.0)
+                .resizable(true)
+                .build() 
+            {
+                Ok(_) => { log::info!("Log window created successfully"); },
+                Err(e) => { log::error!("Failed to create log window: {}", e); }
+            }
+        }
     }
 
     launch_service.launch(args, show_logs, &app_handle)
@@ -305,7 +329,9 @@ pub fn run() {
             get_all_accounts,
             set_active_account,
             remove_account,
-            fetch_json
+            fetch_json,
+            get_active_session_name,
+            set_active_session
         ])
         .on_page_load(|window, _payload| {
             let _ = crate::ui::bridge::inject_bridge(window);

@@ -1,13 +1,15 @@
 import React from 'react';
-import { useLauncherState } from '../hooks/useLauncherState';
+import { useLauncherState } from '../state';
 import TopBar from '../components/TopBar';
 import BottomBar from '../components/BottomBar';
+import SocialLinks from '../components/SocialLinks';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MainScreenProps {
   handlers: {
     syncAndLoad: () => Promise<void>;
     handleSettingsToggle: (show: boolean) => void;
+    handleServerSelectToggle: (show: boolean) => void;
     handleTabChange: (tabId: string) => void;
   };
 }
@@ -15,9 +17,12 @@ interface MainScreenProps {
 const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const state = useLauncherState();
   const session = state.globalSessions[state.activeSessionIndex];
-  
+
   // Use a default background if none is provided by session
-  const background = session?.assetsData?.background || 'https://images.unsplash.com/photo-1635334346045-8c010839e3ec?q=80&w=2070&auto=format&fit=crop';
+  const background = session?.assetsData?.background;
+
+  // Combine links from session and assetsData
+  const links = [...(session?.links || []), ...(session?.assetsData?.links || [])];
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-neutral-950 font-sans antialiased">
@@ -34,10 +39,10 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
           {/* Multi-layered Vignette & Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/60 z-[2]" />
           <div className="absolute inset-0 bg-neutral-950/20 backdrop-blur-[2px] z-[1]" />
-          
-          <img 
-            src={background} 
-            alt="Background" 
+
+          <img
+            src={background}
+            alt="Background"
             className="w-full h-full object-cover select-none brightness-75 scale-[1.02]"
             draggable={false}
           />
@@ -46,13 +51,18 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
 
       {/* Main UI Layers */}
       <div className="relative z-10 w-full h-full flex flex-col">
-        <TopBar 
+        <TopBar
           onSettingsClick={() => handlers.handleSettingsToggle(true)}
           onAccountClick={() => {
             handlers.handleTabChange('account');
             handlers.handleSettingsToggle(true);
           }}
         />
+
+        {/* Social Links on the right */}
+        <div className="absolute right-12 top-32 z-20">
+          <SocialLinks links={links} assetsPath={session?.assetsPath} />
+        </div>
 
         {/* Center content (empty or Logo) */}
         <div className="flex-1 flex items-center justify-center p-12">
@@ -81,11 +91,13 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
           </AnimatePresence>
         </div>
 
-        <BottomBar 
+        <BottomBar
           onPlayClick={() => handlers.syncAndLoad()}
+          onServerSelectClick={() => handlers.handleServerSelectToggle(true)}
           isSyncing={state.isSyncing}
         />
       </div>
+
 
       {/* Ambient noise/grain effect */}
       <div className="absolute inset-0 z-[5] pointer-events-none opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>

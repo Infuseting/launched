@@ -46,6 +46,7 @@ pub struct LibraryDownloads {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Artifact {
     pub path: String,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLauncherState } from '../hooks/useLauncherState';
+import { useLauncherState } from '../state';
 import { motion } from 'framer-motion';
 
 interface TopBarProps {
@@ -12,7 +12,7 @@ const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick }) => {
   const user = state.authCache;
 
   return (
-    <div className="fixed top-0 left-0 right-0 p-6 flex justify-between items-start z-50">
+    <div className="fixed top-0 left-0 right-0 p-12 flex justify-between items-start z-50">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}

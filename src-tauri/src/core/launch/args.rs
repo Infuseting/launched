@@ -13,6 +13,7 @@ pub struct LaunchArguments {
     pub classpath: Vec<PathBuf>,
     pub main_class: String,
     pub minecraft_args: Vec<String>,
+    pub wrapper_command: String,
 }
 
 /// Returns the current OS name as Minecraft knows it.
@@ -444,6 +445,20 @@ impl LaunchArguments {
             return Err(format!("Client JAR not found at {:?}", client_jar_path));
         }
 
+        // Get session-specific settings or fallback to default
+        let session_settings = settings.sessions.get(&session.name).unwrap_or(&settings.default_settings);
+
+        // Find correct Java version (MC 1.12.2 needs Java 8)
+        let required_java = manifest
+            .java_version
+            .as_ref()
+            .map(|j| j.major_version)
+            .or(Some(8));
+        let (java_major, java_path, java_home) = find_java(required_java, &official_mc_path)?;
+        log::info!("Using java: {:?}, home: {:?}", java_path, java_home);
+
+        // Classpath and main class setup remains same...
+
         // JVM args
         let mut jvm_args = Vec::new();
 
@@ -451,18 +466,22 @@ impl LaunchArguments {
         jvm_args.push(format!("-Djava.library.path={}", natives_dir.display()));
 
         // Memory args from settings
-        jvm_args.push(format!("-Xms{}M", settings.min_ram));
-        jvm_args.push(format!("-Xmx{}M", settings.max_ram));
+        jvm_args.push(format!("-Xms{}M", session_settings.min_ram));
+        jvm_args.push(format!("-Xmx{}M", session_settings.max_ram));
 
-        // Use custom JVM args from settings if provided, else fallback to session
-        if !settings.jvm_args.is_empty() {
-            for arg in settings.jvm_args.split_whitespace() {
-                jvm_args.push(arg.to_string());
-            }
+        // Function to filter out conflicting memory args from custom strings
+        let filter_mem_args = |s: &str| -> Vec<String> {
+            s.split_whitespace()
+                .filter(|arg| !arg.starts_with("-Xmx") && !arg.starts_with("-Xms"))
+                .map(|s| s.to_string())
+                .collect()
+        };
+
+        // Use custom JVM args from session settings if provided, else fallback to session defaults
+        if !session_settings.jvm_args.is_empty() {
+            jvm_args.extend(filter_mem_args(&session_settings.jvm_args));
         } else if !session.jvm_arg.is_empty() {
-            for arg in session.jvm_arg.split_whitespace() {
-                jvm_args.push(arg.to_string());
-            }
+            jvm_args.extend(filter_mem_args(&session.jvm_arg));
         }
 
         // Minecraft game args
@@ -571,6 +590,7 @@ impl LaunchArguments {
             classpath,
             main_class: manifest.main_class,
             minecraft_args,
+            wrapper_command: session_settings.wrapper_command.clone(),
         })
     }
 

@@ -1,80 +1,89 @@
-import type { Session, AuthResponse, AppSettings } from "./types";
+import React from 'react';
 
-export interface LauncherState {
-  globalSessions: Session[];
-  activeSessionIndex: number;
-  isSyncing: boolean;
-  authCache: AuthResponse | null;
-  currentSettings: AppSettings;
-  allAccounts: AuthResponse[];
-  maxSystemRam: number;
-  serverStatusInterval: number | null;
-  appVersion: string;
-  updateManifest: any;
-  isCheckingUpdate: boolean;
-  activeSettingsTab: string;
-  isSettingsOpen: boolean;
-  serverStatus: any;
-}
+// Use standard objects for raw storage
+const rawState = {
+  activeSessionIndex: 0,
+  globalSessions: [] as any[],
+  currentSettings: {
+    gameResolution: '400x300',
+    activeAccountUuid: null as string | null,
+    sessions: {} as Record<string, any>,
+    defaultSettings: {
+      minRam: 2048,
+      maxRam: 4096,
+      jvmArgs: '',
+      wrapperCommand: '',
+      showLogs: false
+    }
+  },
+  authCache: null as any,
+  allAccounts: [] as any[],
+  isSettingsOpen: false,
+  isServerSelectOpen: false,
+  activeSettingsTab: 'account',
+  maxSystemRam: 8192,
+  isSyncing: false,
+  syncProgress: {
+    current_file: '',
+    files_done: 0,
+    total_files: 0,
+    percentage: 0
+  },
+  appVersion: '1.0.0',
+  mojangStatus: {
+    auth: true,
+    session: true,
+    api: true
+  },
+  serverStatus: null as any,
+  isCheckingUpdate: false,
+  updateManifest: null as any,
+  serverStatusInterval: null as any
+};
 
 const listeners = new Set<() => void>();
-
-export function subscribe(onStoreChange: () => void) {
-  listeners.add(onStoreChange);
-  return () => listeners.delete(onStoreChange);
-}
+let lastSnapshot = JSON.parse(JSON.stringify(rawState));
 
 function notify() {
-  // Update the snapshot before notifying
-  lastSnapshot = {
-    ...rawState,
-    currentSettings: { ...rawState.currentSettings }
-  };
+  console.log("[State] Notifying changes. Snapshot updated.");
+  // Update the snapshot with plain objects before notifying
+  lastSnapshot = JSON.parse(JSON.stringify(rawState));
   listeners.forEach(l => l());
 }
 
-function makeProxy<T extends object>(target: T): T {
-  return new Proxy(target, {
-    set(obj, prop, value) {
-      const success = Reflect.set(obj, prop, value);
-      if (success) notify();
-      return success;
+// Recursive Proxy Handler
+function createRecursiveProxy(obj: any, path = ""): any {
+  return new Proxy(obj, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === 'object' && value !== null) {
+        return createRecursiveProxy(value, path ? `${path}.${String(prop)}` : String(prop));
+      }
+      return value;
+    },
+    set(target, prop, value, receiver) {
+      console.log(`[Proxy] Setting ${path ? path + '.' : ''}${String(prop)} =`, value);
+      const result = Reflect.set(target, prop, value, receiver);
+      notify();
+      return result;
     }
   });
 }
 
-const rawState: LauncherState = {
-  globalSessions: [],
-  activeSessionIndex: 0,
-  isSyncing: false,
-  authCache: null,
-  currentSettings: makeProxy({
-    minRam: 1024,
-    maxRam: 4096,
-    gameResolution: "400x300",
-    activeAccountUuid: null,
-    jvmArgs: "",
-    wrapperCommand: "",
-    showLogs: false
-  } as AppSettings),
-  allAccounts: [],
-  maxSystemRam: 8192,
-  serverStatusInterval: null,
-  appVersion: "1.0.0",
-  updateManifest: null,
-  isCheckingUpdate: false,
-  activeSettingsTab: "account",
-  isSettingsOpen: false,
-  serverStatus: null
-};
+// The global state proxy
+export const state = createRecursiveProxy(rawState);
 
-let lastSnapshot: LauncherState = {
-  ...rawState,
-  currentSettings: { ...rawState.currentSettings }
-};
+export type LauncherState = typeof rawState;
 
-export function getSnapshot() {
-  return lastSnapshot;
+export function useLauncherState() {
+  const subscribe = React.useCallback((listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }, []);
+
+  const getSnapshot = React.useCallback(() => {
+    return lastSnapshot;
+  }, []);
+
+  return React.useSyncExternalStore(subscribe, getSnapshot);
 }
-
-export const state = makeProxy(rawState);

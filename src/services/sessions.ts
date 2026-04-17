@@ -16,3 +16,11 @@ export async function launchGame(session: Session, showLogs: boolean): Promise<v
 export async function fetchJson(url: string): Promise<AssetMetadata> {
   return await invoke<AssetMetadata>("fetch_json", { url });
 }
+
+export async function getActiveSessionName(): Promise<string | null> {
+  return await invoke<string | null>("get_active_session_name");
+}
+
+export async function setActiveSession(name: string): Promise<void> {
+  await invoke("set_active_session", { name });
+}

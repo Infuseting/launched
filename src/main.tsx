@@ -1,4 +1,5 @@
-import './style.css';
+import './assets/tailwind.css';
+import './assets/style.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { listen } from "@tauri-apps/api/event";
@@ -16,6 +17,7 @@ import * as updaterService from "./services/updater";
 import App from './App';
 import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.js';
 import '@shoelace-style/shoelace/dist/themes/dark.css';
+import '@shoelace-style/shoelace/dist/shoelace.js';
 
 // Initialize Shoelace
 setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/dist/');
@@ -30,7 +32,7 @@ async function syncAndLoad() {
   // Note: DOM manipulations here should eventually be moved to React state
   // For now, we keep them if they don't break things, but they might need adjustment
   // since we're removing the old DOM structure.
-  
+
   try {
     if (!state.authCache) {
       let auth = await authService.getAuth();
@@ -57,8 +59,15 @@ async function syncAndLoad() {
       }
     }
 
-    const unlisten = await listen<SyncProgress>("sync-progress", () => {
-      // We rely on state updates to propagate to React
+    state.syncProgress = {
+      current_file: "Starting synchronization...",
+      files_done: 0,
+      total_files: 0,
+      percentage: 0
+    };
+
+    const unlisten = await listen<SyncProgress>("sync-progress", (event) => {
+      state.syncProgress = event.payload;
     });
 
     try {
@@ -68,7 +77,8 @@ async function syncAndLoad() {
     }
 
     try {
-      await sessionService.launchGame(session, state.currentSettings.showLogs);
+      const sessionSettings = state.currentSettings.sessions[session.name] || state.currentSettings.defaultSettings;
+      await sessionService.launchGame(session, sessionSettings.showLogs);
       setTimeout(() => {
         state.isSyncing = false;
       }, 3000);
@@ -79,7 +89,7 @@ async function syncAndLoad() {
     }
   } catch (error) {
     console.error("Failed to sync or load session:", error);
-    alert(`Error: ${error}`);
+    alert(`Critical Launch Error: ${error}`);
     state.isSyncing = false;
   }
 }
@@ -100,19 +110,13 @@ async function fetchPlayerCount() {
 }
 
 async function pollMojangServices() {
-  const checkService = async (url: string) => {
-    try {
-      await statusService.pingService(url);
-    } catch {
-      // Handle error
-    }
-  };
-
-  await Promise.all([
-    checkService('https://user.auth.xboxlive.com/'),
-    checkService('https://sessionserver.mojang.com/'),
-    checkService('https://api.minecraftservices.com/')
+  const [auth, session, api] = await Promise.all([
+    statusService.pingService('https://user.auth.xboxlive.com/'),
+    statusService.pingService('https://sessionserver.mojang.com/'),
+    statusService.pingService('https://api.minecraftservices.com/')
   ]);
+
+  state.mojangStatus = { auth, session, api };
 }
 
 // ─── Settings & Sessions ────────────────────────────────────────────────────
@@ -149,8 +153,16 @@ async function loadSessions() {
       console.error("Failed to get auth:", e);
     }
 
+    const lastSessionName = await sessionService.getActiveSessionName();
+    if (lastSessionName) {
+      const index = state.globalSessions.findIndex(s => s.name === lastSessionName);
+      if (index !== -1) {
+        state.activeSessionIndex = index;
+      }
+    }
+
     await fetchAssetMetadata(state.activeSessionIndex);
-    
+
     // Initialize React Root
     const root = ReactDOM.createRoot(document.getElementById('app')!);
     root.render(
@@ -185,12 +197,12 @@ async function loadSessions() {
 
 async function checkForUpdates() {
   state.isCheckingUpdate = true;
-  
+
   try {
     const update = await updaterService.checkForAppUpdates();
     state.updateManifest = update;
-  } catch (e) { 
-    console.error('Failed to check for updates:', e); 
+  } catch (e) {
+    console.error('Failed to check for updates:', e);
   } finally {
     state.isCheckingUpdate = false;
   }
@@ -240,7 +252,14 @@ const handlers = {
     } catch { alert("Login canceled or failed."); }
   },
   saveSettings: async () => {
-    await settingsService.saveSettingsInternal(state.currentSettings);
+    try {
+      // Use JSON.parse(JSON.stringify) to ensure we pass a plain object to the backend,
+      // bypassing any Proxy-related serialization issues.
+      const settings = JSON.parse(JSON.stringify(state.currentSettings));
+      await settingsService.saveSettingsInternal(settings);
+    } catch (e) {
+      console.error("Failed to save settings:", e);
+    }
   },
   handleCheckUpdate: async () => {
     await checkForUpdates();
@@ -255,6 +274,18 @@ const handlers = {
   },
   handleSettingsToggle: (show: boolean) => {
     state.isSettingsOpen = show;
+  },
+  handleServerSelectToggle: (show: boolean) => {
+    state.isServerSelectOpen = show;
+  },
+  handleSessionSelect: async (index: number) => {
+    state.activeSessionIndex = index;
+    const session = state.globalSessions[index];
+    if (session) {
+      await sessionService.setActiveSession(session.name);
+    }
+    await fetchAssetMetadata(index);
+    fetchPlayerCount();
   }
 };
 

@@ -1,0 +1,51 @@
+<h2>Refining the Classic Layout</h2>
+<p class="subtitle">Minimalist overlay, large buttons, and Shoelace components for a polished feel.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Launched - Classic (M3)</div>
+  <div class="mockup-body" style="background: url('/mnt/Divers/dev/perso/launched/src/assets/hero.png'); background-size: cover; height: 300px; display: flex; flex-direction: column; justify-content: space-between;">
+    <!-- Top Bar: User and Settings -->
+    <div style="display: flex; justify-content: space-between; padding: 10px; background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);">
+       <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 24px; height: 24px; border-radius: 50%; background: #444;"></div>
+          <span style="font-size: 12px; font-weight: 500;">User_Name</span>
+       </div>
+       <button class="mock-button" style="width: 32px; height: 32px; border-radius: 50%; padding: 0;">⚙️</button>
+    </div>
+
+    <!-- Center: Content Area (News / Details) -->
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px;">
+       <div style="background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); width: 80%; height: 60px; display: flex; align-items: center; justify-content: center;">
+          <p style="font-size: 11px; opacity: 0.8;">Latest Server News or Progress...</p>
+       </div>
+    </div>
+
+    <!-- Bottom Bar: Play and Server Info -->
+    <div style="padding: 15px; background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); display: flex; justify-content: center; align-items: center; gap: 20px;">
+       <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+          <span style="font-size: 8px; font-weight: 900; opacity: 0.6; letter-spacing: 1px;">SERVER</span>
+          <span style="font-size: 12px; font-weight: 500;">Survival MC</span>
+       </div>
+       <button class="mock-button" style="background: #4caf50; color: white; padding: 10px 40px; border-radius: 24px; font-weight: 900; letter-spacing: 1.5px; box-shadow: 0 4px 15px rgba(76,175,80,0.4);">PLAY</button>
+       <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+          <span style="font-size: 8px; font-weight: 900; opacity: 0.6; letter-spacing: 1px;">PLAYERS</span>
+          <span style="font-size: 12px; font-weight: 500;">12/20</span>
+       </div>
+    </div>
+  </div>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="dynamic-color" onclick="toggleSelect(this)">
+    <div class="content">
+       <h3>Dynamic Color (M3)</h3>
+       <p>Extract primary colors from the background image to theme the UI components.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="glass-morphism" onclick="toggleSelect(this)">
+    <div class="content">
+       <h3>Maintain Glass-morphism</h3>
+       <p>Keep the translucent, blurred surfaces for a "Material You" depth effect.</p>
+    </div>
+  </div>
+</div>

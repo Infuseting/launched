@@ -14,6 +14,7 @@ export interface SyncProgress {
 export interface AssetMetadata {
   background: string;
   logo?: string;
+  icon?: string;
   links: { name: string; url: string; icon: string; }[];
 }
 
@@ -40,12 +41,17 @@ export interface Session {
   assetsData?: AssetMetadata;
 }
 
-export interface AppSettings {
+export interface SessionSettings {
   minRam: number;
   maxRam: number;
-  gameResolution: string;
-  activeAccountUuid: string | null;
   jvmArgs: string;
   wrapperCommand: string;
   showLogs: boolean;
+}
+
+export interface AppSettings {
+  gameResolution: string;
+  activeAccountUuid: string | null;
+  sessions: Record<string, SessionSettings>;
+  defaultSettings: SessionSettings;
 }
