@@ -14,8 +14,52 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const state = useLauncherState();
   const session = state.globalSessions[state.activeSessionIndex];
 
-  // Use a default background if none is provided by session
-  const background = session?.assetsData?.background;
+  const backgroundSource = session?.assetsData?.background;
+
+  const backgroundPool = React.useMemo(() => {
+    if (Array.isArray(backgroundSource)) {
+      return backgroundSource.filter((url): url is string => typeof url === 'string' && url.length > 0);
+    }
+
+    if (typeof backgroundSource === 'string' && backgroundSource.length > 0) {
+      return [backgroundSource];
+    }
+
+    return [];
+  }, [backgroundSource]);
+
+  const pickRandomBackground = React.useCallback((exclude?: string) => {
+    if (backgroundPool.length === 0) {
+      return undefined;
+    }
+
+    if (backgroundPool.length === 1) {
+      return backgroundPool[0];
+    }
+
+    const choices = exclude ? backgroundPool.filter(bg => bg !== exclude) : backgroundPool;
+    const pool = choices.length > 0 ? choices : backgroundPool;
+    const index = Math.floor(Math.random() * pool.length);
+    return pool[index];
+  }, [backgroundPool]);
+
+  const [activeBackground, setActiveBackground] = React.useState<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    setActiveBackground(pickRandomBackground());
+  }, [pickRandomBackground]);
+
+  React.useEffect(() => {
+    if (backgroundPool.length <= 1) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setActiveBackground(previous => pickRandomBackground(previous));
+    }, 10_000);
+
+    return () => clearInterval(intervalId);
+  }, [backgroundPool.length, pickRandomBackground]);
 
   // Combine links from session and assetsData
   const links = [...(session?.links || []), ...(session?.assetsData?.links || [])];
@@ -25,7 +69,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
       {/* Immersive Dynamic Background */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={background}
+          key={activeBackground ?? 'no-background'}
           initial={{ opacity: 0, scale: 1.05 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
@@ -36,12 +80,14 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/60 z-[2]" />
           <div className="absolute inset-0 bg-neutral-950/20 backdrop-blur-[2px] z-[1]" />
 
-          <img
-            src={background}
-            alt="Background"
-            className="w-full h-full object-cover select-none brightness-75 scale-[1.02]"
-            draggable={false}
-          />
+          {activeBackground && (
+            <img
+              src={activeBackground}
+              alt="Background"
+              className="w-full h-full object-cover select-none brightness-75 scale-[1.02]"
+              draggable={false}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
 

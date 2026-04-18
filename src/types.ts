@@ -48,7 +48,7 @@ export interface UpdateManifest {
 }
 
 export interface AssetMetadata {
-  background: string;
+  background: string | string[];
   logo?: string;
   icon?: string;
   links: { name: string; url: string; icon: string; }[];
