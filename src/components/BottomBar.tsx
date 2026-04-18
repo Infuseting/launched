@@ -55,8 +55,9 @@ const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelectClick,
             </h1>
             <div className={`w-3 h-3 rounded-full mt-2 ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'} shadow-lg`}></div>
           </div>
-
-
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/55 group-hover:text-white/80 transition-colors">
+            Clique ici pour changer de version
+          </p>
         </motion.div>
       </sl-tooltip>
 
