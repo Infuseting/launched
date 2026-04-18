@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Launched",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "identifier": "com.infuseting.launched",
   "build": {
     "frontendDist": "../dist",
@@ -37,7 +37,7 @@
     "createUpdaterArtifacts": true,
     "publisher": "Infuseting",
     "copyright": "Infuseting",
-    "shortDescription": "Launcher de différents serveurRP faisant référence de près ou de loin au serveur Galade",
+    "shortDescription": "Launcher de différents serveur RP",
     "license": "MIT",
     "category": "Game",
     "icon": [
