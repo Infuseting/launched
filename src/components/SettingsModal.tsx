@@ -402,6 +402,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           </div>
                           <div>
                             <h4 className="text-white font-bold tracking-tight">Launcher Updates</h4>
+                            <p className="text-white/55 text-xs">Version actuelle: v{state.appVersion}</p>
                             <p className="text-white/40 text-xs">
                               {state.updateManifest
                                 ? `Nouvelle version disponible: v${state.updateManifest.version}`
