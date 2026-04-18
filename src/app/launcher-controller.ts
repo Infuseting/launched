@@ -6,6 +6,7 @@ import type {
   AppHandlers,
   DeviceCodePayload,
   SyncProgress,
+  UpdateDownloadEvent,
   UpdateManifest
 } from '../types';
 
@@ -18,8 +19,16 @@ import * as updaterService from '../services/updater';
 const STATUS_POLLING_INTERVAL_MS = 30_000;
 const UPDATE_RETRY_DELAY_MS = 15_000;
 const UPDATE_POLLING_INTERVAL_MS = 5 * 60_000;
+const STARTUP_UPDATE_RETRY_DELAYS_MS = [2_500, 7_500];
 const DEFAULT_SYSTEM_RAM_MB = 8192;
 const DEFAULT_APP_VERSION = '1.0.0';
+
+interface RuntimeUpdateManifest {
+  version: string;
+  body?: string;
+  notes?: string;
+  downloadAndInstall: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>;
+}
 
 /**
  * Creates a plain serializable copy for Tauri invokes.
@@ -52,6 +61,7 @@ function getErrorMessage(error: unknown): string {
  */
 export class LauncherController {
   private readonly handlers: AppHandlers;
+  private pendingUpdate: RuntimeUpdateManifest | null = null;
 
   constructor() {
     this.handlers = {
@@ -98,7 +108,9 @@ export class LauncherController {
     this.registerExternalLinksHandler();
     await this.loadInitialData();
 
-    void this.checkForUpdates();
+    await this.checkForUpdates(true);
+    this.scheduleStartupUpdateRetries();
+
     setTimeout(() => {
       void this.checkForUpdates();
     }, UPDATE_RETRY_DELAY_MS);
@@ -109,6 +121,18 @@ export class LauncherController {
 
     await this.refreshStatuses();
     this.startStatusPolling();
+  }
+
+  private scheduleStartupUpdateRetries(): void {
+    for (const delayMs of STARTUP_UPDATE_RETRY_DELAYS_MS) {
+      setTimeout(() => {
+        if (state.updateManifest || state.isInstallingUpdate || state.isCheckingUpdate) {
+          return;
+        }
+
+        void this.checkForUpdates(true);
+      }, delayMs);
+    }
   }
 
   private registerExternalLinksHandler(): void {
@@ -332,14 +356,21 @@ export class LauncherController {
     state.updateError = null;
 
     try {
-      const update = await updaterService.checkForAppUpdates();
-      state.updateManifest = (update as UpdateManifest | null) ?? null;
+      const update = await updaterService.checkForAppUpdates() as RuntimeUpdateManifest | null;
 
-      if (forcePrompt && state.updateManifest) {
+      this.pendingUpdate = update;
+      state.updateManifest = update
+        ? {
+            version: update.version,
+            body: update.body ?? update.notes
+          }
+        : null;
+
+      if (forcePrompt && update) {
         state.dismissedUpdateVersion = null;
       }
 
-      if (!state.updateManifest) {
+      if (!update) {
         state.dismissedUpdateVersion = null;
       }
     } catch (error) {
@@ -359,8 +390,16 @@ export class LauncherController {
   }
 
   private async handleInstallUpdate(): Promise<void> {
-    if (!state.updateManifest || state.isInstallingUpdate) {
+    if (state.isInstallingUpdate) {
       return;
+    }
+
+    if (!this.pendingUpdate) {
+      await this.checkForUpdates(true);
+      if (!this.pendingUpdate) {
+        state.updateError = state.updateError ?? 'Aucune mise a jour prete a installer.';
+        return;
+      }
     }
 
     state.isInstallingUpdate = true;
@@ -368,7 +407,7 @@ export class LauncherController {
     state.updateError = null;
 
     try {
-      await this.performUpdate(state.updateManifest, pct => {
+      await this.performUpdate(this.pendingUpdate, pct => {
         state.updateInstallProgress = Math.min(100, Math.max(0, pct));
       });
       state.updateInstallProgress = 100;
@@ -379,7 +418,7 @@ export class LauncherController {
     }
   }
 
-  private async performUpdate(update: UpdateManifest, onProgress?: (pct: number) => void): Promise<void> {
+  private async performUpdate(update: RuntimeUpdateManifest, onProgress?: (pct: number) => void): Promise<void> {
     let downloaded = 0;
     let contentLength = 0;
 

@@ -44,7 +44,6 @@ export interface UpdateDownloadEvent {
 export interface UpdateManifest {
   version: string;
   body?: string;
-  downloadAndInstall: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>;
 }
 
 export interface AssetMetadata {
