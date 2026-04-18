@@ -61,6 +61,7 @@ export class LauncherController {
       saveSettings: () => this.saveSettings(),
       handleCheckUpdate: () => this.checkForUpdates(),
       handleInstallUpdate: () => this.handleInstallUpdate(),
+      handleDismissUpdatePrompt: () => this.dismissUpdatePrompt(),
       handleTabChange: (tabId: string) => {
         state.activeSettingsTab = tabId;
       },
@@ -318,10 +319,15 @@ export class LauncherController {
 
   private async checkForUpdates(): Promise<void> {
     state.isCheckingUpdate = true;
+    state.updateError = null;
 
     try {
       const update = await updaterService.checkForAppUpdates();
       state.updateManifest = (update as UpdateManifest | null) ?? null;
+
+      if (!state.updateManifest) {
+        state.dismissedUpdateVersion = null;
+      }
     } catch (error) {
       console.error('Failed to check for updates:', error);
     } finally {
@@ -329,39 +335,58 @@ export class LauncherController {
     }
   }
 
-  private async handleInstallUpdate(): Promise<void> {
+  private dismissUpdatePrompt(): void {
     if (!state.updateManifest) {
       return;
     }
 
-    await this.performUpdate(state.updateManifest);
+    state.dismissedUpdateVersion = state.updateManifest.version;
+  }
+
+  private async handleInstallUpdate(): Promise<void> {
+    if (!state.updateManifest || state.isInstallingUpdate) {
+      return;
+    }
+
+    state.isInstallingUpdate = true;
+    state.updateInstallProgress = 0;
+    state.updateError = null;
+
+    try {
+      await this.performUpdate(state.updateManifest, pct => {
+        state.updateInstallProgress = Math.min(100, Math.max(0, pct));
+      });
+      state.updateInstallProgress = 100;
+    } catch (error) {
+      state.updateError = getErrorMessage(error);
+    } finally {
+      state.isInstallingUpdate = false;
+    }
   }
 
   private async performUpdate(update: UpdateManifest, onProgress?: (pct: number) => void): Promise<void> {
-    try {
-      let downloaded = 0;
-      let contentLength = 0;
+    let downloaded = 0;
+    let contentLength = 0;
 
-      await update.downloadAndInstall(event => {
-        if (event.event === 'Started') {
-          contentLength = event.data.contentLength ?? 0;
-          return;
+    await update.downloadAndInstall(event => {
+      if (event.event === 'Started') {
+        contentLength = event.data.contentLength ?? 0;
+        return;
+      }
+
+      if (event.event === 'Progress') {
+        downloaded += event.data.chunkLength ?? 0;
+        if (contentLength > 0 && onProgress) {
+          onProgress((downloaded / contentLength) * 100);
         }
+      }
+    });
 
-        if (event.event === 'Progress') {
-          downloaded += event.data.chunkLength ?? 0;
-          if (contentLength > 0 && onProgress) {
-            onProgress((downloaded / contentLength) * 100);
-          }
-        }
-      });
+    onProgress?.(100);
 
-      setTimeout(() => {
-        void updaterService.relaunchApp();
-      }, 1500);
-    } catch (error) {
-      alert(`Update failed: ${getErrorMessage(error)}`);
-    }
+    setTimeout(() => {
+      void updaterService.relaunchApp();
+    }, 1500);
   }
 
   private async handleAccountSwap(uuid: string): Promise<void> {

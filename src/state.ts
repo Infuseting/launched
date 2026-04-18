@@ -41,6 +41,10 @@ const rawState: LauncherStateModel = {
   serverStatus: null,
   isCheckingUpdate: false,
   updateManifest: null,
+  isInstallingUpdate: false,
+  updateInstallProgress: 0,
+  updateError: null,
+  dismissedUpdateVersion: null,
   serverStatusInterval: null
 };
 

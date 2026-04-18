@@ -112,6 +112,10 @@ export interface LauncherStateModel {
   serverStatus: ServerStatus | null;
   isCheckingUpdate: boolean;
   updateManifest: UpdateManifest | null;
+  isInstallingUpdate: boolean;
+  updateInstallProgress: number;
+  updateError: string | null;
+  dismissedUpdateVersion: string | null;
   serverStatusInterval: ReturnType<typeof setInterval> | null;
 }
 
@@ -124,6 +128,7 @@ export interface AppHandlers {
   saveSettings: () => Promise<void>;
   handleCheckUpdate: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
+  handleDismissUpdatePrompt: () => void;
   handleTabChange: (tabId: string) => void;
   handleSettingsToggle: (show: boolean) => void;
   handleServerSelectToggle: (show: boolean) => void;

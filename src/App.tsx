@@ -6,6 +6,7 @@ import MainScreen from './screens/MainScreen';
 import SettingsModal from './components/SettingsModal';
 import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
+import UpdatePromptModal from './components/UpdatePromptModal';
 
 interface AppProps {
   handlers: AppHandlers;
@@ -39,6 +40,11 @@ const App: React.FC<AppProps> = ({ handlers }) => {
           payload={launcherState.deviceCodePayload}
           errorMessage={launcherState.deviceCodeError}
           onClose={() => handlers.handleDeviceCodeModalToggle(false)}
+        />
+
+        <UpdatePromptModal
+          state={launcherState}
+          handlers={handlers}
         />
 
 
