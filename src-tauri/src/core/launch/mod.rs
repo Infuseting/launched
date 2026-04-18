@@ -6,6 +6,11 @@ pub mod models;
 
 use crate::core::launch::args::LaunchArguments;
 use std::process::{Command, Stdio};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub struct LaunchService;
 
@@ -61,6 +66,9 @@ impl LaunchService {
         // We use pipes to stream logs to the UI AND write to file
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
+
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
         match cmd.spawn() {
             Ok(mut child) => {
