@@ -16,6 +16,8 @@ import * as statusService from '../services/status';
 import * as updaterService from '../services/updater';
 
 const STATUS_POLLING_INTERVAL_MS = 30_000;
+const UPDATE_RETRY_DELAY_MS = 15_000;
+const UPDATE_POLLING_INTERVAL_MS = 5 * 60_000;
 const DEFAULT_SYSTEM_RAM_MB = 8192;
 const DEFAULT_APP_VERSION = '1.0.0';
 
@@ -59,7 +61,7 @@ export class LauncherController {
       handleAccountRemove: (uuid: string) => this.handleAccountRemove(uuid),
       handleLoginAdd: () => this.handleLoginAdd(),
       saveSettings: () => this.saveSettings(),
-      handleCheckUpdate: () => this.checkForUpdates(),
+      handleCheckUpdate: () => this.checkForUpdates(true),
       handleInstallUpdate: () => this.handleInstallUpdate(),
       handleDismissUpdatePrompt: () => this.dismissUpdatePrompt(),
       handleTabChange: (tabId: string) => {
@@ -97,6 +99,14 @@ export class LauncherController {
     await this.loadInitialData();
 
     void this.checkForUpdates();
+    setTimeout(() => {
+      void this.checkForUpdates();
+    }, UPDATE_RETRY_DELAY_MS);
+
+    setInterval(() => {
+      void this.checkForUpdates();
+    }, UPDATE_POLLING_INTERVAL_MS);
+
     await this.refreshStatuses();
     this.startStatusPolling();
   }
@@ -317,7 +327,7 @@ export class LauncherController {
     await this.fetchAssetMetadata(state.activeSessionIndex);
   }
 
-  private async checkForUpdates(): Promise<void> {
+  private async checkForUpdates(forcePrompt = false): Promise<void> {
     state.isCheckingUpdate = true;
     state.updateError = null;
 
@@ -325,10 +335,15 @@ export class LauncherController {
       const update = await updaterService.checkForAppUpdates();
       state.updateManifest = (update as UpdateManifest | null) ?? null;
 
+      if (forcePrompt && state.updateManifest) {
+        state.dismissedUpdateVersion = null;
+      }
+
       if (!state.updateManifest) {
         state.dismissedUpdateVersion = null;
       }
     } catch (error) {
+      state.updateError = getErrorMessage(error);
       console.error('Failed to check for updates:', error);
     } finally {
       state.isCheckingUpdate = false;
