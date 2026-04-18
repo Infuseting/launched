@@ -6,8 +6,7 @@ import type {
   AppHandlers,
   DeviceCodePayload,
   SyncProgress,
-  UpdateDownloadEvent,
-  UpdateManifest
+  UpdateDownloadEvent
 } from '../types';
 
 import * as authService from '../services/auth';
@@ -361,9 +360,9 @@ export class LauncherController {
       this.pendingUpdate = update;
       state.updateManifest = update
         ? {
-            version: update.version,
-            body: update.body ?? update.notes
-          }
+          version: update.version,
+          body: update.body ?? update.notes
+        }
         : null;
 
       if (forcePrompt && update) {
