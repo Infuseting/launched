@@ -1,0 +1,9 @@
+Package: launched
+Version: 1.1.0
+Architecture: amd64
+Installed-Size: 26543
+Maintainer: you
+Priority: optional
+Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+Description: Launcher de différents serveurRP faisant référence de près ou de loin au serveur Galade
+ (none)
