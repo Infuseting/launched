@@ -2,6 +2,7 @@ use crate::auth::{AuthResponse, AuthStrategy};
 use async_trait::async_trait;
 use models::*;
 use reqwest::Client;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::time::Duration;
 use tauri::Emitter;
@@ -10,6 +11,7 @@ use tokio::time::sleep;
 pub mod models;
 
 const CLIENT_ID: &str = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
+const APP_USER_AGENT: &str = "Launched/0.1";
 
 /**
  * Microsoft authentication strategy.
@@ -23,7 +25,7 @@ impl AuthStrategy for MicrosoftAuth {
      */
     async fn authenticate(&self, window: &tauri::Window) -> Result<AuthResponse, String> {
         let client = Client::builder()
-            .user_agent("PrismLauncher/1.0")
+            .user_agent(APP_USER_AGENT)
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -97,8 +99,72 @@ struct MinecraftProfile {
 }
 
 impl MicrosoftAuth {
+    async fn parse_json_response<T: DeserializeOwned>(
+        response: reqwest::Response,
+        endpoint_label: &str,
+    ) -> Result<T, String> {
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read {} response body: {}", endpoint_label, e))?;
+
+        if !status.is_success() {
+            return Err(format!(
+                "{} failed (status {}): {}",
+                endpoint_label, status, body
+            ));
+        }
+
+        serde_json::from_str::<T>(&body).map_err(|e| {
+            format!(
+                "Failed to parse {} response: {}. Body: {}",
+                endpoint_label, e, body
+            )
+        })
+    }
+
+    fn map_xsts_error(xerr: Option<u64>) -> Option<&'static str> {
+        match xerr {
+            Some(2148916233) => Some(
+                "Votre compte Microsoft n'a pas de profil Xbox. Ouvrez xbox.com et terminez la creation du profil.",
+            ),
+            Some(2148916235) => Some(
+                "Votre compte Xbox ne peut pas utiliser ce service actuellement (restriction de region ou de compte).",
+            ),
+            Some(2148916236) => Some(
+                "Votre compte Xbox demande une verification supplementaire. Connectez-vous sur xbox.com pour la finaliser.",
+            ),
+            Some(2148916237) => Some(
+                "Compte enfant detecte: un compte adulte doit valider les parametres famille Xbox.",
+            ),
+            _ => None,
+        }
+    }
+
+    fn format_xsts_error(status: reqwest::StatusCode, body: &str) -> String {
+        if let Ok(parsed) = serde_json::from_str::<XstsErrorResponse>(body) {
+            let xerr = parsed.XErr;
+            let api_message = parsed.Message.unwrap_or_else(|| "no message".to_string());
+
+            if let Some(user_message) = Self::map_xsts_error(xerr) {
+                return format!(
+                    "XSTS authorize endpoint failed (status {}): {} (XErr: {:?}, API: {})",
+                    status, user_message, xerr, api_message
+                );
+            }
+
+            return format!(
+                "XSTS authorize endpoint failed (status {}): XErr {:?}, API: {}",
+                status, xerr, api_message
+            );
+        }
+
+        format!("XSTS authorize endpoint failed (status {}): {}", status, body)
+    }
+
     pub async fn is_mc_token_valid(mc_token: &str) -> bool {
-        let client = match Client::builder().user_agent("PrismLauncher/1.0").build() {
+        let client = match Client::builder().user_agent(APP_USER_AGENT).build() {
             Ok(c) => c,
             Err(_) => return false,
         };
@@ -117,7 +183,7 @@ impl MicrosoftAuth {
 
     pub async fn refresh_auth(&self, refresh_token: &str) -> Result<AuthResponse, String> {
         let client = Client::builder()
-            .user_agent("PrismLauncher/1.0")
+            .user_agent(APP_USER_AGENT)
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -292,10 +358,8 @@ impl MicrosoftAuth {
             .await
             .map_err(|e| format!("Failed to get XBL token: {}", e))?;
 
-        response
-            .json::<XboxLiveResponse>()
+        Self::parse_json_response::<XboxLiveResponse>(response, "Xbox Live authenticate endpoint")
             .await
-            .map_err(|e| format!("Failed to parse XBL response: {}", e))
     }
 
     async fn get_xsts_token(
@@ -319,10 +383,22 @@ impl MicrosoftAuth {
             .await
             .map_err(|e| format!("Failed to get XSTS token: {}", e))?;
 
-        response
-            .json::<XboxLiveResponse>()
+        let status = response.status();
+        let response_body = response
+            .text()
             .await
-            .map_err(|e| format!("Failed to parse XSTS response: {}", e))
+            .map_err(|e| format!("Failed to read XSTS response body: {}", e))?;
+
+        if !status.is_success() {
+            return Err(Self::format_xsts_error(status, &response_body));
+        }
+
+        serde_json::from_str::<XboxLiveResponse>(&response_body).map_err(|e| {
+            format!(
+                "Failed to parse XSTS response: {}. Body: {}",
+                e, response_body
+            )
+        })
     }
 
     async fn get_mc_token(
@@ -342,15 +418,13 @@ impl MicrosoftAuth {
             .await
             .map_err(|e| format!("Failed to get Minecraft token: {}", e))?;
 
-        let resp_json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse Minecraft token response: {}", e))?;
+        let token_response = Self::parse_json_response::<MinecraftTokenResponse>(
+            response,
+            "Minecraft login_with_xbox endpoint",
+        )
+        .await?;
 
-        resp_json["access_token"]
-            .as_str()
-            .ok_or_else(|| "Missing access_token in Minecraft response".to_string())
-            .map(|s| s.to_string())
+        Ok(token_response.access_token)
     }
 
     async fn get_mc_profile(

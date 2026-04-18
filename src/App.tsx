@@ -37,6 +37,7 @@ const App: React.FC<AppProps> = ({ handlers }) => {
         <MicrosoftDeviceCodeModal
           isOpen={launcherState.deviceCodeModalOpen}
           payload={launcherState.deviceCodePayload}
+          errorMessage={launcherState.deviceCodeError}
           onClose={() => handlers.handleDeviceCodeModalToggle(false)}
         />
 

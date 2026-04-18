@@ -6,10 +6,11 @@ import type { DeviceCodePayload } from '../types';
 interface MicrosoftDeviceCodeModalProps {
   isOpen: boolean;
   payload: DeviceCodePayload | null;
+  errorMessage: string | null;
   onClose: () => void;
 }
 
-const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> = ({ isOpen, payload, onClose }) => {
+const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> = ({ isOpen, payload, errorMessage, onClose }) => {
   const code = payload?.user_code ?? '';
   const url = payload?.verification_uri ?? '';
   const message = payload?.message ?? 'Connectez-vous avec Microsoft pour continuer.';
@@ -63,6 +64,13 @@ const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> = ({ isO
             </div>
 
             <p className="text-sm text-white/75 mt-4 leading-relaxed">{message}</p>
+
+            {errorMessage ? (
+              <div className="mt-4 rounded-2xl border border-red-300/30 bg-red-400/10 p-4">
+                <p className="text-[11px] uppercase tracking-widest text-red-200/80 font-bold">Erreur de connexion</p>
+                <p className="mt-2 text-sm text-red-100 leading-relaxed">{errorMessage}</p>
+              </div>
+            ) : null}
 
             <div className="mt-6 space-y-4">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">

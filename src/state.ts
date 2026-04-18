@@ -20,6 +20,7 @@ const rawState: LauncherStateModel = {
   allAccounts: [],
   deviceCodeModalOpen: false,
   deviceCodePayload: null,
+  deviceCodeError: null,
   isSettingsOpen: false,
   isServerSelectOpen: false,
   activeSettingsTab: 'account',

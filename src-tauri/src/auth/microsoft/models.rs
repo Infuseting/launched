@@ -16,11 +16,23 @@ pub struct MicrosoftTokenResponse {
     pub refresh_token: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MinecraftTokenResponse {
+    pub access_token: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[allow(non_snake_case)]
 pub struct XboxLiveResponse {
     pub Token: String,
     pub DisplayClaims: DisplayClaims,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[allow(non_snake_case)]
+pub struct XstsErrorResponse {
+    pub XErr: Option<u64>,
+    pub Message: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

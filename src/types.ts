@@ -100,6 +100,7 @@ export interface LauncherStateModel {
   allAccounts: AuthResponse[];
   deviceCodeModalOpen: boolean;
   deviceCodePayload: DeviceCodePayload | null;
+  deviceCodeError: string | null;
   isSettingsOpen: boolean;
   isServerSelectOpen: boolean;
   activeSettingsTab: string;

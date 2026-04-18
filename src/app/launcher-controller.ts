@@ -74,6 +74,7 @@ export class LauncherController {
         state.deviceCodeModalOpen = show;
         if (!show) {
           state.deviceCodePayload = null;
+          state.deviceCodeError = null;
         }
       },
       handleSessionSelect: (index: number) => this.handleSessionSelect(index)
@@ -118,6 +119,7 @@ export class LauncherController {
    */
   private async loginMicrosoftWithModal(): Promise<Awaited<ReturnType<typeof authService.loginMicrosoft>>> {
     state.deviceCodePayload = null;
+    state.deviceCodeError = null;
     state.deviceCodeModalOpen = true;
 
     const unlistenCode = await listen<Partial<DeviceCodePayload>>('ms-device-code', event => {
@@ -139,11 +141,16 @@ export class LauncherController {
     });
 
     try {
-      return await authService.loginMicrosoft();
-    } finally {
-      unlistenCode();
+      const auth = await authService.loginMicrosoft();
       state.deviceCodeModalOpen = false;
       state.deviceCodePayload = null;
+      state.deviceCodeError = null;
+      return auth;
+    } catch (error) {
+      state.deviceCodeError = getErrorMessage(error);
+      throw error;
+    } finally {
+      unlistenCode();
     }
   }
 
@@ -209,8 +216,8 @@ export class LauncherController {
         const refreshedAuth = await this.loginMicrosoftWithModal();
         state.authCache = refreshedAuth;
         state.allAccounts = await authService.getAllAccounts();
-      } catch {
-        alert('Reconnexion Microsoft annulee ou echouee.');
+      } catch (error) {
+        alert(`Reconnexion Microsoft echouee: ${getErrorMessage(error)}`);
       }
     }
 
@@ -377,8 +384,8 @@ export class LauncherController {
       const auth = await this.loginMicrosoftWithModal();
       state.authCache = auth;
       state.allAccounts = await authService.getAllAccounts();
-    } catch {
-      alert('Login canceled or failed.');
+    } catch (error) {
+      alert(`Connexion Microsoft echouee: ${getErrorMessage(error)}`);
     }
   }
 
