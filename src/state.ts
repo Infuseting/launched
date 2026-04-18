@@ -18,6 +18,12 @@ const rawState = {
   },
   authCache: null as any,
   allAccounts: [] as any[],
+  deviceCodeModalOpen: false,
+  deviceCodePayload: null as null | {
+    user_code: string;
+    verification_uri: string;
+    message?: string;
+  },
   isSettingsOpen: false,
   isServerSelectOpen: false,
   activeSettingsTab: 'account',

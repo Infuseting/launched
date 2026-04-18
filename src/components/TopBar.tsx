@@ -12,12 +12,12 @@ const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick }) => {
   const user = state.authCache;
 
   return (
-    <div className="fixed top-0 left-0 right-0 p-12 flex justify-between items-start z-50">
+    <div className="fixed top-0 left-0 right-0 p-12 flex justify-between items-start z-50 pointer-events-none">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         onClick={onAccountClick}
-        className="flex items-center gap-4 group cursor-pointer bg-black/20 hover:bg-black/40 backdrop-blur-xl p-2 pr-6 rounded-2xl border border-white/10 transition-colors shadow-2xl"
+        className="flex items-center gap-4 group cursor-pointer bg-black/20 hover:bg-black/40 backdrop-blur-xl p-2 pr-6 rounded-2xl border border-white/10 transition-colors shadow-2xl pointer-events-auto"
       >
         <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 overflow-hidden shadow-lg relative transition-transform group-hover:scale-105 active:scale-95">
           {user ? (
@@ -48,7 +48,7 @@ const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick }) => {
         whileHover={{ scale: 1.1, rotate: 90 }}
         whileTap={{ scale: 0.9 }}
         onClick={onSettingsClick}
-        className="w-12 h-12 rounded-2xl bg-black/20 hover:bg-black/40 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white shadow-2xl transition-colors cursor-pointer"
+        className="w-12 h-12 rounded-2xl bg-black/20 hover:bg-black/40 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white shadow-2xl transition-colors cursor-pointer pointer-events-auto"
       >
         <sl-icon name="gear-wide-connected" style={{ fontSize: '1.5rem' }}></sl-icon>
       </motion.button>

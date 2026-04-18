@@ -85,6 +85,7 @@ impl AuthStrategy for MicrosoftAuth {
             access_token: mc_token,
             uuid: profile.id,
             name: profile.name,
+            refresh_token: Some(ms_token_resp.refresh_token),
         })
     }
 }
@@ -96,6 +97,78 @@ struct MinecraftProfile {
 }
 
 impl MicrosoftAuth {
+    pub async fn is_mc_token_valid(mc_token: &str) -> bool {
+        let client = match Client::builder().user_agent("PrismLauncher/1.0").build() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        let response = client
+            .get("https://api.minecraftservices.com/minecraft/profile")
+            .bearer_auth(mc_token)
+            .send()
+            .await;
+
+        match response {
+            Ok(r) => r.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
+    pub async fn refresh_auth(&self, refresh_token: &str) -> Result<AuthResponse, String> {
+        let client = Client::builder()
+            .user_agent("PrismLauncher/1.0")
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+        // 1. Refresh Microsoft token
+        let params = [
+            ("client_id", CLIENT_ID),
+            ("grant_type", "refresh_token"),
+            ("scope", "XboxLive.signin offline_access"),
+            ("refresh_token", refresh_token),
+        ];
+
+        let response = client
+            .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to refresh Microsoft token: {}", e))?;
+
+        if !response.status().is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Failed to refresh Microsoft token: {}", body));
+        }
+
+        let ms_token_resp = response
+            .json::<MicrosoftTokenResponse>()
+            .await
+            .map_err(|e| format!("Failed to parse refreshed Microsoft token: {}", e))?;
+
+        // 2. Continue standard Xbox/Minecraft chain
+        let xbl_resp = self
+            .get_xbl_token(&client, &ms_token_resp.access_token)
+            .await?;
+        let xsts_resp = self.get_xsts_token(&client, &xbl_resp.Token).await?;
+        let uhs = xsts_resp
+            .DisplayClaims
+            .xui
+            .first()
+            .ok_or_else(|| "Missing UHS in XSTS response".to_string())?
+            .uhs
+            .clone();
+        let mc_token = self.get_mc_token(&client, &xsts_resp.Token, &uhs).await?;
+        let profile = self.get_mc_profile(&client, &mc_token).await?;
+
+        Ok(AuthResponse {
+            access_token: mc_token,
+            uuid: profile.id,
+            name: profile.name,
+            refresh_token: Some(ms_token_resp.refresh_token),
+        })
+    }
+
     async fn get_device_code(&self, client: &Client) -> Result<DeviceCodeResponse, String> {
         let params = [
             ("client_id", CLIENT_ID),

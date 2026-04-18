@@ -40,13 +40,13 @@ const SocialLinks: React.FC<SocialLinksProps> = ({ links, assetsPath }) => {
             whileTap={{ scale: 0.95 }}
             onClick={() => handleLinkClick(link.url)}
             title={link.name}
-            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md flex items-center justify-center cursor-pointer transition-colors hover:border-white/20 shadow-lg group"
+            className="w-12 h-12 rounded-2xl bg-black/20 hover:bg-black/40 border border-white/10 backdrop-blur-xl flex items-center justify-center cursor-pointer transition-colors hover:border-white/20 shadow-2xl group"
           >
             {isRemote || (assetsPath && !link.icon.includes(' ')) ? (
               <img 
                 src={iconUrl} 
                 alt={link.name} 
-                className="w-5 h-5 object-contain brightness-0 invert opacity-70 group-hover:opacity-100 transition-opacity"
+                className="w-6 h-6 object-contain brightness-0 invert opacity-70 group-hover:opacity-100 transition-opacity"
                 onError={(e) => {
                   // Fallback if image fails or is not a URL/path
                   (e.target as HTMLImageElement).style.display = 'none';

@@ -60,7 +60,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
         />
 
         {/* Social Links on the right */}
-        <div className="absolute right-12 top-32 z-20">
+        <div className="absolute right-12 top-28 z-20">
           <SocialLinks links={links} assetsPath={session?.assetsPath} />
         </div>
 

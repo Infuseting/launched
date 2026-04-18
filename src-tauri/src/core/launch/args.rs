@@ -1,6 +1,8 @@
 use crate::auth::AuthResponse;
 use crate::core::launch::models::{LibraryRule, VersionManifest};
 use crate::core::session::Session;
+use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use which::which;
@@ -49,6 +51,65 @@ fn library_allowed(rules: &Option<Vec<LibraryRule>>) -> bool {
     allowed
 }
 
+fn argument_rules_allow(arg: &Value) -> bool {
+    let Some(rules) = arg.get("rules").and_then(|r| r.as_array()) else {
+        return true;
+    };
+
+    let os = current_os_name();
+    let mut allowed = false;
+
+    for rule in rules {
+        let action = rule
+            .get("action")
+            .and_then(|a| a.as_str())
+            .unwrap_or("disallow");
+
+        let matches_os = match rule
+            .get("os")
+            .and_then(|o| o.get("name"))
+            .and_then(|n| n.as_str())
+        {
+            Some(name) => name == os,
+            None => true,
+        };
+
+        if matches_os {
+            allowed = action == "allow";
+        }
+    }
+
+    allowed
+}
+
+fn argument_value_strings(arg: &Value) -> Vec<String> {
+    if !argument_rules_allow(arg) {
+        return Vec::new();
+    }
+
+    let value = arg.get("value").unwrap_or(arg);
+    if let Some(s) = value.as_str() {
+        return vec![s.to_string()];
+    }
+
+    if let Some(arr) = value.as_array() {
+        return arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+    }
+
+    Vec::new()
+}
+
+fn apply_placeholders(input: &str, replacements: &[(&str, String)]) -> String {
+    let mut out = input.to_string();
+    for (needle, value) in replacements {
+        out = out.replace(needle, value);
+    }
+    out
+}
+
 /// Extracts a native JAR's .so/.dll/.dylib files into `natives_dir`.
 fn extract_natives(jar_path: &Path, natives_dir: &Path) -> Result<(), String> {
     let file = fs::File::open(jar_path)
@@ -93,6 +154,38 @@ fn extract_natives(jar_path: &Path, natives_dir: &Path) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn ensure_pointblank_effect_hotfix(session_dir: &Path) {
+    let effects_dir = session_dir
+        .join("pointblank")
+        .join("STALKER_PACK")
+        .join("assets")
+        .join("pointblank")
+        .join("effects");
+
+    if !effects_dir.exists() {
+        return;
+    }
+
+    let required_effects = ["s_gauss_flash"];
+    for effect_name in required_effects {
+        let effect_file = effects_dir.join(format!("{}.json", effect_name));
+        if effect_file.exists() {
+            continue;
+        }
+
+        let content = format!(
+            "{{\n  \"type\": \"muzzle_flash\",\n  \"name\": \"{}\",\n  \"texture\": \"textures/effect/{}.png\",\n  \"blendMode\": \"ADDITIVE\",\n  \"width\": 1,\n  \"duration\": 50,\n  \"sprites\": {{\n    \"type\": \"random\",\n    \"rows\": 1,\n    \"colums\": 1,\n    \"fps\": 60\n  }}\n}}\n",
+            effect_name, effect_name
+        );
+
+        if let Err(e) = fs::write(&effect_file, content) {
+            log::warn!("Failed to write PointBlank effect hotfix {:?}: {}", effect_file, e);
+        } else {
+            log::info!("Applied PointBlank effect hotfix: {:?}", effect_file);
+        }
+    }
 }
 
 /// Finds the best Java binary for the given required major version.
@@ -286,6 +379,8 @@ impl LaunchArguments {
         auth: &AuthResponse,
         settings: &crate::core::settings::AppSettings,
     ) -> Result<Self, String> {
+        ensure_pointblank_effect_hotfix(session_dir);
+
         // Resolve the official .minecraft path
         let official_mc_path = if cfg!(windows) {
             PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join(".minecraft")
@@ -335,11 +430,22 @@ impl LaunchArguments {
                         if manifest.java_version.is_none() {
                             manifest.java_version = parent_manifest.java_version;
                         }
-                        let parent_libs_len = parent_manifest.libraries.len();
-                        manifest.libraries.extend(parent_manifest.libraries);
+                        if manifest.minecraft_arguments.is_none() {
+                            manifest.minecraft_arguments = parent_manifest.minecraft_arguments;
+                        }
+                        if manifest.arguments.is_none() {
+                            manifest.arguments = parent_manifest.arguments;
+                        }
+                        let mut merged_from_parent = 0usize;
+                        for parent_lib in parent_manifest.libraries {
+                            if !manifest.libraries.iter().any(|l| l.name == parent_lib.name) {
+                                manifest.libraries.push(parent_lib);
+                                merged_from_parent += 1;
+                            }
+                        }
                         log::info!(
                             "Merged {} libraries from parent {}",
-                            parent_libs_len,
+                            merged_from_parent,
                             parent_id
                         );
                     }
@@ -359,6 +465,7 @@ impl LaunchArguments {
             .map_err(|e| format!("Failed to create natives dir: {}", e))?;
 
         let mut classpath = Vec::new();
+        let mut classpath_seen: HashSet<PathBuf> = HashSet::new();
         let mut missing_libs = Vec::new();
 
         // 1. Process libraries
@@ -372,7 +479,9 @@ impl LaunchArguments {
                 if let Some(artifact) = &downloads.artifact {
                     let p = lib_base.join(&artifact.path);
                     if p.exists() {
-                        classpath.push(p);
+                        if classpath_seen.insert(p.clone()) {
+                            classpath.push(p);
+                        }
                     } else {
                         missing_libs.push(artifact.path.clone());
                     }
@@ -413,7 +522,9 @@ impl LaunchArguments {
                         .join(ver)
                         .join(&jar_name);
                     if p.exists() {
-                        classpath.push(p);
+                        if classpath_seen.insert(p.clone()) {
+                            classpath.push(p);
+                        }
                     }
                 }
             }
@@ -432,38 +543,90 @@ impl LaunchArguments {
             natives_dir
         );
 
-        // 2. Add client JAR last
-        let root_jar_id = manifest.jar.as_deref().unwrap_or(version_id);
-        let client_jar_path = official_mc_path
-            .join("versions")
-            .join(root_jar_id)
-            .join(format!("{}.jar", root_jar_id));
+        // 2. Add vanilla client JAR only when it is truly needed.
+        // Modern Forge (bootstraplauncher) resolves Minecraft client modules itself; adding
+        // versions/<mc>/<mc>.jar here creates module conflicts (minecraft vs _1._20._1).
+        let is_modern_forge_bootstrap = session.forge.is_some()
+            && manifest
+                .main_class
+                .contains("cpw.mods.bootstraplauncher.BootstrapLauncher");
 
-        if client_jar_path.exists() {
-            classpath.push(client_jar_path);
+        let has_forge_minecraft_client = manifest
+            .libraries
+            .iter()
+            .any(|lib| lib.name.starts_with("net.minecraft:client:"));
+
+        if !has_forge_minecraft_client && !is_modern_forge_bootstrap {
+            let root_jar_id = manifest
+                .jar
+                .as_deref()
+                .or(manifest.inherits_from.as_deref())
+                .unwrap_or(version_id);
+            let client_jar_path = official_mc_path
+                .join("versions")
+                .join(root_jar_id)
+                .join(format!("{}.jar", root_jar_id));
+
+            if client_jar_path.exists() {
+                if classpath_seen.insert(client_jar_path.clone()) {
+                    classpath.push(client_jar_path);
+                }
+            } else {
+                return Err(format!("Client JAR not found at {:?}", client_jar_path));
+            }
         } else {
-            return Err(format!("Client JAR not found at {:?}", client_jar_path));
+            log::info!(
+                "Skipping root client JAR for {}: handled by Forge/module bootstrap or forge client libraries",
+                version_id
+            );
         }
 
         // Get session-specific settings or fallback to default
         let session_settings = settings.sessions.get(&session.name).unwrap_or(&settings.default_settings);
-
-        // Find correct Java version (MC 1.12.2 needs Java 8)
-        let required_java = manifest
-            .java_version
-            .as_ref()
-            .map(|j| j.major_version)
-            .or(Some(8));
-        let (java_major, java_path, java_home) = find_java(required_java, &official_mc_path)?;
-        log::info!("Using java: {:?}, home: {:?}", java_path, java_home);
-
-        // Classpath and main class setup remains same...
 
         // JVM args
         let mut jvm_args = Vec::new();
 
         // CRITICAL: tell JVM where to find native .so/.dll files
         jvm_args.push(format!("-Djava.library.path={}", natives_dir.display()));
+
+        let jvm_placeholders = [
+            (
+                "${natives_directory}",
+                natives_dir.to_string_lossy().to_string(),
+            ),
+            (
+                "${library_directory}",
+                official_mc_path
+                    .join("libraries")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            ("${classpath_separator}", if cfg!(windows) { ";" } else { ":" }.to_string()),
+            ("${launcher_name}", "launched".to_string()),
+            ("${launcher_version}", env!("CARGO_PKG_VERSION").to_string()),
+        ];
+
+        // Include launcher-provided JVM args from the manifest (modern format).
+        if let Some(args) = &manifest.arguments {
+            for raw in &args.jvm {
+                for s in argument_value_strings(raw) {
+                    let resolved = apply_placeholders(&s, &jvm_placeholders);
+
+                    // Keep control of classpath and memory flags in the launcher.
+                    if resolved == "-cp"
+                        || resolved == "--class-path"
+                        || resolved.contains("${classpath}")
+                        || resolved.starts_with("-Xmx")
+                        || resolved.starts_with("-Xms")
+                    {
+                        continue;
+                    }
+
+                    jvm_args.push(resolved);
+                }
+            }
+        }
 
         // Memory args from settings
         jvm_args.push(format!("-Xms{}M", session_settings.min_ram));
@@ -487,7 +650,62 @@ impl LaunchArguments {
         // Minecraft game args
         let mut minecraft_args = Vec::new();
 
-        if let Some(arg_line) = manifest.minecraft_arguments {
+        if let Some(args) = &manifest.arguments {
+            let game_placeholders = [
+                ("${auth_player_name}", auth.name.clone()),
+                ("${version_name}", version_id.clone()),
+                (
+                    "${game_directory}",
+                    session_dir.to_string_lossy().to_string(),
+                ),
+                (
+                    "${assets_root}",
+                    official_mc_path
+                        .join("assets")
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                (
+                    "${assets_index_name}",
+                    manifest
+                        .asset_index
+                        .as_ref()
+                        .map(|a| a.id.clone())
+                        .unwrap_or_else(|| "1.12".to_string()),
+                ),
+                ("${auth_uuid}", auth.uuid.clone()),
+                ("${auth_access_token}", auth.access_token.clone()),
+                ("${user_type}", "msa".to_string()),
+                ("${version_type}", "release".to_string()),
+                (
+                    "${resolution_width}",
+                    settings
+                        .game_resolution
+                        .split('x')
+                        .next()
+                        .unwrap_or("854")
+                        .to_string(),
+                ),
+                (
+                    "${resolution_height}",
+                    settings
+                        .game_resolution
+                        .split('x')
+                        .nth(1)
+                        .unwrap_or("480")
+                        .to_string(),
+                ),
+            ];
+
+            for raw in &args.game {
+                for s in argument_value_strings(raw) {
+                    minecraft_args.push(apply_placeholders(&s, &game_placeholders));
+                }
+            }
+        }
+
+        if minecraft_args.is_empty() {
+            if let Some(arg_line) = manifest.minecraft_arguments {
             // Old format: single string with placeholders
             let map = [
                 ("${auth_player_name}", auth.name.clone()),
@@ -527,7 +745,7 @@ impl LaunchArguments {
             for arg in result_line.split_whitespace() {
                 minecraft_args.push(arg.to_string());
             }
-        } else {
+            } else {
             // Modern format or fallback
             minecraft_args.push("--username".to_string());
             minecraft_args.push(auth.name.clone());
@@ -566,6 +784,56 @@ impl LaunchArguments {
                 minecraft_args.push("--height".to_string());
                 minecraft_args.push(h.to_string());
             }
+            }
+        }
+
+        // Some Forge profiles provide partial game arguments; guarantee mandatory options.
+        if !minecraft_args.iter().any(|a| a == "--username") {
+            minecraft_args.push("--username".to_string());
+            minecraft_args.push(auth.name.clone());
+        }
+        if !minecraft_args.iter().any(|a| a == "--version") {
+            minecraft_args.push("--version".to_string());
+            minecraft_args.push(version_id.clone());
+        }
+        if !minecraft_args.iter().any(|a| a == "--gameDir") {
+            minecraft_args.push("--gameDir".to_string());
+            minecraft_args.push(session_dir.to_string_lossy().to_string());
+        }
+        if !minecraft_args.iter().any(|a| a == "--assetsDir") {
+            minecraft_args.push("--assetsDir".to_string());
+            minecraft_args.push(
+                official_mc_path
+                    .join("assets")
+                    .to_string_lossy()
+                    .to_string(),
+            );
+        }
+        if !minecraft_args.iter().any(|a| a == "--assetIndex") {
+            minecraft_args.push("--assetIndex".to_string());
+            minecraft_args.push(
+                manifest
+                    .asset_index
+                    .as_ref()
+                    .map(|a| a.id.clone())
+                    .unwrap_or_else(|| "1.12".to_string()),
+            );
+        }
+        if !minecraft_args.iter().any(|a| a == "--uuid") {
+            minecraft_args.push("--uuid".to_string());
+            minecraft_args.push(auth.uuid.clone());
+        }
+        if !minecraft_args.iter().any(|a| a == "--accessToken") {
+            minecraft_args.push("--accessToken".to_string());
+            minecraft_args.push(auth.access_token.clone());
+        }
+        if !minecraft_args.iter().any(|a| a == "--userType") {
+            minecraft_args.push("--userType".to_string());
+            minecraft_args.push("msa".to_string());
+        }
+        if !minecraft_args.iter().any(|a| a == "--versionType") {
+            minecraft_args.push("--versionType".to_string());
+            minecraft_args.push("release".to_string());
         }
 
         // Find correct Java version (MC 1.12.2 needs Java 8)
@@ -580,6 +848,12 @@ impl LaunchArguments {
         // Allow native access (suppresses LWJGL warning on Java 17+)
         if java_major >= 17 {
             jvm_args.push("--enable-native-access=ALL-UNNAMED".to_string());
+
+            // Forge bootstrap libraries may reflectively access MethodHandles internals on modern JVMs.
+            if session.forge.is_some() {
+                jvm_args.push("--add-opens=java.base/java.lang.invoke=ALL-UNNAMED".to_string());
+                jvm_args.push("--add-opens=java.base/java.util.jar=ALL-UNNAMED".to_string());
+            }
         }
 
         Ok(LaunchArguments {

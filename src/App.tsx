@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import MainScreen from './screens/MainScreen';
 import SettingsModal from './components/SettingsModal';
 import ServerSelectModal from './components/ServerSelectModal';
+import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 
 interface AppProps {
   handlers: {
@@ -18,6 +19,7 @@ interface AppProps {
     handleTabChange: (tabId: string) => void;
     handleSettingsToggle: (show: boolean) => void;
     handleServerSelectToggle: (show: boolean) => void;
+    handleDeviceCodeModalToggle: (show: boolean) => void;
     handleSessionSelect: (index: number) => Promise<void>;
   };
 }
@@ -43,6 +45,12 @@ const App: React.FC<AppProps> = ({ handlers }) => {
             await handlers.handleSessionSelect(index);
           }}
           onClose={() => handlers.handleServerSelectToggle(false)}
+        />
+
+        <MicrosoftDeviceCodeModal
+          isOpen={launcherState.deviceCodeModalOpen}
+          payload={launcherState.deviceCodePayload}
+          onClose={() => handlers.handleDeviceCodeModalToggle(false)}
         />
 
 

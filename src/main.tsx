@@ -19,6 +19,34 @@ import { setBasePath } from '@shoelace-style/shoelace/dist/utilities/base-path.j
 import '@shoelace-style/shoelace/dist/themes/dark.css';
 import '@shoelace-style/shoelace/dist/shoelace.js';
 
+function getErrorMessage(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return String(error);
+}
+
+async function loginMicrosoftWithModal() {
+  state.deviceCodePayload = null;
+  state.deviceCodeModalOpen = true;
+
+  const unlistenCode = await listen<any>("ms-device-code", (event) => {
+    const { user_code, verification_uri, message } = event.payload || {};
+    state.deviceCodePayload = { user_code, verification_uri, message };
+    navigator.clipboard.writeText(user_code).catch(() => { });
+  });
+
+  try {
+    return await authService.loginMicrosoft();
+  } finally {
+    unlistenCode();
+    state.deviceCodeModalOpen = false;
+    state.deviceCodePayload = null;
+  }
+}
+
 // Initialize Shoelace
 setBasePath('https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/dist/');
 
@@ -38,21 +66,14 @@ async function syncAndLoad() {
       let auth = await authService.getAuth();
 
       if (!auth) {
-        const unlistenCode = await listen<any>("ms-device-code", (event) => {
-          const { user_code } = event.payload;
-          navigator.clipboard.writeText(user_code).catch(() => { });
-        });
-
         try {
-          auth = await authService.loginMicrosoft();
+          auth = await loginMicrosoftWithModal();
           state.authCache = auth;
         } catch (authError) {
           console.error("Auth failed:", authError);
           alert("Microsoft Authentication failed. Please try again.");
           state.isSyncing = false;
           return;
-        } finally {
-          unlistenCode();
         }
       } else {
         state.authCache = auth;
@@ -84,7 +105,20 @@ async function syncAndLoad() {
       }, 3000);
     } catch (launchError) {
       console.error("Failed to launch game:", launchError);
-      alert(`Failed to launch game: ${launchError}`);
+      const launchErrorMessage = getErrorMessage(launchError);
+
+      if (launchErrorMessage.includes("compte invalide a ete supprime")) {
+        try {
+          const refreshedAuth = await loginMicrosoftWithModal();
+          state.authCache = refreshedAuth;
+          state.allAccounts = await authService.getAllAccounts();
+        } catch (authError) {
+          console.error("Re-authentication failed:", authError);
+          alert("Reconnexion Microsoft annulee ou echouee.");
+        }
+      }
+
+      alert(`Failed to launch game: ${launchErrorMessage}`);
       state.isSyncing = false;
     }
   } catch (error) {
@@ -246,7 +280,7 @@ const handlers = {
   },
   handleLoginAdd: async () => {
     try {
-      const auth = await authService.loginMicrosoft();
+      const auth = await loginMicrosoftWithModal();
       state.authCache = auth;
       state.allAccounts = await authService.getAllAccounts();
     } catch { alert("Login canceled or failed."); }
@@ -277,6 +311,10 @@ const handlers = {
   },
   handleServerSelectToggle: (show: boolean) => {
     state.isServerSelectOpen = show;
+  },
+  handleDeviceCodeModalToggle: (show: boolean) => {
+    state.deviceCodeModalOpen = show;
+    if (!show) state.deviceCodePayload = null;
   },
   handleSessionSelect: async (index: number) => {
     state.activeSessionIndex = index;

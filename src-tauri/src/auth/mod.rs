@@ -9,6 +9,8 @@ pub struct AuthResponse {
     pub uuid: String,
     pub name: String,
     pub access_token: String,
+    #[serde(default)]
+    pub refresh_token: Option<String>,
 }
 
 /**
