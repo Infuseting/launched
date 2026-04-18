@@ -29,6 +29,12 @@ interface RuntimeUpdateManifest {
   downloadAndInstall: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>;
 }
 
+interface PendingUpdate {
+  version: string;
+  body?: string;
+  install: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>;
+}
+
 /**
  * Creates a plain serializable copy for Tauri invokes.
  */
@@ -60,7 +66,7 @@ function getErrorMessage(error: unknown): string {
  */
 export class LauncherController {
   private readonly handlers: AppHandlers;
-  private pendingUpdate: RuntimeUpdateManifest | null = null;
+  private pendingUpdate: PendingUpdate | null = null;
 
   constructor() {
     this.handlers = {
@@ -357,19 +363,27 @@ export class LauncherController {
     try {
       const update = await updaterService.checkForAppUpdates() as RuntimeUpdateManifest | null;
 
-      this.pendingUpdate = update;
-      state.updateManifest = update
+      this.pendingUpdate = update
         ? {
           version: update.version,
-          body: update.body ?? update.notes
+          body: update.body ?? update.notes,
+          // Bind keeps the plugin Update instance context required by private fields.
+          install: update.downloadAndInstall.bind(update)
         }
         : null;
 
-      if (forcePrompt && update) {
+      state.updateManifest = this.pendingUpdate
+        ? {
+          version: this.pendingUpdate.version,
+          body: this.pendingUpdate.body
+        }
+        : null;
+
+      if (forcePrompt && this.pendingUpdate) {
         state.dismissedUpdateVersion = null;
       }
 
-      if (!update) {
+      if (!this.pendingUpdate) {
         state.dismissedUpdateVersion = null;
       }
     } catch (error) {
@@ -406,7 +420,7 @@ export class LauncherController {
     state.updateError = null;
 
     try {
-      await this.performUpdate(this.pendingUpdate, pct => {
+      await this.performUpdate(this.pendingUpdate.install, pct => {
         state.updateInstallProgress = Math.min(100, Math.max(0, pct));
       });
       state.updateInstallProgress = 100;
@@ -417,11 +431,14 @@ export class LauncherController {
     }
   }
 
-  private async performUpdate(update: RuntimeUpdateManifest, onProgress?: (pct: number) => void): Promise<void> {
+  private async performUpdate(
+    install: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>,
+    onProgress?: (pct: number) => void
+  ): Promise<void> {
     let downloaded = 0;
     let contentLength = 0;
 
-    await update.downloadAndInstall(event => {
+    await install(event => {
       if (event.event === 'Started') {
         contentLength = event.data.contentLength ?? 0;
         return;
