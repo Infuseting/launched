@@ -1,25 +1,32 @@
 import * as React from 'react';
 
+type ShoelaceStyle = React.CSSProperties & Record<`--${string}`, string | number>;
+
+type ShoelaceElementProps = Omit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>, 'style'> & {
+  style?: ShoelaceStyle;
+  [key: string]: unknown;
+};
+
 declare global {
   namespace React {
     namespace JSX {
       interface IntrinsicElements {
-        'sl-icon': any;
-        'sl-button': any;
-        'sl-dialog': any;
-        'sl-input': any;
-        'sl-select': any;
-        'sl-option': any;
-        'sl-switch': any;
-        'sl-tooltip': any;
-        'sl-spinner': any;
-        'sl-progress-bar': any;
-        'sl-avatar': any;
-        'sl-tab-group': any;
-        'sl-tab': any;
-        'sl-tab-panel': any;
-        'sl-range': any;
-        'sl-textarea': any;
+        'sl-icon': ShoelaceElementProps;
+        'sl-button': ShoelaceElementProps;
+        'sl-dialog': ShoelaceElementProps;
+        'sl-input': ShoelaceElementProps;
+        'sl-select': ShoelaceElementProps;
+        'sl-option': ShoelaceElementProps;
+        'sl-switch': ShoelaceElementProps;
+        'sl-tooltip': ShoelaceElementProps;
+        'sl-spinner': ShoelaceElementProps;
+        'sl-progress-bar': ShoelaceElementProps;
+        'sl-avatar': ShoelaceElementProps;
+        'sl-tab-group': ShoelaceElementProps;
+        'sl-tab': ShoelaceElementProps;
+        'sl-tab-panel': ShoelaceElementProps;
+        'sl-range': ShoelaceElementProps;
+        'sl-textarea': ShoelaceElementProps;
       }
     }
   }

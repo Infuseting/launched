@@ -1,29 +1,25 @@
 import React from 'react';
+import type { LauncherStateModel } from './types';
 
-// Use standard objects for raw storage
-const rawState = {
+const rawState: LauncherStateModel = {
   activeSessionIndex: 0,
-  globalSessions: [] as any[],
+  globalSessions: [],
   currentSettings: {
     gameResolution: '400x300',
-    activeAccountUuid: null as string | null,
-    sessions: {} as Record<string, any>,
+    activeAccountUuid: null,
+    sessions: {},
     defaultSettings: {
-      minRam: 2048,
+      minRam: 1024,
       maxRam: 4096,
       jvmArgs: '',
       wrapperCommand: '',
       showLogs: false
     }
   },
-  authCache: null as any,
-  allAccounts: [] as any[],
+  authCache: null,
+  allAccounts: [],
   deviceCodeModalOpen: false,
-  deviceCodePayload: null as null | {
-    user_code: string;
-    verification_uri: string;
-    message?: string;
-  },
+  deviceCodePayload: null,
   isSettingsOpen: false,
   isServerSelectOpen: false,
   activeSettingsTab: 'account',
@@ -41,47 +37,69 @@ const rawState = {
     session: true,
     api: true
   },
-  serverStatus: null as any,
+  serverStatus: null,
   isCheckingUpdate: false,
-  updateManifest: null as any,
-  serverStatusInterval: null as any
+  updateManifest: null,
+  serverStatusInterval: null
 };
 
 const listeners = new Set<() => void>();
 let lastSnapshot = JSON.parse(JSON.stringify(rawState));
 
 function notify() {
-  console.log("[State] Notifying changes. Snapshot updated.");
-  // Update the snapshot with plain objects before notifying
   lastSnapshot = JSON.parse(JSON.stringify(rawState));
   listeners.forEach(l => l());
 }
 
-// Recursive Proxy Handler
-function createRecursiveProxy(obj: any, path = ""): any {
-  return new Proxy(obj, {
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+const proxyCache = new WeakMap<object, object>();
+
+function createRecursiveProxy<T extends object>(obj: T): T {
+  const existing = proxyCache.get(obj);
+  if (existing) {
+    return existing as T;
+  }
+
+  const proxy = new Proxy(obj, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
-      if (typeof value === 'object' && value !== null) {
-        return createRecursiveProxy(value, path ? `${path}.${String(prop)}` : String(prop));
+      if (isObject(value)) {
+        return createRecursiveProxy(value);
       }
       return value;
     },
     set(target, prop, value, receiver) {
-      console.log(`[Proxy] Setting ${path ? path + '.' : ''}${String(prop)} =`, value);
+      const currentValue = Reflect.get(target, prop, receiver);
+      if (Object.is(currentValue, value)) {
+        return true;
+      }
+
       const result = Reflect.set(target, prop, value, receiver);
       notify();
       return result;
     }
   });
+
+  proxyCache.set(obj, proxy);
+  return proxy as T;
 }
 
-// The global state proxy
+/**
+ * Global mutable launcher state exposed through a reactive proxy.
+ *
+ * React components must read it through `useLauncherState` to receive updates.
+ */
 export const state = createRecursiveProxy(rawState);
 
-export type LauncherState = typeof rawState;
+export type LauncherState = LauncherStateModel;
 
-export function useLauncherState() {
+/**
+ * Subscribes React to launcher state mutations through `useSyncExternalStore`.
+ */
+export function useLauncherState(): LauncherState {
   const subscribe = React.useCallback((listener: () => void) => {
     listeners.add(listener);
     return () => listeners.delete(listener);

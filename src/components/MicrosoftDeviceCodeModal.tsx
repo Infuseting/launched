@@ -1,14 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-shell';
+import type { DeviceCodePayload } from '../types';
 
 interface MicrosoftDeviceCodeModalProps {
   isOpen: boolean;
-  payload: {
-    user_code: string;
-    verification_uri: string;
-    message?: string;
-  } | null;
+  payload: DeviceCodePayload | null;
   onClose: () => void;
 }
 

@@ -521,10 +521,8 @@ impl LaunchArguments {
                         .join(artifact_name)
                         .join(ver)
                         .join(&jar_name);
-                    if p.exists() {
-                        if classpath_seen.insert(p.clone()) {
-                            classpath.push(p);
-                        }
+                    if p.exists() && classpath_seen.insert(p.clone()) {
+                        classpath.push(p);
                     }
                 }
             }

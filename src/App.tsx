@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLauncherState } from './state';
+import type { AppHandlers } from './types';
 import Layout from './components/Layout';
 import MainScreen from './screens/MainScreen';
 import SettingsModal from './components/SettingsModal';
@@ -7,21 +8,7 @@ import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 
 interface AppProps {
-  handlers: {
-    syncAndLoad: () => Promise<void>;
-    fetchAssetMetadata: (index: number) => Promise<void>;
-    handleAccountSwap: (uuid: string) => Promise<void>;
-    handleAccountRemove: (uuid: string) => Promise<void>;
-    handleLoginAdd: () => Promise<void>;
-    saveSettings: () => Promise<void>;
-    handleCheckUpdate: () => Promise<void>;
-    handleInstallUpdate: () => Promise<void>;
-    handleTabChange: (tabId: string) => void;
-    handleSettingsToggle: (show: boolean) => void;
-    handleServerSelectToggle: (show: boolean) => void;
-    handleDeviceCodeModalToggle: (show: boolean) => void;
-    handleSessionSelect: (index: number) => Promise<void>;
-  };
+  handlers: AppHandlers;
 }
 
 const App: React.FC<AppProps> = ({ handlers }) => {

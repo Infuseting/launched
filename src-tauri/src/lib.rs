@@ -140,13 +140,12 @@ async fn launch_game(
     let mut settings = SettingsManager::load(&app_handle);
     let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
     
-    let mut auth = if let Some(ref active_uuid) = settings.active_account_uuid {
-        accounts.into_iter().find(|a| a.uuid == *active_uuid)
-    } else if let Some(first) = accounts.into_iter().next() {
-        Some(first)
-    } else {
-        None
-    }.ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
+    let mut auth = settings
+        .active_account_uuid
+        .as_ref()
+        .and_then(|active_uuid| accounts.iter().find(|a| a.uuid == *active_uuid).cloned())
+        .or_else(|| accounts.into_iter().next())
+        .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
 
     // Validate token before launch; if expired, try refresh_token once.
     if !MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {

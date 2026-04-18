@@ -1,19 +1,13 @@
 import React, { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { state as sourceState, type LauncherState } from '../state';
+import type { AppHandlers, AppSettings, SessionSettings } from '../types';
 import AccountSwitcher from './AccountSwitcher';
 
 interface SettingsModalProps {
   isOpen: boolean;
   state: LauncherState;
-  handlers: {
-    handleSettingsToggle: (show: boolean) => void;
-    handleTabChange: (tabId: string) => void;
-    handleAccountSwap: (uuid: string) => Promise<void>;
-    handleAccountRemove: (uuid: string) => Promise<void>;
-    handleLoginAdd: () => Promise<void>;
-    saveSettings: () => Promise<void>;
-  };
+  handlers: Pick<AppHandlers, 'handleSettingsToggle' | 'handleTabChange' | 'handleAccountSwap' | 'handleAccountRemove' | 'handleLoginAdd' | 'saveSettings'>;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -25,13 +19,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const activeSession = state.globalSessions[state.activeSessionIndex];
   const sessionName = activeSession?.name;
 
-  // Helper to get effective session settings
-  const getSessionSettings = (settings: any, name: string | undefined) => {
+  const getSessionSettings = React.useCallback((settings: AppSettings, name: string | undefined): SessionSettings => {
     if (name && settings.sessions[name]) {
       return settings.sessions[name];
     }
     return settings.defaultSettings;
-  };
+  }, []);
 
   const currentEffective = getSessionSettings(state.currentSettings, sessionName);
 
@@ -41,11 +34,142 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localJvmArgs, setLocalJvmArgs] = React.useState(currentEffective.jvmArgs);
   const [localWrapperCommand, setLocalWrapperCommand] = React.useState(currentEffective.wrapperCommand);
 
-  const minRamRef = useRef<any>(null);
-  const maxRamRef = useRef<any>(null);
-  const showLogsRef = useRef<any>(null);
-  const jvmArgsRef = useRef<any>(null);
-  const wrapperCommandRef = useRef<any>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const hasPendingSaveRef = useRef(false);
+
+  const minRamRef = useRef<HTMLElement | null>(null);
+  const maxRamRef = useRef<HTMLElement | null>(null);
+  const showLogsRef = useRef<HTMLElement | null>(null);
+  const jvmArgsRef = useRef<HTMLElement | null>(null);
+  const wrapperCommandRef = useRef<HTMLElement | null>(null);
+
+  const getEventValue = React.useCallback((e: Event): string => {
+    const customDetailValue = (e as CustomEvent<{ value?: string | number }>).detail?.value;
+    if (customDetailValue !== undefined && customDetailValue !== null) {
+      return String(customDetailValue);
+    }
+
+    const targetValue = (e.target as { value?: string | number } | null)?.value;
+    if (targetValue !== undefined && targetValue !== null) {
+      return String(targetValue);
+    }
+
+    const currentTargetValue = (e.currentTarget as { value?: string | number } | null)?.value;
+    if (currentTargetValue !== undefined && currentTargetValue !== null) {
+      return String(currentTargetValue);
+    }
+
+    return '';
+  }, []);
+
+  const syncCurrentInputsToState = React.useCallback((): boolean => {
+    if (!sessionName) {
+      return false;
+    }
+
+    if (!sourceState.currentSettings.sessions[sessionName]) {
+      sourceState.currentSettings.sessions[sessionName] = JSON.parse(JSON.stringify(sourceState.currentSettings.defaultSettings));
+    }
+
+    const sessionSettings = sourceState.currentSettings.sessions[sessionName];
+    let changed = false;
+
+    const minRaw = (minRamRef.current as { value?: string | number } | null)?.value;
+    const minValue = Number(minRaw);
+    if (Number.isFinite(minValue) && sessionSettings.minRam !== minValue) {
+      sessionSettings.minRam = minValue;
+      changed = true;
+    }
+
+    const maxRaw = (maxRamRef.current as { value?: string | number } | null)?.value;
+    const maxValue = Number(maxRaw);
+    if (Number.isFinite(maxValue) && sessionSettings.maxRam !== maxValue) {
+      sessionSettings.maxRam = maxValue;
+      changed = true;
+    }
+
+    const logsRaw = (showLogsRef.current as { checked?: boolean } | null)?.checked;
+    if (typeof logsRaw === 'boolean' && sessionSettings.showLogs !== logsRaw) {
+      sessionSettings.showLogs = logsRaw;
+      changed = true;
+    }
+
+    const jvmRaw = (jvmArgsRef.current as { value?: string } | null)?.value;
+    if (typeof jvmRaw === 'string' && sessionSettings.jvmArgs !== jvmRaw) {
+      sessionSettings.jvmArgs = jvmRaw;
+      changed = true;
+    }
+
+    const wrapperRaw = (wrapperCommandRef.current as { value?: string } | null)?.value;
+    if (typeof wrapperRaw === 'string' && sessionSettings.wrapperCommand !== wrapperRaw) {
+      sessionSettings.wrapperCommand = wrapperRaw;
+      changed = true;
+    }
+
+    return changed;
+  }, [sessionName]);
+
+  const flushSave = React.useCallback(() => {
+    if (syncCurrentInputsToState()) {
+      hasPendingSaveRef.current = true;
+    }
+
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
+    if (hasPendingSaveRef.current) {
+      hasPendingSaveRef.current = false;
+      void handlers.saveSettings();
+    }
+  }, [handlers, syncCurrentInputsToState]);
+
+  const scheduleSave = React.useCallback((immediate = false) => {
+    hasPendingSaveRef.current = true;
+
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
+    if (immediate) {
+      flushSave();
+      return;
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      flushSave();
+    }, 250);
+  }, [flushSave]);
+
+  const updateSetting = React.useCallback(<K extends keyof SessionSettings>(key: K, value: SessionSettings[K], persist = false) => {
+    if (!sessionName) return;
+
+    // Ensure the session entry exists in the proxy state
+    if (!sourceState.currentSettings.sessions[sessionName]) {
+      // Initialize with a copy of default settings if it's the first override
+      sourceState.currentSettings.sessions[sessionName] = JSON.parse(JSON.stringify(sourceState.currentSettings.defaultSettings));
+    }
+
+    sourceState.currentSettings.sessions[sessionName][key] = value;
+
+    if (persist) {
+      scheduleSave(true);
+    } else {
+      scheduleSave();
+    }
+  }, [sessionName, scheduleSave]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      flushSave();
+    }
+  }, [isOpen, flushSave]);
+
+  useEffect(() => {
+    return () => flushSave();
+  }, [flushSave]);
 
   // Sync local state when the tab becomes active or modal opens
   useEffect(() => {
@@ -57,7 +181,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setLocalJvmArgs(current.jvmArgs);
       setLocalWrapperCommand(current.wrapperCommand);
     }
-  }, [isOpen, activeSettingsTab, state.currentSettings, sessionName]);
+  }, [isOpen, activeSettingsTab, state.currentSettings, sessionName, getSessionSettings]);
 
   // Handle Shoelace events via refs
   useEffect(() => {
@@ -66,59 +190,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const handlers_map = [
       {
         ref: minRamRef,
-        onInput: (e: any) => {
-          const val = parseInt(e.target.value);
+        onInput: (e: Event) => {
+          const val = parseInt(getEventValue(e), 10);
           if (!isNaN(val)) {
             setLocalMinRam(val);
             updateSetting('minRam', val);
           }
-        },
-        onChange: () => handlers.saveSettings()
+        }
       },
       {
         ref: maxRamRef,
-        onInput: (e: any) => {
-          const val = parseInt(e.target.value);
+        onInput: (e: Event) => {
+          const val = parseInt(getEventValue(e), 10);
           if (!isNaN(val)) {
             setLocalMaxRam(val);
             updateSetting('maxRam', val);
           }
-        },
-        onChange: () => handlers.saveSettings()
+        }
       },
       {
         ref: showLogsRef,
-        onChange: (e: any) => {
-          const val = e.target.checked;
-          console.log("[Settings] showLogs changed:", val);
+        onChange: (e: Event) => {
+          const val = (e.target as HTMLInputElement).checked;
           setLocalShowLogs(val);
           updateSetting('showLogs', val, true);
         }
       },
       {
         ref: jvmArgsRef,
-        onInput: (e: any) => {
-          const val = e.target.value;
-          console.log("[Settings] jvmArgs input:", val);
+        onInput: (e: Event) => {
+          const val = (e.target as HTMLTextAreaElement).value;
           setLocalJvmArgs(val);
           updateSetting('jvmArgs', val);
-        },
-        onChange: () => {
-          console.log("[Settings] jvmArgs commit");
-          handlers.saveSettings();
         }
       },
       {
         ref: wrapperCommandRef,
-        onInput: (e: any) => {
-          const val = e.target.value;
-          console.log("[Settings] wrapperCommand input:", val);
+        onInput: (e: Event) => {
+          const val = (e.target as HTMLInputElement).value;
           setLocalWrapperCommand(val);
           updateSetting('wrapperCommand', val);
-        },
-        onChange: () => {
-          console.log("[Settings] wrapperCommand commit");
-          handlers.saveSettings();
         }
       }
     ];
@@ -130,36 +241,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       if (!el) return;
 
       if (onInput) {
+        el.addEventListener('input', onInput);
         el.addEventListener('sl-input', onInput);
+        cleanups.push(() => el.removeEventListener('input', onInput));
         cleanups.push(() => el.removeEventListener('sl-input', onInput));
       }
       if (onChange) {
+        el.addEventListener('change', onChange);
         el.addEventListener('sl-change', onChange);
+        cleanups.push(() => el.removeEventListener('change', onChange));
         cleanups.push(() => el.removeEventListener('sl-change', onChange));
       }
     });
 
     return () => cleanups.forEach(c => c());
-  }, [isOpen, activeSettingsTab]);
-
-  const updateSetting = (key: string, value: any, persist = false) => {
-    if (!sessionName) return;
-
-    console.log(`[Settings] Updating ${key} for ${sessionName} to:`, value);
-
-    // Ensure the session entry exists in the proxy state
-    if (!sourceState.currentSettings.sessions[sessionName]) {
-      // Initialize with a copy of default settings if it's the first override
-      sourceState.currentSettings.sessions[sessionName] = JSON.parse(JSON.stringify(sourceState.currentSettings.defaultSettings));
-    }
-
-    (sourceState.currentSettings.sessions[sessionName] as any)[key] = value;
-
-    if (persist) {
-      console.log(`[Settings] Persisting session settings for ${sessionName} immediately...`);
-      handlers.saveSettings();
-    }
-  };
+  }, [isOpen, activeSettingsTab, sessionName, updateSetting, handlers, getEventValue]);
 
   return (
     <AnimatePresence>

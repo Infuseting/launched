@@ -76,44 +76,49 @@ impl SettingsManager {
     pub fn load(app_handle: &tauri::AppHandle) -> AppSettings {
         let path = Self::get_path(app_handle);
         if let Ok(content) = std::fs::read_to_string(&path) {
-            match serde_json::from_str::<AppSettings>(&content) {
-                Ok(settings) => settings,
-                Err(_) => {
-                    // Try to migrate from old flat structure
-                    #[derive(Deserialize)]
-                    #[serde(rename_all = "camelCase")]
-                    struct OldSettings {
-                        min_ram: u32,
-                        max_ram: u32,
-                        game_resolution: String,
-                        active_account_uuid: Option<String>,
-                        jvm_args: String,
-                        wrapper_command: String,
-                        show_logs: bool,
-                    }
+            // Check if it's already the new format by looking for "sessions" key
+            let is_new_format = content.contains("\"sessions\"");
 
-                    if let Ok(old) = serde_json::from_str::<OldSettings>(&content) {
-                        log::info!("Migrating old flat settings to session-specific structure");
-                        AppSettings {
-                            game_resolution: old.game_resolution,
-                            active_account_uuid: old.active_account_uuid,
-                            sessions: HashMap::new(),
-                            default_settings: SessionSettings {
-                                min_ram: old.min_ram,
-                                max_ram: old.max_ram,
-                                jvm_args: old.jvm_args,
-                                wrapper_command: old.wrapper_command,
-                                show_logs: old.show_logs,
-                            },
-                        }
-                    } else {
-                        AppSettings::default()
+            if is_new_format {
+                match serde_json::from_str::<AppSettings>(&content) {
+                    Ok(settings) => return settings,
+                    Err(e) => {
+                        log::error!("Failed to parse new settings format: {}. Attempting fallback.", e);
                     }
                 }
             }
-        } else {
-            AppSettings::default()
+
+            // Fallback: Try to migrate from old flat structure if "sessions" is missing or parsing failed
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct OldSettings {
+                min_ram: u32,
+                max_ram: u32,
+                game_resolution: String,
+                active_account_uuid: Option<String>,
+                jvm_args: String,
+                wrapper_command: String,
+                show_logs: bool,
+            }
+
+            if let Ok(old) = serde_json::from_str::<OldSettings>(&content) {
+                log::info!("Migrating old flat settings to session-specific structure");
+                return AppSettings {
+                    game_resolution: old.game_resolution,
+                    active_account_uuid: old.active_account_uuid,
+                    sessions: HashMap::new(),
+                    default_settings: SessionSettings {
+                        min_ram: old.min_ram,
+                        max_ram: old.max_ram,
+                        jvm_args: old.jvm_args,
+                        wrapper_command: old.wrapper_command,
+                        show_logs: old.show_logs,
+                    },
+                };
+            }
         }
+        
+        AppSettings::default()
     }
 
     pub fn save(app_handle: &tauri::AppHandle, settings: &AppSettings) -> Result<(), String> {

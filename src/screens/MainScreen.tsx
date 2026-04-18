@@ -1,17 +1,13 @@
 import React from 'react';
 import { useLauncherState } from '../state';
+import type { AppHandlers } from '../types';
 import TopBar from '../components/TopBar';
 import BottomBar from '../components/BottomBar';
 import SocialLinks from '../components/SocialLinks';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MainScreenProps {
-  handlers: {
-    syncAndLoad: () => Promise<void>;
-    handleSettingsToggle: (show: boolean) => void;
-    handleServerSelectToggle: (show: boolean) => void;
-    handleTabChange: (tabId: string) => void;
-  };
+  handlers: Pick<AppHandlers, 'syncAndLoad' | 'handleSettingsToggle' | 'handleServerSelectToggle' | 'handleTabChange'>;
 }
 
 const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {

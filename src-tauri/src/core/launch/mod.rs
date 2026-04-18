@@ -80,13 +80,11 @@ impl LaunchService {
                     use tauri::Emitter;
                     let mut file: Option<std::fs::File> = OpenOptions::new().append(true).create(true).open(&log_file_path_out).ok();
                     let reader = BufReader::new(stdout);
-                    for line in reader.lines() {
-                        if let Ok(l) = line {
-                            if show_logs { let _ = handle_out.emit("game-log", &l); }
-                            if let Some(f) = file.as_mut() {
-                                let _ = writeln!(f, "{}", l);
-                                let _ = f.flush();
-                            }
+                    for l in reader.lines().map_while(Result::ok) {
+                        if show_logs { let _ = handle_out.emit("game-log", &l); }
+                        if let Some(f) = file.as_mut() {
+                            let _ = writeln!(f, "{}", l);
+                            let _ = f.flush();
                         }
                     }
                 });
@@ -98,13 +96,11 @@ impl LaunchService {
                     use tauri::Emitter;
                     let mut file: Option<std::fs::File> = OpenOptions::new().append(true).create(true).open(&log_file_path_err).ok();
                     let reader = BufReader::new(stderr);
-                    for line in reader.lines() {
-                        if let Ok(l) = line {
-                            if show_logs { let _ = handle_err.emit("game-log", format!("[ERROR] {}", l)); }
-                            if let Some(f) = file.as_mut() {
-                                let _ = writeln!(f, "[ERROR] {}", l);
-                                let _ = f.flush();
-                            }
+                    for l in reader.lines().map_while(Result::ok) {
+                        if show_logs { let _ = handle_err.emit("game-log", format!("[ERROR] {}", l)); }
+                        if let Some(f) = file.as_mut() {
+                            let _ = writeln!(f, "[ERROR] {}", l);
+                            let _ = f.flush();
                         }
                     }
                 });
