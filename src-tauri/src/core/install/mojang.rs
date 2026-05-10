@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use crate::core::retry::retry_with_backoff;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 const JRE_MANIFEST_URL: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
@@ -197,29 +198,38 @@ async fn download_file(client: &Client, url: &str, path: &PathBuf) -> Result<boo
             .map_err(|e| format!("Failed to create dir {:?}: {}", parent, e))?;
     }
 
-    let mut response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to download {}: {}", url, e))?;
+    let url = url.to_string();
+    let path = path.clone();
+    let client = client.clone();
 
-    if !response.status().is_success() {
-        return Err(format!("HTTP {} for {}", response.status(), url));
-    }
-
-    let mut file = fs::File::create(path)
-        .await
-        .map_err(|e| format!("Failed to create file {:?}: {}", path, e))?;
-
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| format!("Chunk error from {}: {}", url, e))?
-    {
-        file.write_all(&chunk)
+    retry_with_backoff(|| async {
+        let mut response = client
+            .get(&url)
+            .send()
             .await
-            .map_err(|e| format!("Write error: {}", e))?;
-    }
+            .map_err(|e| format!("Failed to download {}: {}", url, e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("HTTP {} for {}", response.status(), url));
+        }
+
+        let mut file = fs::File::create(&path)
+            .await
+            .map_err(|e| format!("Failed to create file {:?}: {}", path, e))?;
+
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| format!("Chunk error from {}: {}", url, e))?
+        {
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Write error: {}", e))?;
+        }
+
+        Ok(())
+    })
+    .await?;
 
     Ok(true) // Downloaded new file
 }
@@ -248,14 +258,17 @@ pub async fn install_version(version: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to create version directory: {}", e))?;
 
     // ── Step 1: Fetch version manifest index ───────────────────────────────────
-    let manifest: VersionManifestIndex = client
-        .get(VERSION_MANIFEST_URL)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch version manifest: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse version manifest: {}", e))?;
+    let manifest: VersionManifestIndex = retry_with_backoff(|| async {
+        client
+            .get(VERSION_MANIFEST_URL)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch version manifest: {}", e))?
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse version manifest: {}", e))
+    })
+    .await?;
 
     let version_info = manifest
         .versions
@@ -266,14 +279,17 @@ pub async fn install_version(version: &str) -> Result<(), String> {
     // ── Step 2: Download version JSON ─────────────────────────────────────────
     if !version_json_path.exists() {
         log::info!("Downloading version JSON for {}...", version);
-        let content = client
-            .get(&version_info.url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch version JSON: {}", e))?
-            .text()
-            .await
-            .map_err(|e| format!("Failed to read version JSON: {}", e))?;
+        let content = retry_with_backoff(|| async {
+            client
+                .get(&version_info.url)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch version JSON: {}", e))?
+                .text()
+                .await
+                .map_err(|e| format!("Failed to read version JSON: {}", e))
+        })
+        .await?;
 
         fs::write(&version_json_path, &content)
             .await
@@ -291,25 +307,32 @@ pub async fn install_version(version: &str) -> Result<(), String> {
     // ── Step 4: Download client JAR ───────────────────────────────────────────
     if !version_jar_path.exists() {
         log::info!("Downloading Minecraft {} client JAR...", version);
-        let mut response = client
-            .get(&detail.downloads.client.url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to start JAR download: {}", e))?;
+        let jar_url = detail.downloads.client.url.clone();
+        let jar_path = version_jar_path.clone();
 
-        let mut file = fs::File::create(&version_jar_path)
-            .await
-            .map_err(|e| format!("Failed to create JAR file: {}", e))?;
-
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|e| format!("JAR download chunk error: {}", e))?
-        {
-            file.write_all(&chunk)
+        retry_with_backoff(|| async {
+            let mut response = client
+                .get(&jar_url)
+                .send()
                 .await
-                .map_err(|e| format!("JAR write error: {}", e))?;
-        }
+                .map_err(|e| format!("Failed to start JAR download: {}", e))?;
+
+            let mut file = fs::File::create(&jar_path)
+                .await
+                .map_err(|e| format!("Failed to create JAR file: {}", e))?;
+
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| format!("JAR download chunk error: {}", e))?
+            {
+                file.write_all(&chunk)
+                    .await
+                    .map_err(|e| format!("JAR write error: {}", e))?;
+            }
+            Ok(())
+        })
+        .await?;
         log::info!("Minecraft {} JAR downloaded.", version);
     }
 

@@ -4,6 +4,7 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use tauri::Emitter;
 use tokio::io::AsyncWriteExt;
+use super::retry::retry_with_backoff;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SyncFile {
@@ -233,22 +234,28 @@ impl SyncService {
     }
 
     /**
-     * Downloads a file from a URL to a destination path.
+     * Downloads a file from a URL to a destination path with retry logic.
      */
     async fn download_file(&self, url: &str, dest: &Path) -> Result<(), String> {
-        let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
-        if !response.status().is_success() {
-            return Err(format!(
-                "Failed to download file from {}: status {}",
-                url,
-                response.status()
-            ));
-        }
-        let bytes = response.bytes().await.map_err(|e| e.to_string())?;
-        let mut file = tokio::fs::File::create(dest)
-            .await
-            .map_err(|e| e.to_string())?;
-        file.write_all(&bytes).await.map_err(|e| e.to_string())?;
-        Ok(())
+        let url = url.to_string();
+        let dest = dest.to_path_buf();
+
+        retry_with_backoff(|| async {
+            let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+            if !response.status().is_success() {
+                return Err(format!(
+                    "Failed to download file from {}: status {}",
+                    url,
+                    response.status()
+                ));
+            }
+            let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+            let mut file = tokio::fs::File::create(&dest)
+                .await
+                .map_err(|e| e.to_string())?;
+            file.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            Ok(())
+        })
+        .await
     }
 }
