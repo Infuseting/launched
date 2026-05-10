@@ -1,0 +1,91 @@
+<h2>Exploration des Styles</h2>
+<p class="subtitle">Voici un aperçu plus détaillé des trois directions possibles pour Launched.</p>
+
+<div class="options" style="flex-direction: column; gap: 2rem;">
+  
+  <!-- A: Minimaliste -->
+  <div class="option" data-choice="minimalist" onclick="toggleSelect(this)" style="display: block;">
+    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+      <div class="letter">A</div>
+      <h3 style="margin:0">L'Approche "Clean Slate"</h3>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <div>
+        <p><strong>Philosophie:</strong> Moins c'est plus. On laisse le produit parler via des captures d'écran ultra-nettes dans des cadres minimalistes.</p>
+        <ul style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem;">
+          <li>Typographie: Inter ou SF Pro, gras et espacé.</li>
+          <li>Couleurs: Noir pur (#000), Gris zinc, Blanc.</li>
+          <li>Images: Mockups de l'application sur fond neutre.</li>
+        </ul>
+      </div>
+      <div style="background: #111; border-radius: 12px; padding: 1rem; border: 1px solid rgba(255,255,255,0.1)">
+         <div style="height: 20px; width: 40%; background: #fff; border-radius: 4px; margin-bottom: 1rem;"></div>
+         <div style="aspect-ratio: 16/9; background: #222; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; color: #444; font-size: 10px;">Capture App Ultra-Clean</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B: Gaming -->
+  <div class="option" data-choice="gaming" onclick="toggleSelect(this)" style="display: block;">
+    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+      <div class="letter">B</div>
+      <h3 style="margin:0">L'Approche "Immersion Totale"</h3>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <div>
+        <p><strong>Philosophie:</strong> On célèbre Minecraft. L'interface "flotte" au-dessus d'un monde immersif avec des effets de profondeur.</p>
+        <ul style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem;">
+          <li>Typographie: Montserrat ou une police custom "Gaming".</li>
+          <li>Couleurs: Dégradés bleus/violets, effets de verre flouté.</li>
+          <li>Images: Shaders Minecraft en arrière-plan, renders 3D d'objets.</li>
+        </ul>
+      </div>
+      <div style="background: linear-gradient(to bottom right, #1e3a8a, #000); border-radius: 12px; padding: 1rem; border: 1px solid #3b82f6; position: relative; overflow: hidden;">
+         <div style="position: absolute; inset:0; opacity: 0.2; background: url('https://www.minecraft.net/content/dam/minecraftnet/games/minecraft/key-art/MC-Vanilla-Update-KeyArt-1920x1080.jpg') center/cover;"></div>
+         <div style="position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end;">
+            <div style="height: 30px; width: 60%; background: #3b82f6; border-radius: 6px; box-shadow: 0 0 15px rgba(59,130,246,0.5)"></div>
+         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C: Technique -->
+  <div class="option" data-choice="tech" onclick="toggleSelect(this)" style="display: block;">
+    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+      <div class="letter">C</div>
+      <h3 style="margin:0">L'Approche "Power User"</h3>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <div>
+        <p><strong>Philosophie:</strong> On montre les muscles. Focus sur la vitesse, l'optimisation disque et la gestion multi-launcher.</p>
+        <ul style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem;">
+          <li>Typographie: JetBrains Mono ou Roboto Mono pour les détails.</li>
+          <li>Couleurs: Noir mat, Vert terminal ou Bleu électrique.</li>
+          <li>Images: Schémas techniques, graphiques de performance.</li>
+        </ul>
+      </div>
+      <div style="background: #000; border-radius: 12px; padding: 1rem; border: 1px solid #333; font-family: monospace; font-size: 10px;">
+         <div style="color: #666; margin-bottom: 0.5rem;">[STATUS] Optimizing disk...</div>
+         <div style="display: flex; gap: 4px; margin-bottom: 1rem;">
+            <div style="height: 4px; flex: 1; background: #2563eb"></div>
+            <div style="height: 4px; flex: 1; background: #2563eb"></div>
+            <div style="height: 4px; flex: 1; background: #333"></div>
+            <div style="height: 4px; flex: 1; background: #333"></div>
+         </div>
+         <div style="height: 40px; border: 1px dashed #444; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #444;">DATA_VIZ.JSON</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top: 3rem; padding: 2rem; background: rgba(255,255,255,0.02); border-radius: 20px; border: 1px solid rgba(255,255,255,0.05)">
+  <h4 style="margin-top:0">Idées d'images pour le site :</h4>
+  <p style="font-size: 0.9rem; color: rgba(255,255,255,0.6)">Pour quel "truc" aimerais-tu que je génère ou cherche une illustration ?</p>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem;">
+    <span style="background: #222; padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.75rem;">Comparaison d'espace disque</span>
+    <span style="background: #222; padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.75rem;">Multi-instance simultanée</span>
+    <span style="background: #222; padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.75rem;">Sécurité Microsoft OAuth</span>
+    <span style="background: #222; padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.75rem;">Vitesse de lancement</span>
+  </div>
+</div>

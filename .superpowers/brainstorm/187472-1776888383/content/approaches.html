@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0a0a0a; color: white; }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glow { box-shadow: 0 0 20px rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="p-8">
+    <h1 class="text-3xl font-black mb-8 tracking-tighter uppercase text-center">Choix de l'Approche Graphique</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <!-- Approach 1 -->
+        <div class="glass p-8 rounded-3xl flex flex-col h-full border-l-8 border-blue-500 hover:scale-[1.02] transition-transform cursor-pointer">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="bg-blue-500 text-xs font-bold px-2 py-1 rounded">RECOMMANDÉ</span>
+                <h2 class="text-2xl font-black text-blue-400">1. Portail Immersif</h2>
+            </div>
+            <p class="text-neutral-400 mb-6 flex-grow leading-relaxed">Reprend exactement l'ADN du launcher. Un fond dynamique plein écran, une typographie massive, et un bouton central unique qui s'adapte à l'OS. L'expérience est fluide, sombre et centrée sur l'action.</p>
+            <ul class="text-sm space-y-3 mb-8 text-neutral-300">
+                <li class="flex items-center gap-2"><span class="text-green-400">✅</span> Cohérence visuelle totale avec le jeu</li>
+                <li class="flex items-center gap-2"><span class="text-green-400">✅</span> Navigation ultra-rapide</li>
+                <li class="flex items-center gap-2"><span class="text-green-400">✅</span> Focus maximum sur le téléchargement</li>
+            </ul>
+            <div class="bg-black/60 aspect-video rounded-2xl border border-white/10 flex items-center justify-center relative overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-t from-blue-500/20 to-transparent"></div>
+                <div class="text-4xl font-black opacity-20">LAUNCHED</div>
+                <div class="absolute bottom-4 h-8 w-32 bg-blue-500 rounded-lg shadow-[0_0_20px_rgba(59,130,246,0.5)]"></div>
+            </div>
+        </div>
+
+        <!-- Approach 2 -->
+        <div class="glass p-8 rounded-3xl flex flex-col h-full border-l-8 border-neutral-700 opacity-60">
+            <h2 class="text-2xl font-black mb-4">2. Showcase Classique</h2>
+            <p class="text-neutral-400 mb-6 flex-grow leading-relaxed">Structure plus traditionnelle type 'Page Produit'. Plus d'informations visibles directement (features, screenshots) avant le bouton de téléchargement. Convient si tu veux expliquer beaucoup de choses.</p>
+            <ul class="text-sm space-y-3 mb-8 text-neutral-300">
+                <li class="flex items-center gap-2"><span class="text-red-400">❌</span> Moins 'immersif' que le launcher</li>
+                <li class="flex items-center gap-2"><span class="text-green-400">✅</span> Plus d'espace pour le contenu</li>
+                <li class="flex items-center gap-2"><span class="text-green-400">✅</span> Structure familière</li>
+            </ul>
+            <div class="bg-black/60 aspect-video rounded-2xl border border-white/10 p-4 space-y-2">
+                <div class="h-2 w-1/2 bg-white/20 rounded"></div>
+                <div class="h-2 w-3/4 bg-white/10 rounded"></div>
+                <div class="grid grid-cols-2 gap-2 pt-4">
+                    <div class="h-12 bg-white/5 rounded"></div>
+                    <div class="h-12 bg-white/5 rounded"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
