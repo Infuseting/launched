@@ -176,8 +176,16 @@ impl MicrosoftAuth {
             .await;
 
         match response {
-            Ok(r) => r.status().is_success(),
-            Err(_) => false,
+            Ok(r) => {
+                let status = r.status();
+                // Only treat the token as invalid if we get an explicit auth error (401).
+                // 429 Too Many Requests or 5xx server errors or network errors mean the token might still be valid.
+                status != reqwest::StatusCode::UNAUTHORIZED && status != reqwest::StatusCode::FORBIDDEN
+            }
+            Err(e) => {
+                log::warn!("Network error checking if MC token is valid: {}. Assuming it is valid to prevent accidental logout.", e);
+                true
+            }
         }
     }
 
