@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { state as sourceState, type LauncherState } from '../state';
 import type { AppHandlers, AppSettings, SessionSettings } from '../types';
 import AccountSwitcher from './AccountSwitcher';
+import SkinTab from './SkinTab';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -194,6 +195,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           const val = parseInt(getEventValue(e), 10);
           if (!isNaN(val)) {
             setLocalMinRam(val);
+          }
+        },
+        onChange: (e: Event) => {
+          const val = parseInt(getEventValue(e), 10);
+          if (!isNaN(val)) {
+            setLocalMinRam(val);
             updateSetting('minRam', val);
           }
         }
@@ -201,6 +208,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       {
         ref: maxRamRef,
         onInput: (e: Event) => {
+          const val = parseInt(getEventValue(e), 10);
+          if (!isNaN(val)) {
+            setLocalMaxRam(val);
+          }
+        },
+        onChange: (e: Event) => {
           const val = parseInt(getEventValue(e), 10);
           if (!isNaN(val)) {
             setLocalMaxRam(val);
@@ -289,10 +302,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Navigation */}
-            <div className="px-8 py-4 flex gap-2 bg-black/20 border-b border-white/5">
+            <div className="px-8 py-4 flex gap-2 bg-black/20 border-b border-white/5 overflow-x-auto">
               {[
                 { id: 'account', label: 'Accounts', icon: 'person-fill' },
-                { id: 'general', label: 'General', icon: 'gear-wide-connected' },
+                { id: 'skin',    label: 'Skin',     icon: 'palette-fill' },
+                { id: 'general', label: 'General',  icon: 'gear-wide-connected' },
                 { id: 'advanced', label: 'Advanced', icon: 'braces' }
               ].map((tab) => (
                 <button
@@ -326,6 +340,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       onRemove={handlers.handleAccountRemove}
                       onAdd={handlers.handleLoginAdd}
                     />
+                  </motion.div>
+                )}
+
+                {activeSettingsTab === 'skin' && (
+                  <motion.div
+                    key="skin"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                  >
+                    <SkinTab />
                   </motion.div>
                 )}
 

@@ -24,3 +24,11 @@ export async function setActiveAccount(uuid: string): Promise<void> {
 export async function logout(): Promise<void> {
   await invoke("logout");
 }
+
+/**
+ * Validates the stored Minecraft token and silently refreshes it if expired.
+ * Returns the fresh AuthResponse. Throws if not logged in or refresh fails.
+ */
+export async function refreshActiveToken(): Promise<AuthResponse> {
+  return await invoke<AuthResponse>("refresh_active_token");
+}

@@ -343,6 +343,203 @@ async fn fetch_json(url: String) -> Result<serde_json::Value, String> {
         .map_err(|e| e.to_string())
 }
 
+// ─── Skin management commands ────────────────────────────────────────────────
+
+/// Returns a **valid** (non-expired) Minecraft access token for the active account.
+/// Mirrors the same validate → refresh → remove flow used in `launch_game`.
+async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, String> {
+    let mut settings = SettingsManager::load(app_handle);
+    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(app_handle).unwrap_or_default();
+
+    let auth = settings
+        .active_account_uuid
+        .as_ref()
+        .and_then(|uid| accounts.iter().find(|a| a.uuid == *uid).cloned())
+        .or_else(|| accounts.iter().next().cloned())
+        .ok_or_else(|| "Not authenticated – please login first.".to_string())?;
+
+    // Token still valid → return immediately
+    if MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {
+        return Ok(auth.access_token);
+    }
+
+    log::warn!("Minecraft token expired for {}, attempting silent refresh…", auth.name);
+
+    // Try silent refresh via the stored refresh_token
+    if let Some(refresh_token) = auth.refresh_token.clone() {
+        match MicrosoftAuth.refresh_auth(&refresh_token).await {
+            Ok(refreshed) => {
+                log::info!("Silently refreshed Minecraft token for {}", refreshed.name);
+                crate::auth::secrets::SecretManager::add_account(app_handle, refreshed.clone())?;
+                settings.active_account_uuid = Some(refreshed.uuid.clone());
+                let _ = SettingsManager::save(app_handle, &settings);
+                return Ok(refreshed.access_token);
+            }
+            Err(e) => {
+                log::warn!("Silent refresh failed: {}", e);
+            }
+        }
+    }
+
+    // Refresh failed (or no refresh token) → remove stale account
+    let _ = crate::auth::secrets::SecretManager::remove_account(app_handle, &auth.uuid);
+    if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
+        settings.active_account_uuid = None;
+        let _ = SettingsManager::save(app_handle, &settings);
+    }
+
+    Err("Session Minecraft expirée. Merci de vous reconnecter via Microsoft.".to_string())
+}
+
+#[tauri::command]
+async fn get_minecraft_profile(app_handle: tauri::AppHandle) -> Result<crate::core::skin::MinecraftProfile, String> {
+    let token = get_valid_token(&app_handle).await?;
+    crate::core::skin::fetch_minecraft_profile(&token).await
+}
+
+#[tauri::command]
+async fn get_skin_history(app_handle: tauri::AppHandle) -> Result<Vec<crate::core::skin::SkinEntry>, String> {
+    Ok(crate::core::skin::load_skin_history(&app_handle))
+}
+
+#[tauri::command]
+async fn upload_skin(
+    app_handle: tauri::AppHandle,
+    name: String,
+    texture_b64: String,
+    variant: String,
+) -> Result<crate::core::skin::SkinEntry, String> {
+    let token = get_valid_token(&app_handle).await?;
+    crate::core::skin::upload_skin_to_mojang(&token, &texture_b64, &variant).await?;
+
+    let entry = crate::core::skin::SkinEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        texture_b64,
+        variant,
+        added_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    let mut history = crate::core::skin::load_skin_history(&app_handle);
+    history.insert(0, entry.clone());
+    history.truncate(50);
+    crate::core::skin::save_skin_history(&app_handle, &history)?;
+    Ok(entry)
+}
+
+/// Saves a skin entry to the local library WITHOUT making any HTTP call.
+/// Used when the frontend has already done the Mojang upload via browser fetch.
+#[tauri::command]
+async fn save_skin_to_library(
+    app_handle: tauri::AppHandle,
+    name: String,
+    texture_b64: String,
+    variant: String,
+) -> Result<crate::core::skin::SkinEntry, String> {
+    let entry = crate::core::skin::SkinEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        texture_b64,
+        variant,
+        added_at: chrono::Utc::now().to_rfc3339(),
+    };
+    let mut history = crate::core::skin::load_skin_history(&app_handle);
+    history.insert(0, entry.clone());
+    history.truncate(50);
+    crate::core::skin::save_skin_history(&app_handle, &history)?;
+    Ok(entry)
+}
+
+/// Sends a pre-serialized multipart body to Mojang's skin endpoint.
+/// The frontend uses browser's FormData API to serialize the body (guaranteed correct),
+/// then passes raw bytes + Content-Type header here to bypass CORS restrictions.
+#[tauri::command]
+async fn upload_skin_raw(
+    app_handle: tauri::AppHandle,
+    content_type: String,
+    body: Vec<u8>,
+) -> Result<(), String> {
+    let token = get_valid_token(&app_handle).await?;
+
+    let client = reqwest::Client::builder()
+        .http1_only()
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let resp = client
+        .post("https://api.minecraftservices.com/minecraft/profile/skins")
+        .bearer_auth(&token)
+        .header("Content-Type", &content_type)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Mojang upload failed: HTTP {} – {}", status, text));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_skin_token(app_handle: tauri::AppHandle) -> Result<String, String> {
+    get_valid_token(&app_handle).await
+}
+
+
+#[tauri::command]
+async fn apply_skin_from_history(
+    app_handle: tauri::AppHandle,
+    skin_id: String,
+) -> Result<(), String> {
+    let token = get_valid_token(&app_handle).await?;
+    let history = crate::core::skin::load_skin_history(&app_handle);
+    let entry = history
+        .iter()
+        .find(|e| e.id == skin_id)
+        .ok_or_else(|| format!("Skin '{}' not found in history", skin_id))?;
+    crate::core::skin::upload_skin_to_mojang(&token, &entry.texture_b64, &entry.variant).await
+}
+
+#[tauri::command]
+async fn reset_skin(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let token = get_valid_token(&app_handle).await?;
+    let settings = SettingsManager::load(&app_handle);
+    let uuid = settings
+        .active_account_uuid
+        .ok_or_else(|| "No active account".to_string())?;
+    crate::core::skin::reset_skin_on_mojang(&token, &uuid).await
+}
+
+#[tauri::command]
+async fn delete_skin_from_history(
+    app_handle: tauri::AppHandle,
+    skin_id: String,
+) -> Result<(), String> {
+    let mut history = crate::core::skin::load_skin_history(&app_handle);
+    history.retain(|e| e.id != skin_id);
+    crate::core::skin::save_skin_history(&app_handle, &history)
+}
+
+/// Validates the active token and silently refreshes it if expired.
+/// Called at launcher startup to proactively renew credentials.
+/// Returns the fresh AuthResponse so the frontend can update its cache.
+#[tauri::command]
+async fn refresh_active_token(app_handle: tauri::AppHandle) -> Result<crate::auth::AuthResponse, String> {
+    // get_valid_token already does validate → refresh → save → error
+    let token = get_valid_token(&app_handle).await?;
+
+    // Return the full account matching this fresh token
+    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
+    accounts
+        .into_iter()
+        .find(|a| a.access_token == token)
+        .ok_or_else(|| "Could not find refreshed account".to_string())
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -371,7 +568,17 @@ pub fn run() {
             remove_account,
             fetch_json,
             get_active_session_name,
-            set_active_session
+            set_active_session,
+            get_minecraft_profile,
+            get_skin_history,
+            upload_skin,
+            apply_skin_from_history,
+            reset_skin,
+            delete_skin_from_history,
+            refresh_active_token,
+            save_skin_to_library,
+            get_skin_token,
+            upload_skin_raw
         ])
         .on_page_load(|window, _payload| {
             let _ = crate::ui::bridge::inject_bridge(window);

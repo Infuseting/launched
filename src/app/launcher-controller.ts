@@ -321,7 +321,6 @@ export class LauncherController {
       console.error(`Failed to fetch assets for ${session.name}:`, error);
     }
   }
-
   private async loadInitialData(): Promise<void> {
     state.globalSessions = await sessionService.getSessions();
     state.currentSettings = await settingsService.getSettings();
@@ -332,19 +331,16 @@ export class LauncherController {
     } catch {
       state.maxSystemRam = DEFAULT_SYSTEM_RAM_MB;
     }
-
     try {
       state.appVersion = await updaterService.appVersion();
     } catch {
       state.appVersion = DEFAULT_APP_VERSION;
     }
-
     try {
       state.authCache = await authService.getAuth();
     } catch (error) {
       console.error('Failed to get auth:', error);
     }
-
     const lastSessionName = await sessionService.getActiveSessionName();
     if (lastSessionName) {
       const index = state.globalSessions.findIndex(session => session.name === lastSessionName);
@@ -352,8 +348,20 @@ export class LauncherController {
         state.activeSessionIndex = index;
       }
     }
-
     await this.fetchAssetMetadata(state.activeSessionIndex);
+    this.silentlyRefreshToken();
+  }
+
+  private silentlyRefreshToken(): void {
+    authService.refreshActiveToken().then(refreshed => {
+      state.authCache = refreshed;
+      state.allAccounts = state.allAccounts.map(a =>
+        a.uuid === refreshed.uuid ? refreshed : a
+      );
+      console.log('[auth] Token refreshed silently for', refreshed.name);
+    }).catch(err => {
+      console.debug('[auth] Silent refresh skipped:', err);
+    });
   }
 
   private async checkForUpdates(forcePrompt = false): Promise<void> {
