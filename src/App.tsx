@@ -3,7 +3,7 @@ import { useLauncherState } from './state';
 import type { AppHandlers } from './types';
 import Layout from './components/Layout';
 import MainScreen from './screens/MainScreen';
-import SettingsModal from './components/SettingsModal';
+import SettingsModal from './components/settings/SettingsModal';
 import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';

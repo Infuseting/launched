@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { AuthResponse } from '../types';
+import type { AuthResponse } from '../../types';
 
 interface AccountSwitcherProps {
   accounts: AuthResponse[];
