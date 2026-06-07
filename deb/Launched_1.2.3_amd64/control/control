@@ -1,0 +1,9 @@
+Package: launched
+Version: 1.2.3
+Architecture: amd64
+Installed-Size: 27829
+Maintainer: Infuseting
+Priority: optional
+Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+Description: Launcher de différents serveur RP
+ (none)
