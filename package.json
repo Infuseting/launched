@@ -1,7 +1,7 @@
 {
   "name": "launched",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Launcher Minecraft personnalisé",
   "author": "Infuseting",
   "license": "MIT",
@@ -21,8 +21,8 @@
   },
   "dependencies": {
     "@shoelace-style/shoelace": "^2.20.1",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/cli": "^2.10.1",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/cli": "^2.11.2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",

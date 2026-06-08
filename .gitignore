@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 .worktrees/
 web/
+
+# Tauri local signing keys
+src-tauri/*.pfx
+src-tauri/cert_base64.txt
+
