@@ -47,6 +47,9 @@
       "icons/icon.icns",
       "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "windows": {
+      "signCommand": "powershell -ExecutionPolicy Bypass -File ./sign-windows.ps1 %1"
+    }
   }
 }
