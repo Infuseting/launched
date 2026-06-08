@@ -52,7 +52,7 @@ jobs:
         run: rustup target add x86_64-apple-darwin
 
       - name: Decode Windows Certificate
-        if: matrix.platform == 'windows-latest' && secrets.WINDOWS_CERTIFICATE != ''
+        if: matrix.platform == 'windows-latest' && env.WINDOWS_CERTIFICATE != ''
         shell: pwsh
         run: |
           $certBytes = [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
