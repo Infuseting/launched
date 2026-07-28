@@ -599,14 +599,22 @@ async fn download_file_stream(client: &Client, url: &str, destination: &Path) ->
         .await
         .map_err(|e| format!("Failed to create file {:?}: {}", destination, e))?;
 
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| format!("Chunk error from {}: {}", url, e))?
-    {
-        file.write_all(&chunk)
-            .await
-            .map_err(|e| format!("Write error for {:?}: {}", destination, e))?;
+    loop {
+        match response.chunk().await {
+            Ok(Some(chunk)) => {
+                if let Err(e) = file.write_all(&chunk).await {
+                    drop(file);
+                    let _ = tokio_fs::remove_file(destination).await;
+                    return Err(format!("Write error for {:?}: {}", destination, e));
+                }
+            }
+            Ok(None) => break,
+            Err(e) => {
+                drop(file);
+                let _ = tokio_fs::remove_file(destination).await;
+                return Err(format!("Chunk error from {}: {}", url, e));
+            }
+        }
     }
 
     Ok(())

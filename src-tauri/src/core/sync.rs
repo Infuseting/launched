@@ -159,7 +159,7 @@ impl SyncService {
             }
 
             let file_url = format!("{}/{}", base_download_url, normalized_name);
-            self.download_file(&file_url, &local_file_path).await?;
+            self.download_file(&file_url, &local_file_path, Some(&sync_file.md5)).await?;
         }
 
         Ok(())
@@ -236,9 +236,10 @@ impl SyncService {
     /**
      * Downloads a file from a URL to a destination path with retry logic.
      */
-    async fn download_file(&self, url: &str, dest: &Path) -> Result<(), String> {
+    async fn download_file(&self, url: &str, dest: &Path, expected_md5: Option<&str>) -> Result<(), String> {
         let url = url.to_string();
         let dest = dest.to_path_buf();
+        let expected_md5 = expected_md5.map(|s| s.to_string());
 
         retry_with_backoff(|| async {
             let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
@@ -250,10 +251,25 @@ impl SyncService {
                 ));
             }
             let bytes = response.bytes().await.map_err(|e| e.to_string())?;
-            let mut file = tokio::fs::File::create(&dest)
-                .await
-                .map_err(|e| e.to_string())?;
-            file.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            
+            if let Some(expected) = &expected_md5 {
+                let hash = format!("{:x}", md5::compute(&bytes));
+                if hash != *expected {
+                    return Err(format!(
+                        "MD5 mismatch for {}: expected {}, got {}",
+                        url, expected, hash
+                    ));
+                }
+            }
+
+            let mut file = match tokio::fs::File::create(&dest).await {
+                Ok(f) => f,
+                Err(e) => return Err(e.to_string()),
+            };
+            if let Err(e) = file.write_all(&bytes).await {
+                let _ = tokio::fs::remove_file(&dest).await;
+                return Err(e.to_string());
+            }
             Ok(())
         })
         .await
