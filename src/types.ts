@@ -74,6 +74,7 @@ export interface Session {
   isDefault: boolean;
   links?: SessionLink[];
   assetsData?: AssetMetadata;
+  crack?: boolean;
 }
 
 export interface SessionSettings {
@@ -89,6 +90,7 @@ export interface AppSettings {
   activeAccountUuid: string | null;
   sessions: Record<string, SessionSettings>;
   defaultSettings: SessionSettings;
+  lastCrackPseudo?: string;
 }
 
 export interface LauncherStateModel {
@@ -116,6 +118,8 @@ export interface LauncherStateModel {
   updateError: string | null;
   dismissedUpdateVersion: string | null;
   serverStatusInterval: ReturnType<typeof setInterval> | null;
+  crackModalOpen: boolean;
+  crackModalDefaultPseudo: string;
 }
 
 export interface AppHandlers {
@@ -133,4 +137,5 @@ export interface AppHandlers {
   handleServerSelectToggle: (show: boolean) => void;
   handleDeviceCodeModalToggle: (show: boolean) => void;
   handleSessionSelect: (index: number) => Promise<void>;
+  handleCrackModalResolve: (pseudo: string | null) => void;
 }

@@ -19,6 +19,7 @@ pub struct AppSettings {
     // Global Settings
     pub game_resolution: String,
     pub active_account_uuid: Option<String>,
+    pub last_crack_pseudo: Option<String>,
 
     // Session-specific Overrides
     pub sessions: HashMap<String, SessionSettings>,
@@ -56,6 +57,7 @@ impl Default for AppSettings {
         Self {
             game_resolution: "400x300".to_string(),
             active_account_uuid: None,
+            last_crack_pseudo: None,
             sessions: HashMap::new(),
             default_settings: SessionSettings::default(),
         }
@@ -96,6 +98,7 @@ impl SettingsManager {
                 max_ram: u32,
                 game_resolution: String,
                 active_account_uuid: Option<String>,
+                last_crack_pseudo: Option<String>,
                 jvm_args: String,
                 wrapper_command: String,
                 show_logs: bool,
@@ -106,6 +109,7 @@ impl SettingsManager {
                 return AppSettings {
                     game_resolution: old.game_resolution,
                     active_account_uuid: old.active_account_uuid,
+                    last_crack_pseudo: old.last_crack_pseudo,
                     sessions: HashMap::new(),
                     default_settings: SessionSettings {
                         min_ram: old.min_ram,

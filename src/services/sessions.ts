@@ -9,8 +9,8 @@ export async function syncSession(session: Session): Promise<void> {
   await invoke("sync_session", { session });
 }
 
-export async function launchGame(session: Session, showLogs: boolean): Promise<void> {
-  await invoke("launch_game", { session, showLogs });
+export async function launchGame(session: Session, showLogs: boolean, crackPseudo?: string): Promise<void> {
+  await invoke("launch_game", { session, showLogs, crackPseudo });
 }
 
 export async function fetchJson(url: string): Promise<AssetMetadata> {

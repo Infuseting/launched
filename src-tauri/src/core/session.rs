@@ -27,6 +27,8 @@ pub struct Session {
     pub hostname: Option<String>,
     pub is_default: bool,
     pub links: Option<Vec<SessionLink>>,
+    #[serde(default)]
+    pub crack: Option<bool>,
 }
 
 /**

@@ -45,7 +45,9 @@ const rawState: LauncherStateModel = {
   updateInstallProgress: 0,
   updateError: null,
   dismissedUpdateVersion: null,
-  serverStatusInterval: null
+  serverStatusInterval: null,
+  crackModalOpen: false,
+  crackModalDefaultPseudo: ''
 };
 
 const listeners = new Set<() => void>();

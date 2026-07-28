@@ -7,6 +7,7 @@ import SettingsModal from './components/settings/SettingsModal';
 import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';
+import CrackModal from './components/CrackModal';
 
 interface AppProps {
   handlers: AppHandlers;
@@ -45,6 +46,12 @@ const App: React.FC<AppProps> = ({ handlers }) => {
         <UpdatePromptModal
           state={launcherState}
           handlers={handlers}
+        />
+
+        <CrackModal
+          isOpen={launcherState.crackModalOpen}
+          defaultPseudo={launcherState.crackModalDefaultPseudo}
+          onResolve={handlers.handleCrackModalResolve}
         />
 
 

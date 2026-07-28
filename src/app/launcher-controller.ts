@@ -67,6 +67,7 @@ function getErrorMessage(error: unknown): string {
 export class LauncherController {
   private readonly handlers: AppHandlers;
   private pendingUpdate: PendingUpdate | null = null;
+  private currentCrackModalResolve: ((pseudo: string | null) => void) | null = null;
 
   constructor() {
     this.handlers = {
@@ -95,7 +96,12 @@ export class LauncherController {
           state.deviceCodeError = null;
         }
       },
-      handleSessionSelect: (index: number) => this.handleSessionSelect(index)
+      handleSessionSelect: (index: number) => this.handleSessionSelect(index),
+      handleCrackModalResolve: (pseudo: string | null) => {
+        if (this.currentCrackModalResolve) {
+          this.currentCrackModalResolve(pseudo);
+        }
+      }
     };
   }
 
@@ -194,6 +200,19 @@ export class LauncherController {
     }
   }
 
+  private async promptCrackPseudo(defaultPseudo: string): Promise<string | null> {
+    state.crackModalDefaultPseudo = defaultPseudo;
+    state.crackModalOpen = true;
+
+    return new Promise<string | null>((resolve) => {
+      this.currentCrackModalResolve = (pseudo: string | null) => {
+        state.crackModalOpen = false;
+        this.currentCrackModalResolve = null;
+        resolve(pseudo);
+      };
+    });
+  }
+
   private async syncAndLoad(): Promise<void> {
     if (state.isSyncing || state.globalSessions.length === 0) {
       return;
@@ -203,7 +222,21 @@ export class LauncherController {
     state.isSyncing = true;
 
     try {
-      await this.ensureAuthenticated();
+      let crackPseudo: string | undefined;
+
+      if (session.crack) {
+        const defaultPseudo = state.currentSettings.lastCrackPseudo || state.authCache?.name || state.allAccounts[0]?.name || 'Player';
+        const result = await this.promptCrackPseudo(defaultPseudo);
+        if (!result) {
+          state.isSyncing = false;
+          return;
+        }
+        crackPseudo = result;
+        state.currentSettings.lastCrackPseudo = crackPseudo;
+        await this.saveSettings();
+      } else {
+        await this.ensureAuthenticated();
+      }
 
       state.syncProgress = {
         current_file: 'Starting synchronization...',
@@ -223,7 +256,7 @@ export class LauncherController {
       }
 
       const sessionSettings = state.currentSettings.sessions[session.name] ?? state.currentSettings.defaultSettings;
-      await sessionService.launchGame(session, sessionSettings.showLogs);
+      await sessionService.launchGame(session, sessionSettings.showLogs, crackPseudo);
 
       setTimeout(() => {
         state.isSyncing = false;

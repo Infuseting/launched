@@ -74,8 +74,12 @@ pub async fn install_forge(mc_version: &str, forge_version: &str) -> Result<(), 
             "Forge {} already installed, validating and repairing missing libraries if needed",
             ctx.forge_id
         );
-        ensure_existing_installation(&client, &ctx).await?;
-        return Ok(());
+        if ensure_existing_installation(&client, &ctx).await.is_ok() {
+            return Ok(());
+        } else {
+            log::warn!("Existing Forge installation is corrupted or missing critical files. Re-installing...");
+            let _ = tokio_fs::remove_file(&ctx.installed_json).await;
+        }
     }
 
     ensure_installer_downloaded(&client, &ctx).await?;
@@ -173,64 +177,132 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
     async fn install(&self, client: &Client, ctx: &ForgeInstallContext) -> Result<(), String> {
         log::info!("Using modern Forge install strategy for {}", ctx.forge_id);
 
-        let mut version_json_from_installer: Option<Value> = None;
-        let mut profile: Option<InstallProfile> = None;
+        // 1. Fetch vanilla version JSON to determine the correct Java component
+        let vanilla_json_path = ctx
+            .mc_path
+            .join("versions")
+            .join(&ctx.mc_version)
+            .join(format!("{}.json", ctx.mc_version));
+            
+        let mut java_component = "jre-legacy".to_string();
+        if vanilla_json_path.exists() {
+            if let Ok(content) = fs::read_to_string(&vanilla_json_path) {
+                if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
+                    if let Some(comp) = parsed
+                        .get("javaVersion")
+                        .and_then(|j| j.get("component"))
+                        .and_then(|c| c.as_str())
+                    {
+                        java_component = comp.to_string();
+                    }
+                }
+            }
+        }
 
-        {
+        // 2. Download/Ensure JRE is available
+        let jre_path = crate::core::install::mojang::download_jre(&java_component).await?;
+        let java_bin = if cfg!(windows) {
+            jre_path.join("bin/java.exe")
+        } else {
+            jre_path.join("bin/java")
+        };
+
+        // 3. Ensure launcher_profiles.json exists (Forge installer requires it)
+        let profiles_path = ctx.mc_path.join("launcher_profiles.json");
+        if !profiles_path.exists() {
+            let _ = fs::write(&profiles_path, "{ \"profiles\": {} }");
+        }
+
+        log::info!("Running Forge Installer natively using java: {:?}", java_bin);
+        
+        // 4. Execute Forge Installer headlessly
+        let output = std::process::Command::new(&java_bin)
+            .current_dir(&ctx.mc_path)
+            .arg("-jar")
+            .arg(&ctx.installer_path)
+            .arg("--installClient")
+            .arg(&ctx.mc_path)
+            .output()
+            .map_err(|e| format!("Failed to execute Forge installer: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!("Forge installer failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr));
+        }
+
+        // 4. Ensure version.json is available in the expected location
+        if !ctx.installed_json.exists() {
+            log::warn!("Forge installer did not create json at {:?}, extracting manually...", ctx.installed_json);
+            
             let file = fs::File::open(&ctx.installer_path).map_err(|e| {
-                format!(
-                    "Failed to open forge installer {:?}: {}",
-                    ctx.installer_path, e
-                )
+                format!("Failed to open forge installer {:?}: {}", ctx.installer_path, e)
             })?;
             let mut archive = zip::ZipArchive::new(file)
                 .map_err(|e| format!("Failed to read forge installer ZIP: {}", e))?;
 
-            if let Ok(mut version_json_file) = archive.by_name("version.json") {
-                let mut version_json_str = String::new();
-                version_json_file
-                    .read_to_string(&mut version_json_str)
-                    .map_err(|e| format!("Failed to read version.json from installer: {}", e))?;
-                let parsed: Value = serde_json::from_str(&version_json_str)
-                    .map_err(|e| format!("Failed to parse installer version.json: {}", e))?;
-                version_json_from_installer = Some(parsed);
-            }
+            let version_json_str = {
+                if let Ok(mut version_json_file) = archive.by_name("version.json") {
+                    let mut s = String::new();
+                    if version_json_file.read_to_string(&mut s).is_ok() {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
 
-            if let Ok(mut profile_file) = archive.by_name("install_profile.json") {
-                let mut profile_str = String::new();
-                profile_file
-                    .read_to_string(&mut profile_str)
-                    .map_err(|e| format!("Failed to read install_profile.json: {}", e))?;
-                let parsed_profile: InstallProfile = serde_json::from_str(&profile_str)
+            let profile_str = if version_json_str.is_none() {
+                if let Ok(mut profile_file) = archive.by_name("install_profile.json") {
+                    let mut s = String::new();
+                    if profile_file.read_to_string(&mut s).is_ok() {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let mut version_json = if let Some(v) = version_json_str {
+                serde_json::from_str::<Value>(&v)
+                    .map_err(|e| format!("Failed to parse installer version.json: {}", e))?
+            } else if let Some(p) = profile_str {
+                let parsed_profile: InstallProfile = serde_json::from_str(&p)
                     .map_err(|e| format!("Failed to parse install_profile.json: {}", e))?;
-                profile = Some(parsed_profile);
-            }
+                parsed_profile.version_info
+                    .ok_or_else(|| "Missing versionInfo in installer".to_string())?
+            } else {
+                return Err("Missing version.json and install_profile.json in installer".to_string());
+            };
 
-            extract_maven_entries(&mut archive, &ctx.mc_path)?;
+            set_json_id(&mut version_json, &ctx.forge_id)?;
+            write_version_json(&ctx.installed_json, &version_json)?;
+        } else {
+            // If it exists, enforce our custom ID to match exactly
+            if let Ok(content) = fs::read_to_string(&ctx.installed_json) {
+                if let Ok(mut parsed) = serde_json::from_str::<Value>(&content) {
+                    if set_json_id(&mut parsed, &ctx.forge_id).is_ok() {
+                        let _ = write_version_json(&ctx.installed_json, &parsed);
+                    }
+                }
+            }
         }
 
-        let mut version_json = if let Some(v) = version_json_from_installer {
-            v
-        } else if let Some(p) = &profile {
-            p.version_info
-                .clone()
-                .ok_or_else(|| "Missing both version.json and versionInfo in installer".to_string())?
-        } else {
-            return Err("Missing both version.json and install_profile.json in installer".to_string());
-        };
-
-        set_json_id(&mut version_json, &ctx.forge_id)?;
-        write_version_json(&ctx.installed_json, &version_json)?;
-
-        let manifest: VersionManifest = serde_json::from_value(version_json)
+        // 5. Verify manifest libraries (most should be installed by the installer process)
+        let content = fs::read_to_string(&ctx.installed_json)
+            .map_err(|e| format!("Failed to read generated version json: {}", e))?;
+        let manifest: VersionManifest = serde_json::from_str(&content)
             .map_err(|e| format!("Failed to parse modern Forge version manifest: {}", e))?;
 
         ensure_manifest_libraries(client, &ctx.mc_path, &manifest).await?;
-        if let Some(p) = profile {
-            ensure_profile_libraries(client, &ctx.mc_path, p.libraries.unwrap_or_default()).await?;
-        }
 
-        log::info!("Forge {} installed with modern strategy", ctx.forge_id);
+        log::info!("Forge {} installed with modern strategy via native installer", ctx.forge_id);
         Ok(())
     }
 }
@@ -346,10 +418,18 @@ async fn ensure_manifest_libraries(
     mc_path: &Path,
     manifest: &VersionManifest,
 ) -> Result<(), String> {
+    let mut missing_critical = false;
     for lib in &manifest.libraries {
         if let Err(e) = ensure_library_from_manifest(client, mc_path, lib).await {
             log::warn!("Failed to download manifest library {}: {}", lib.name, e);
+            if lib.name.starts_with("net.minecraftforge:") || lib.name.starts_with("net.minecraft:client:") {
+                missing_critical = true;
+            }
         }
+    }
+
+    if missing_critical {
+        return Err("Critical Forge libraries are missing and could not be downloaded.".to_string());
     }
 
     Ok(())
@@ -367,8 +447,29 @@ async fn ensure_profile_libraries(
             continue;
         }
 
-        if let Err(e) = ensure_library_from_coordinates(client, mc_path, &lib.name, lib.url.as_deref()).await {
-            log::warn!("Failed to download profile library {}: {}", lib.name, e);
+        let mut success = false;
+        if let Some(url) = lib.url.as_deref() {
+            if ensure_library_from_coordinates(client, mc_path, &lib.name, Some(url)).await.is_ok() {
+                success = true;
+            }
+        }
+
+        if !success {
+            // Try default maven
+            if ensure_library_from_coordinates(client, mc_path, &lib.name, None).await.is_ok() {
+                success = true;
+            }
+        }
+
+        if !success {
+            // Try forge maven
+            if ensure_library_from_coordinates(client, mc_path, &lib.name, Some("https://maven.minecraftforge.net/")).await.is_ok() {
+                success = true;
+            }
+        }
+
+        if !success {
+            log::warn!("Failed to download profile library {}", lib.name);
         }
     }
 

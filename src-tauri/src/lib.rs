@@ -123,6 +123,7 @@ async fn sync_session(
 async fn launch_game(
     session: Option<Session>,
     show_logs: bool,
+    crack_pseudo: Option<String>,
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
@@ -137,61 +138,73 @@ async fn launch_game(
     let session_dir = base_dir.join("sessions").join(&session.name);
 
     // Get auth: try keychain first
-    let mut settings = SettingsManager::load(&app_handle);
-    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
-    
-    let mut auth = settings
-        .active_account_uuid
-        .as_ref()
-        .and_then(|active_uuid| accounts.iter().find(|a| a.uuid == *active_uuid).cloned())
-        .or_else(|| accounts.into_iter().next())
-        .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
+    let mut auth = if let Some(pseudo) = crack_pseudo {
+        log::info!("Launching in crack mode with pseudo: {}", pseudo);
+        AuthResponse {
+            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
+            name: pseudo,
+            access_token: "offline".to_string(),
+            refresh_token: None,
+        }
+    } else {
+        let mut settings = SettingsManager::load(&app_handle);
+        let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
+        
+        let mut auth = settings
+            .active_account_uuid
+            .as_ref()
+            .and_then(|active_uuid| accounts.iter().find(|a| a.uuid == *active_uuid).cloned())
+            .or_else(|| accounts.into_iter().next())
+            .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
 
-    // Validate token before launch; if expired, try refresh_token once.
-    if !MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {
-        log::warn!("Stored Minecraft token is invalid/expired for account {}", auth.name);
+        // Validate token before launch; if expired, try refresh_token once.
+        if !MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {
+            log::warn!("Stored Minecraft token is invalid/expired for account {}", auth.name);
 
-        if let Some(refresh_token) = auth.refresh_token.clone() {
-            match MicrosoftAuth.refresh_auth(&refresh_token).await {
-                Ok(refreshed) => {
-                    log::info!("Successfully refreshed Minecraft auth for {}", refreshed.name);
-                    crate::auth::secrets::SecretManager::add_account(&app_handle, refreshed.clone())?;
+            if let Some(refresh_token) = auth.refresh_token.clone() {
+                match MicrosoftAuth.refresh_auth(&refresh_token).await {
+                    Ok(refreshed) => {
+                        log::info!("Successfully refreshed Minecraft auth for {}", refreshed.name);
+                        crate::auth::secrets::SecretManager::add_account(&app_handle, refreshed.clone()).map_err(|e| e.to_string())?;
 
-                    settings.active_account_uuid = Some(refreshed.uuid.clone());
-                    let _ = SettingsManager::save(&app_handle, &settings);
+                        settings.active_account_uuid = Some(refreshed.uuid.clone());
+                        let _ = SettingsManager::save(&app_handle, &settings);
 
-                    auth = refreshed;
-                }
-                Err(e) => {
-                    log::warn!("Failed to refresh Minecraft auth: {}", e);
-                    if e.contains("invalid_grant") || e.contains("invalid_request") {
-                        let _ = crate::auth::secrets::SecretManager::remove_account(&app_handle, &auth.uuid);
-                        if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
-                            settings.active_account_uuid = None;
-                            let _ = SettingsManager::save(&app_handle, &settings);
+                        auth = refreshed;
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to refresh Minecraft auth: {}", e);
+                        if e.contains("invalid_grant") || e.contains("invalid_request") {
+                            let _ = crate::auth::secrets::SecretManager::remove_account(&app_handle, &auth.uuid);
+                            if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
+                                settings.active_account_uuid = None;
+                                let _ = SettingsManager::save(&app_handle, &settings);
+                            }
+                            return Err(
+                                "Session Minecraft expiree. Le compte a ete supprime, merci de vous reconnecter avec Microsoft."
+                                    .to_string()
+                            );
+                        } else {
+                            return Err(format!("Erreur lors de l'authentification Minecraft: {}", e));
                         }
-                        return Err(
-                            "Session Minecraft expiree. Le compte a ete supprime, merci de vous reconnecter avec Microsoft."
-                                .to_string()
-                        );
-                    } else {
-                        return Err(format!("Erreur lors de l'authentification Minecraft: {}", e));
                     }
                 }
+            } else {
+                let _ = crate::auth::secrets::SecretManager::remove_account(&app_handle, &auth.uuid);
+                if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
+                    settings.active_account_uuid = None;
+                    let _ = SettingsManager::save(&app_handle, &settings);
+                }
+                return Err(
+                    "Session Minecraft expiree. Le compte invalide a ete supprime, merci de vous reconnecter avec Microsoft."
+                        .to_string()
+                );
             }
-        } else {
-            let _ = crate::auth::secrets::SecretManager::remove_account(&app_handle, &auth.uuid);
-            if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
-                settings.active_account_uuid = None;
-                let _ = SettingsManager::save(&app_handle, &settings);
-            }
-            return Err(
-                "Session Minecraft expiree. Le compte invalide a ete supprime, merci de vous reconnecter avec Microsoft."
-                    .to_string()
-            );
         }
-    }
-
+        auth
+    };
+    // Generate arguments
+    let settings = SettingsManager::load(&app_handle);
     let args = LaunchArguments::from_session(&session, &session_dir, &auth, &settings)?;
     
     // Create or focus log window if enabled before launching
