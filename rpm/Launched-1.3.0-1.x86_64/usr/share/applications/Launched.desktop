@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Game;
+Comment=Launcher de différents serveur RP
+Exec=app
+StartupWMClass=app
+Icon=app
+Name=Launched
+Terminal=false
+Type=Application
