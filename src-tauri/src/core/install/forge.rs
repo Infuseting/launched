@@ -24,8 +24,6 @@ struct ForgeInstallContext {
 
 #[derive(Debug, Deserialize)]
 struct InstallProfile {
-    #[serde(rename = "versionInfo")]
-    version_info: Option<Value>,
     libraries: Option<Vec<ProfileLibrary>>,
 }
 
@@ -98,8 +96,6 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
     async fn install(&self, client: &Client, ctx: &ForgeInstallContext) -> Result<(), String> {
         log::info!("Using legacy Forge install strategy for {}", ctx.forge_id);
 
-        let mut profile_str = String::new();
-
         let lib_dir = ctx
             .mc_path
             .join("libraries")
@@ -109,6 +105,9 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             .join(format!("{}-{}", ctx.mc_version, ctx.forge_version));
         let dest_jar = lib_dir.join(format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version));
         let dest_universal_jar = lib_dir.join(format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version));
+
+        let mut version_info_obj: Option<Value> = None;
+        let mut profile_libraries: Vec<ProfileLibrary> = Vec::new();
 
         {
             let file = fs::File::open(&ctx.installer_path).map_err(|e| {
@@ -120,17 +119,51 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             let mut archive = zip::ZipArchive::new(file)
                 .map_err(|e| format!("Failed to read forge installer ZIP: {}", e))?;
 
+            // 1. Try reading version.json directly from archive
+            if let Ok(mut version_file) = archive.by_name("version.json") {
+                let mut s = String::new();
+                if version_file.read_to_string(&mut s).is_ok() {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(&s) {
+                        if parsed.is_object() {
+                            version_info_obj = Some(parsed);
+                        }
+                    }
+                }
+            }
+
+            // 2. Try reading install_profile.json
             if let Ok(mut profile_file) = archive.by_name("install_profile.json") {
-                let _ = profile_file.read_to_string(&mut profile_str);
+                let mut s = String::new();
+                if profile_file.read_to_string(&mut s).is_ok() {
+                    if let Ok(parsed) = serde_json::from_str::<Value>(&s) {
+                        if let Some(libs_val) = parsed.get("libraries") {
+                            if let Ok(libs) = serde_json::from_value::<Vec<ProfileLibrary>>(libs_val.clone()) {
+                                profile_libraries = libs;
+                            }
+                        }
+
+                        if version_info_obj.is_none() {
+                            if let Some(v_info) = parsed.get("versionInfo").filter(|v| v.is_object()) {
+                                version_info_obj = Some(v_info.clone());
+                            } else if let Some(v_info) = parsed.get("version").filter(|v| v.is_object()) {
+                                version_info_obj = Some(v_info.clone());
+                            } else if let Some(v_info) = parsed.get("json").filter(|v| v.is_object()) {
+                                version_info_obj = Some(v_info.clone());
+                            } else if parsed.get("mainClass").is_some() || parsed.get("minecraftArguments").is_some() {
+                                version_info_obj = Some(parsed.clone());
+                            }
+                        }
+                    }
+                }
             }
 
             fs::create_dir_all(&lib_dir)
                 .map_err(|e| format!("Failed to create forge lib dir: {}", e))?;
 
-            // 1. Extract bundled maven entries
+            // 3. Extract bundled maven entries
             extract_maven_entries(&mut archive, &ctx.mc_path)?;
 
-            // 2. Candidate names for universal / forge jar in zip
+            // 4. Candidate names for universal / forge jar in zip
             let candidate_names = [
                 format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version),
                 format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version),
@@ -172,7 +205,7 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             }
         }
 
-        // 3. Fallback: If forge library jar does not exist, download directly from Maven
+        // 5. Fallback: If forge library jar does not exist, download directly from Maven
         if !dest_jar.exists() && !dest_universal_jar.exists() {
             log::info!("Universal jar not found in installer, downloading directly from Maven...");
             let download_urls = [
@@ -195,21 +228,43 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             }
         }
 
-        let profile: InstallProfile = serde_json::from_str(&profile_str)
-            .map_err(|e| format!("Failed to parse install_profile.json: {}", e))?;
+        // 6. Build the final version JSON object
+        let mut final_version_info = if let Some(obj) = version_info_obj {
+            obj
+        } else {
+            // Load vanilla version JSON as fallback base
+            let vanilla_path = ctx.mc_path.join("versions").join(&ctx.mc_version).join(format!("{}.json", ctx.mc_version));
+            let mut vanilla_obj = if vanilla_path.exists() {
+                let content = fs::read_to_string(&vanilla_path).map_err(|e| format!("Failed to read vanilla json: {}", e))?;
+                serde_json::from_str::<Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
+            } else {
+                serde_json::json!({
+                    "id": ctx.forge_id,
+                    "inheritsFrom": ctx.mc_version,
+                    "type": "release",
+                    "mainClass": "net.minecraft.launchwrapper.Launch",
+                    "minecraftArguments": "--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory} --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} --accessToken ${auth_access_token} --userType ${user_type} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker --versionType Forge",
+                    "libraries": []
+                })
+            };
 
-        let mut version_info_obj = profile
-            .version_info
-            .ok_or_else(|| "Missing versionInfo in install_profile.json".to_string())?;
-        set_json_id(&mut version_info_obj, &ctx.forge_id)?;
+            if let Value::Object(ref mut map) = vanilla_obj {
+                map.insert("mainClass".to_string(), Value::String("net.minecraft.launchwrapper.Launch".to_string()));
+                map.insert("inheritsFrom".to_string(), Value::String(ctx.mc_version.clone()));
+            }
+            vanilla_obj
+        };
 
-        write_version_json(&ctx.installed_json, &version_info_obj)?;
+        set_json_id(&mut final_version_info, &ctx.forge_id)?;
+        write_version_json(&ctx.installed_json, &final_version_info)?;
 
-        let manifest: VersionManifest = serde_json::from_value(version_info_obj)
-            .map_err(|e| format!("Failed to parse legacy Forge version manifest: {}", e))?;
+        if let Ok(manifest) = serde_json::from_value::<VersionManifest>(final_version_info) {
+            let _ = ensure_manifest_libraries(client, &ctx.mc_path, &manifest).await;
+        }
 
-        ensure_manifest_libraries(client, &ctx.mc_path, &manifest).await?;
-        ensure_profile_libraries(client, &ctx.mc_path, profile.libraries.unwrap_or_default()).await?;
+        if !profile_libraries.is_empty() {
+            let _ = ensure_profile_libraries(client, &ctx.mc_path, profile_libraries).await;
+        }
 
         log::info!("Forge {} installed with legacy strategy", ctx.forge_id);
         Ok(())
@@ -275,7 +330,7 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             return Err(format!("Forge installer failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr));
         }
 
-        // 4. Ensure version.json is available in the expected location
+        // 5. Ensure version.json is available in the expected location
         if !ctx.installed_json.exists() {
             log::warn!("Forge installer did not create json at {:?}, extracting manually...", ctx.installed_json);
             
@@ -317,10 +372,17 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
                 serde_json::from_str::<Value>(&v)
                     .map_err(|e| format!("Failed to parse installer version.json: {}", e))?
             } else if let Some(p) = profile_str {
-                let parsed_profile: InstallProfile = serde_json::from_str(&p)
+                let parsed_profile: Value = serde_json::from_str(&p)
                     .map_err(|e| format!("Failed to parse install_profile.json: {}", e))?;
-                parsed_profile.version_info
-                    .ok_or_else(|| "Missing versionInfo in installer".to_string())?
+                if let Some(v) = parsed_profile.get("versionInfo").filter(|v| v.is_object()) {
+                    v.clone()
+                } else if let Some(v) = parsed_profile.get("version").filter(|v| v.is_object()) {
+                    v.clone()
+                } else if let Some(v) = parsed_profile.get("json").filter(|v| v.is_object()) {
+                    v.clone()
+                } else {
+                    parsed_profile
+                }
             } else {
                 return Err("Missing version.json and install_profile.json in installer".to_string());
             };
@@ -338,7 +400,7 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             }
         }
 
-        // 5. Verify manifest libraries (most should be installed by the installer process)
+        // 6. Verify manifest libraries
         let content = fs::read_to_string(&ctx.installed_json)
             .map_err(|e| format!("Failed to read generated version json: {}", e))?;
         let manifest: VersionManifest = serde_json::from_str(&content)
