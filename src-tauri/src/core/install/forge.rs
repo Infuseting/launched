@@ -99,10 +99,16 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
         log::info!("Using legacy Forge install strategy for {}", ctx.forge_id);
 
         let mut profile_str = String::new();
-        let universal_name = format!(
-            "forge-{}-{}-universal.jar",
-            ctx.mc_version, ctx.forge_version
-        );
+
+        let lib_dir = ctx
+            .mc_path
+            .join("libraries")
+            .join("net")
+            .join("minecraftforge")
+            .join("forge")
+            .join(format!("{}-{}", ctx.mc_version, ctx.forge_version));
+        let dest_jar = lib_dir.join(format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version));
+        let dest_universal_jar = lib_dir.join(format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version));
 
         {
             let file = fs::File::open(&ctx.installer_path).map_err(|e| {
@@ -114,41 +120,79 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             let mut archive = zip::ZipArchive::new(file)
                 .map_err(|e| format!("Failed to read forge installer ZIP: {}", e))?;
 
-            let mut profile_file = archive
-                .by_name("install_profile.json")
-                .map_err(|e| format!("install_profile.json not found in installer: {}", e))?;
+            if let Ok(mut profile_file) = archive.by_name("install_profile.json") {
+                let _ = profile_file.read_to_string(&mut profile_str);
+            }
 
-            profile_file
-                .read_to_string(&mut profile_str)
-                .map_err(|e| format!("Failed to read install_profile.json: {}", e))?;
-            drop(profile_file);
-
-            let lib_dir = ctx
-                .mc_path
-                .join("libraries")
-                .join("net")
-                .join("minecraftforge")
-                .join("forge")
-                .join(format!("{}-{}", ctx.mc_version, ctx.forge_version));
             fs::create_dir_all(&lib_dir)
                 .map_err(|e| format!("Failed to create forge lib dir: {}", e))?;
-            let dest_jar = lib_dir.join(format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version));
 
-            let mut universal_jar = archive.by_name(&universal_name).map_err(|e| {
-                format!(
-                    "Universal jar {} not found in installer: {}",
-                    universal_name, e
-                )
-            })?;
-
-            let mut out_file = fs::File::create(&dest_jar)
-                .map_err(|e| format!("Failed to create forge library jar: {}", e))?;
-            std::io::copy(&mut universal_jar, &mut out_file)
-                .map_err(|e| format!("Failed to extract forge universal jar: {}", e))?;
-            drop(universal_jar);
-            drop(out_file);
-
+            // 1. Extract bundled maven entries
             extract_maven_entries(&mut archive, &ctx.mc_path)?;
+
+            // 2. Candidate names for universal / forge jar in zip
+            let candidate_names = [
+                format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version),
+                format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version),
+                format!("forge-{}-universal.jar", ctx.forge_version),
+                format!("forge-{}.jar", ctx.forge_version),
+                format!("maven/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}-universal.jar", ctx.mc_version, ctx.forge_version),
+                format!("maven/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}.jar", ctx.mc_version, ctx.forge_version),
+            ];
+
+            let mut found_entry_name: Option<String> = None;
+            for candidate in &candidate_names {
+                if archive.by_name(candidate).is_ok() {
+                    found_entry_name = Some(candidate.clone());
+                    break;
+                }
+            }
+
+            // Fallback search across all archive entries
+            if found_entry_name.is_none() {
+                for i in 0..archive.len() {
+                    if let Ok(entry) = archive.by_index(i) {
+                        let name = entry.name().to_string();
+                        if name.ends_with(".jar") && name.contains(&ctx.forge_version) && (name.contains("universal") || name.contains("forge")) {
+                            found_entry_name = Some(name);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let Some(entry_name) = found_entry_name {
+                if let Ok(mut jar_entry) = archive.by_name(&entry_name) {
+                    let mut bytes = Vec::new();
+                    if jar_entry.read_to_end(&mut bytes).is_ok() {
+                        let _ = fs::write(&dest_jar, &bytes);
+                        let _ = fs::write(&dest_universal_jar, &bytes);
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: If forge library jar does not exist, download directly from Maven
+        if !dest_jar.exists() && !dest_universal_jar.exists() {
+            log::info!("Universal jar not found in installer, downloading directly from Maven...");
+            let download_urls = [
+                format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}-universal.jar", ctx.mc_version, ctx.forge_version),
+                format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}.jar", ctx.mc_version, ctx.forge_version),
+                format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{0}/forge-{0}-universal.jar", ctx.forge_version),
+            ];
+
+            for url in &download_urls {
+                if let Ok(resp) = client.get(url).send().await {
+                    if resp.status().is_success() {
+                        if let Ok(bytes) = resp.bytes().await {
+                            let _ = tokio_fs::create_dir_all(&lib_dir).await;
+                            let _ = tokio_fs::write(&dest_jar, &bytes).await;
+                            let _ = tokio_fs::write(&dest_universal_jar, &bytes).await;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         let profile: InstallProfile = serde_json::from_str(&profile_str)

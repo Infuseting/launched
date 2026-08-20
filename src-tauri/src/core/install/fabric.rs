@@ -4,18 +4,25 @@ use serde::Deserialize;
 use tokio::fs;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FabricLibrary {
     pub name: String,
-    pub url: String,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FabricProfile {
     pub id: String,
-    pub inherits_from: String,
-    pub r#type: String,
-    pub main_class: String,
-    pub arguments: serde_json::Value,
+    #[serde(alias = "inherits_from", default)]
+    pub inherits_from: Option<String>,
+    #[serde(default)]
+    pub r#type: Option<String>,
+    #[serde(alias = "main_class", default)]
+    pub main_class: Option<String>,
+    #[serde(default)]
+    pub arguments: Option<serde_json::Value>,
+    #[serde(default)]
     pub libraries: Vec<FabricLibrary>,
 }
 
@@ -58,7 +65,7 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
             .map_err(|e| format!("Failed to save Fabric version JSON: {}", e))?;
     }
 
-    // Step 2: Download libraries (this is a simplified logic as requested)
+    // Step 2: Download libraries
     let content = fs::read_to_string(&version_json_path)
         .await
         .map_err(|e| format!("Failed to read Fabric version JSON: {}", e))?;
@@ -92,9 +99,16 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
                     .map_err(|e| format!("Failed to create library directory: {}", e))?;
             }
 
-            let download_url = format!("{}{}", lib.url, package_path_to_maven_path(&lib.name));
+            let base_url = lib.url.as_deref().unwrap_or("https://maven.fabricmc.net/");
+            let formatted_base = if base_url.ends_with('/') {
+                base_url.to_string()
+            } else {
+                format!("{}/", base_url)
+            };
 
-            // For now, we just skip errors for individual libraries to keep it robust but simple
+            let download_url = format!("{}{}", formatted_base, package_path_to_maven_path(&lib.name));
+
+            // Skip errors for individual libraries to keep installation robust
             if let Ok(response) = client.get(&download_url).send().await {
                 if let Ok(bytes) = response.bytes().await {
                     let _ = fs::write(&lib_path, &bytes).await;
