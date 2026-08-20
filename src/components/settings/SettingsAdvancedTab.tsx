@@ -1,52 +1,63 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { Terminal, Command } from 'lucide-react';
 
 interface SettingsAdvancedTabProps {
   localJvmArgs: string;
   localWrapperCommand: string;
-  refs: {
-    jvmArgsRef: React.RefObject<HTMLElement>;
-    wrapperCommandRef: React.RefObject<HTMLElement>;
-  };
+  onJvmArgsChange: (val: string) => void;
+  onWrapperCommandChange: (val: string) => void;
 }
 
-const SettingsAdvancedTab: React.FC<SettingsAdvancedTabProps> = ({
+export const SettingsAdvancedTab: React.FC<SettingsAdvancedTabProps> = ({
   localJvmArgs,
   localWrapperCommand,
-  refs,
+  onJvmArgsChange,
+  onWrapperCommandChange,
 }) => {
   return (
-    <motion.div
-      key="advanced"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="space-y-6"
-    >
-      <div className="space-y-3">
-        <label className="text-white font-black tracking-tight flex items-center gap-2">
-          <sl-icon name="braces"></sl-icon> JVM Arguments
-        </label>
-        <sl-textarea
-          ref={refs.jvmArgsRef as any}
-          placeholder="-Xmx4G -XX:+UseG1GC..."
-          rows={6}
+    <div className="space-y-6">
+      {/* JVM Arguments Panel */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-3">
+        <div className="flex items-center gap-2.5 pb-2 border-b border-white/5">
+          <div className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60">
+            <Terminal className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-white font-black text-sm tracking-tight">Arguments Personnalisés JVM</h3>
+            <p className="text-[11px] text-white/40">Paramètres transmis directement à la machine virtuelle Java</p>
+          </div>
+        </div>
+
+        <textarea
+          rows={4}
           value={localJvmArgs}
-          style={{ '--sl-input-background-color': 'rgba(255,255,255,0.05)', '--sl-input-border-color': 'rgba(255,255,255,0.1)' }}
-        ></sl-textarea>
+          onChange={(e) => onJvmArgsChange(e.target.value)}
+          placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled..."
+          className="w-full bg-black/40 border border-white/10 focus:border-emerald-500/50 rounded-2xl p-4 text-white font-mono text-xs outline-none transition-colors placeholder-white/20 resize-none"
+        />
       </div>
 
-      <div className="space-y-3">
-        <label className="text-white font-black tracking-tight flex items-center gap-2">
-          <sl-icon name="command"></sl-icon> Wrapper Command
-        </label>
-        <sl-input
-          ref={refs.wrapperCommandRef as any}
-          placeholder="e.g. optirun"
+      {/* Wrapper Command Panel */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-3">
+        <div className="flex items-center gap-2.5 pb-2 border-b border-white/5">
+          <div className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60">
+            <Command className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-white font-black text-sm tracking-tight">Commande Wrapper (GameMode / Mangohud...)</h3>
+            <p className="text-[11px] text-white/40">Préfixe de commande exécuté avant le binaire Java</p>
+          </div>
+        </div>
+
+        <input
+          type="text"
           value={localWrapperCommand}
-        ></sl-input>
+          onChange={(e) => onWrapperCommandChange(e.target.value)}
+          placeholder="gamemoderun"
+          className="w-full bg-black/40 border border-white/10 focus:border-emerald-500/50 rounded-2xl px-4 py-3 text-white font-mono text-xs outline-none transition-colors placeholder-white/20"
+        />
       </div>
-    </motion.div>
+    </div>
   );
 };
 

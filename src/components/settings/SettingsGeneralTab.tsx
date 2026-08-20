@@ -1,7 +1,9 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import type { LauncherState } from '../../state';
 import type { AppHandlers } from '../../types';
+import Slider from '../ui/Slider';
+import Switch from '../ui/Switch';
+import { Cpu, Terminal, RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface SettingsGeneralTabProps {
   localMinRam: number;
@@ -10,142 +12,115 @@ interface SettingsGeneralTabProps {
   maxSystemRam: number;
   state: LauncherState;
   handlers: Pick<AppHandlers, 'handleCheckUpdate' | 'handleInstallUpdate'>;
-  refs: {
-    minRamRef: React.RefObject<HTMLElement>;
-    maxRamRef: React.RefObject<HTMLElement>;
-    showLogsRef: React.RefObject<HTMLElement>;
-  };
+  onMinRamChange: (val: number) => void;
+  onMaxRamChange: (val: number) => void;
+  onShowLogsChange: (val: boolean) => void;
 }
 
-const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
+export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
   localMinRam,
   localMaxRam,
   localShowLogs,
   maxSystemRam,
   state,
   handlers,
-  refs,
+  onMinRamChange,
+  onMaxRamChange,
+  onShowLogsChange,
 }) => {
   return (
-    <motion.div
-      key="general"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
-      className="space-y-8"
-    >
-      <div className="space-y-4">
-        <div className="flex justify-between items-end">
-          <label className="text-white font-black tracking-tight flex items-center gap-2">
-            <sl-icon name="memory"></sl-icon> RAM Allocation
-          </label>
-          <span className="text-white/40 text-xs font-mono bg-white/5 px-2 py-1 rounded-lg border border-white/5">
-            {localMinRam}MB - {localMaxRam}MB / {maxSystemRam}MB
-          </span>
-        </div>
-
-        <div className="space-y-6 bg-white/5 p-6 rounded-3xl border border-white/5">
-          <div className="space-y-2">
-            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/30">
-              <span>Minimum RAM</span>
-              <span className="text-white">{localMinRam} MB</span>
-            </div>
-            <sl-range
-              ref={refs.minRamRef as any}
-              min="512"
-              max={maxSystemRam}
-              step="256"
-              value={localMinRam}
-            ></sl-range>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/30">
-              <span>Maximum RAM</span>
-              <span className="text-white">{localMaxRam} MB</span>
-            </div>
-            <sl-range
-              ref={refs.maxRamRef as any}
-              min="1024"
-              max={maxSystemRam}
-              step="256"
-              value={localMaxRam}
-            ></sl-range>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white/5 p-6 rounded-3xl border border-white/5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white">
-            <sl-icon name="terminal-fill" style={{ fontSize: '1.2rem' }}></sl-icon>
+    <div className="space-y-6">
+      {/* RAM Allocation Panel */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-6">
+        <div className="flex items-center gap-2.5 pb-2 border-b border-white/5">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-400/25 flex items-center justify-center text-emerald-400">
+            <Cpu className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-white font-bold tracking-tight">Show Logs</h4>
-            <p className="text-white/40 text-xs">Open terminal window on game start</p>
+            <h3 className="text-white font-black text-sm tracking-tight">Allocation de la Mémoire RAM</h3>
+            <p className="text-[11px] text-white/40">Mémoire maximale du système détectée : {maxSystemRam} Go</p>
           </div>
         </div>
-        <sl-switch
-          ref={refs.showLogsRef as any}
-          checked={localShowLogs}
-        ></sl-switch>
+
+        <div className="grid gap-6">
+          <Slider
+            label="RAM Minimale au Démarrage"
+            min={1}
+            max={Math.max(4, maxSystemRam)}
+            step={1}
+            value={localMinRam}
+            unit="Go"
+            onChange={onMinRamChange}
+          />
+
+          <Slider
+            label="RAM Maximale Allouée (Recommandé : 4 à 8 Go)"
+            min={1}
+            max={maxSystemRam}
+            step={1}
+            value={localMaxRam}
+            unit="Go"
+            onChange={onMaxRamChange}
+          />
+        </div>
       </div>
 
-      <div className="bg-white/5 p-6 rounded-3xl border border-white/5 space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white">
-              <sl-icon name="cloud-arrow-down-fill" style={{ fontSize: '1.2rem' }}></sl-icon>
+      {/* Logs & Diagnostics Panel */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60">
+              <Terminal className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-white font-bold tracking-tight">Launcher Updates</h4>
-              <p className="text-white/55 text-xs">Version actuelle: v{state.appVersion}</p>
-              <p className="text-white/40 text-xs">
-                {state.updateManifest
-                  ? `Nouvelle version disponible: v${state.updateManifest.version}`
-                  : 'Aucune mise a jour detectee pour le moment'}
-              </p>
+              <h4 className="text-white font-bold text-xs">Afficher la console de logs en jeu</h4>
+              <p className="text-white/40 text-[11px]">Ouvre une fenêtre détaillée pendant le lancement</p>
+            </div>
+          </div>
+          <Switch checked={localShowLogs} onChange={onShowLogsChange} />
+        </div>
+      </div>
+
+      {/* Launcher Update Panel */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-400/25 flex items-center justify-center text-emerald-400">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-white font-bold text-xs">Mise à jour du Launcher</h4>
+              <p className="text-white/40 text-[11px]">Version actuelle : v{state.appVersion}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                void handlers.handleCheckUpdate();
-              }}
-              disabled={state.isCheckingUpdate}
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-white/80 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {state.isCheckingUpdate ? 'Verification...' : 'Verifier'}
-            </button>
+          <button
+            onClick={() => void handlers.handleCheckUpdate()}
+            disabled={state.isCheckingUpdate || state.isInstallingUpdate}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white text-white hover:text-neutral-950 text-xs font-bold transition-all duration-150 cursor-pointer disabled:opacity-40"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${state.isCheckingUpdate ? 'animate-spin' : ''}`} />
+            <span>{state.isCheckingUpdate ? 'Recherche...' : 'Vérifier'}</span>
+          </button>
+        </div>
 
+        {state.updateManifest && (
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Version {state.updateManifest.version} disponible !</span>
+            </div>
             <button
-              onClick={() => {
-                void handlers.handleInstallUpdate();
-              }}
-              disabled={!state.updateManifest || state.isInstallingUpdate}
-              className="rounded-2xl border border-emerald-200/25 bg-gradient-to-r from-emerald-400 to-lime-300 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-zinc-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void handlers.handleInstallUpdate()}
+              disabled={state.isInstallingUpdate}
+              className="px-4 py-1.5 rounded-xl bg-emerald-400 text-neutral-950 font-black text-xs hover:brightness-110 transition-all cursor-pointer"
             >
               {state.isInstallingUpdate ? 'Installation...' : 'Installer'}
             </button>
           </div>
-        </div>
-
-        {(state.isCheckingUpdate || state.isInstallingUpdate) && (
-          <p className="text-xs text-white/55">
-            {state.isInstallingUpdate
-              ? `Telechargement en cours: ${Math.round(state.updateInstallProgress)}%`
-              : 'Verification des mises a jour en cours...'}
-          </p>
-        )}
-
-        {state.updateError && (
-          <p className="text-xs text-red-200 bg-red-500/10 border border-red-400/30 rounded-xl px-3 py-2">
-            {state.updateError}
-          </p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 };
 

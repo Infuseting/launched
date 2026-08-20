@@ -10,7 +10,7 @@ interface MainScreenProps {
   handlers: Pick<AppHandlers, 'syncAndLoad' | 'handleSettingsToggle' | 'handleServerSelectToggle' | 'handleTabChange'>;
 }
 
-const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
+export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const state = useLauncherState();
   const session = state.globalSessions[state.activeSessionIndex];
 
@@ -65,26 +65,26 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const links = [...(session?.links || []), ...(session?.assetsData?.links || [])];
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-neutral-950 font-sans antialiased">
+    <div className="relative w-full h-screen overflow-hidden bg-neutral-950 font-sans antialiased select-none">
       {/* Immersive Dynamic Background */}
       <AnimatePresence mode="wait">
         <motion.div
           key={activeBackground ?? 'no-background'}
-          initial={{ opacity: 0, scale: 1.05 }}
+          initial={{ opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
+          transition={{ duration: 1.2, ease: 'easeOut' }}
           className="absolute inset-0 z-0 pointer-events-none"
         >
-          {/* Multi-layered Vignette & Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/60 z-[2]" />
-          <div className="absolute inset-0 bg-neutral-950/20 backdrop-blur-[2px] z-[1]" />
+          {/* Multi-layered Vignette & Gradients for contrast */}
+          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/40 to-neutral-950/80 z-[2]" />
+          <div className="absolute inset-0 bg-radial-gradient from-transparent via-neutral-950/20 to-neutral-950/70 z-[2]" />
 
           {activeBackground && (
             <img
               src={activeBackground}
-              alt="Background"
-              className="w-full h-full object-cover select-none brightness-75 scale-[1.02]"
+              alt="Session Background"
+              className="w-full h-full object-cover select-none brightness-85"
               draggable={false}
             />
           )}
@@ -92,7 +92,7 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
       </AnimatePresence>
 
       {/* Main UI Layers */}
-      <div className="relative z-10 w-full h-full flex flex-col">
+      <div className="relative z-10 w-full h-full flex flex-col justify-between">
         <TopBar
           onSettingsClick={() => handlers.handleSettingsToggle(true)}
           onAccountClick={() => {
@@ -102,35 +102,20 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
         />
 
         {/* Social Links on the right */}
-        <div className="absolute right-12 top-28 z-20">
+        <div className="absolute right-8 top-28 z-20">
           <SocialLinks links={links} assetsPath={session?.assetsPath} />
         </div>
 
-        {/* Center content (empty or Logo) */}
-        <div className="flex-1 flex items-center justify-center p-12">
-          <AnimatePresence mode="wait">
-            {session?.assetsData?.logo ? (
-              <motion.img
-                key={session.assetsData.logo}
-                initial={{ opacity: 0, scale: 0.8, filter: 'blur(20px)' }}
-                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, scale: 0.8, filter: 'blur(20px)' }}
-                transition={{ duration: 0.8 }}
-                src={session.assetsData.logo}
-                alt="Logo"
-                className="max-w-[500px] w-full h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)] pointer-events-none select-none brightness-110"
-                draggable={false}
-              />
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.1 }}
-                className="text-[12rem] font-black text-white select-none pointer-events-none tracking-tighter"
-              >
-                LAUNCHED
-              </motion.div>
-            )}
-          </AnimatePresence>
+        {/* Center monumental typographic title "LAUNCHED" with 50% opacity */}
+        <div className="flex-1 flex items-center justify-center p-6 pointer-events-none select-none">
+          <motion.h1
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className="text-[14vw] font-black text-white/50 tracking-tighter leading-none select-none drop-shadow-[0_25px_60px_rgba(0,0,0,0.8)] text-center"
+          >
+            LAUNCHED
+          </motion.h1>
         </div>
 
         <BottomBar
@@ -139,10 +124,6 @@ const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
           isSyncing={state.isSyncing}
         />
       </div>
-
-
-      {/* Ambient noise/grain effect */}
-      <div className="absolute inset-0 z-[5] pointer-events-none opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay"></div>
     </div>
   );
 };

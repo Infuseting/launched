@@ -1,113 +1,129 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { AppHandlers, LauncherStateModel } from '../types';
+import type { LauncherState } from '../state';
+import type { AppHandlers } from '../types';
+import { Sparkles, Download, X } from 'lucide-react';
 
 interface UpdatePromptModalProps {
-  state: Pick<
-    LauncherStateModel,
-    'updateManifest' | 'isInstallingUpdate' | 'updateInstallProgress' | 'updateError' | 'dismissedUpdateVersion'
-  >;
+  state: LauncherState;
   handlers: Pick<AppHandlers, 'handleInstallUpdate' | 'handleDismissUpdatePrompt'>;
 }
 
-const UpdatePromptModal: React.FC<UpdatePromptModalProps> = ({ state, handlers }) => {
-  const update = state.updateManifest;
+export const UpdatePromptModal: React.FC<UpdatePromptModalProps> = ({
+  state,
+  handlers,
+}) => {
+  const manifest = state.updateManifest;
+  const isInstalling = state.isInstallingUpdate;
+  const progress = state.updateInstallProgress;
 
-  const shouldShow =
-    !!update &&
-    state.dismissedUpdateVersion !== update.version;
+  const isOpen =
+    !!manifest &&
+    !isInstalling &&
+    state.dismissedUpdateVersion !== manifest.version;
 
-  const releaseNotes = update?.body?.trim();
+  const onDismiss = () => handlers.handleDismissUpdatePrompt();
+  const onInstall = () => void handlers.handleInstallUpdate();
 
   return (
     <AnimatePresence>
-      {shouldShow && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 backdrop-blur-md px-6"
-        >
+      {(isOpen || isInstalling) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 select-none">
+          {/* Backdrop */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.93, y: 20 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={!isInstalling ? onDismiss : undefined}
+            className="absolute inset-0 bg-black/75 backdrop-blur-xl"
+          />
+
+          {/* Modal Card */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 16 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 22 }}
-            className="w-full max-w-xl rounded-[2rem] border border-emerald-300/20 bg-gradient-to-br from-emerald-950/95 via-zinc-950/95 to-black/95 p-8 text-white shadow-[0_40px_100px_rgba(16,185,129,0.25)]"
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: 'spring', duration: 0.35, bounce: 0.1 }}
+            className="relative z-10 w-full max-w-lg bg-neutral-900/95 border border-white/15 rounded-3xl p-6 shadow-[0_25px_60px_rgba(0,0,0,0.8)] text-white overflow-hidden space-y-5"
           >
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200">
-                  <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.95)]"></span>
-                  Launcher update
-                </p>
-                <h3 className="text-3xl font-black tracking-tight">Version {update?.version} disponible</h3>
-                <p className="mt-2 text-sm text-white/65">
-                  Une nouvelle version de Launched est prete. Installation rapide puis redemarrage automatique.
-                </p>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base tracking-tight">Nouvelle Version Disponible</h3>
+                  <p className="text-white/40 text-xs">Mise à jour v{manifest?.version ?? state.appVersion}</p>
+                </div>
               </div>
-              <button
-                onClick={handlers.handleDismissUpdatePrompt}
-                disabled={state.isInstallingUpdate}
-                className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white"
-                aria-label="Remind me later"
-              >
-                <sl-icon name="x-lg"></sl-icon>
-              </button>
+              {!isInstalling && (
+                <button
+                  onClick={onDismiss}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
-            {releaseNotes && (
-              <div className="mb-6 rounded-2xl border border-white/10 bg-black/35 p-4">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Release notes</p>
-                <p className="max-h-28 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-white/75 custom-scrollbar">
-                  {releaseNotes}
-                </p>
-              </div>
-            )}
-
-            {state.updateError && (
-              <div className="mb-5 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                Echec de la mise a jour: {state.updateError}
-              </div>
-            )}
-
-            {state.isInstallingUpdate && (
-              <div className="mb-6 rounded-2xl border border-white/10 bg-black/30 p-4">
-                <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest text-white/55">
-                  <span>Telechargement en cours</span>
-                  <span className="tabular-nums text-white">{Math.round(state.updateInstallProgress)}%</span>
+            {/* Release Notes */}
+            {manifest?.body && (
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 block">
+                  Notes de mise à jour
+                </span>
+                <div className="max-h-48 overflow-y-auto p-4 rounded-2xl bg-black/50 border border-white/5 text-xs text-white/80 whitespace-pre-wrap font-sans leading-relaxed custom-scrollbar">
+                  {manifest.body}
                 </div>
-                <div className="h-2 overflow-hidden rounded-full border border-white/10 bg-white/10">
+              </div>
+            )}
+
+            {/* Installing Progress Bar */}
+            {isInstalling && (
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-white/70">Installation en cours...</span>
+                  <span className="font-mono text-emerald-400">{Math.round(progress)}%</span>
+                </div>
+                <div className="w-full h-2.5 bg-neutral-800 rounded-full overflow-hidden border border-white/5">
                   <motion.div
-                    className="h-full bg-gradient-to-r from-emerald-300 via-emerald-400 to-lime-300"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${state.updateInstallProgress}%` }}
-                    transition={{ duration: 0.2 }}
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.8)]"
+                    style={{ width: `${Math.max(3, progress)}%` }}
                   />
                 </div>
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={handlers.handleDismissUpdatePrompt}
-                disabled={state.isInstallingUpdate}
-                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
-              >
-                Plus tard
-              </button>
-              <button
-                onClick={() => {
-                  void handlers.handleInstallUpdate();
-                }}
-                disabled={state.isInstallingUpdate}
-                className="rounded-2xl border border-emerald-200/30 bg-gradient-to-r from-emerald-400 to-lime-300 px-5 py-3 text-sm font-black uppercase tracking-wider text-zinc-950 shadow-[0_10px_25px_rgba(110,231,183,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {state.isInstallingUpdate ? 'Installation...' : 'Installer maintenant'}
-              </button>
-            </div>
+            {/* Error banner */}
+            {state.updateError && (
+              <p className="text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-xl">
+                {state.updateError}
+              </p>
+            )}
+
+            {/* Actions */}
+            {!isInstalling && (
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onDismiss}
+                  className="flex-1 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Plus tard
+                </button>
+                <button
+                  type="button"
+                  onClick={onInstall}
+                  className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 text-neutral-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_6px_25px_rgba(52,211,153,0.35)] hover:brightness-110 cursor-pointer transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Mettre à jour</span>
+                </button>
+              </div>
+            )}
           </motion.div>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>
   );

@@ -64,6 +64,8 @@ export interface Session {
   minecraft: string;
   forge?: string;
   fabric?: string;
+  neoforge?: string;
+  quilt?: string;
   syncDir: string;
   syncUrl: string;
   welcome: string;
