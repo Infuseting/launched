@@ -315,12 +315,20 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
         log::info!("Running Forge Installer natively using java: {:?}", java_bin);
         
         // 4. Execute Forge Installer headlessly
-        let output = std::process::Command::new(&java_bin)
-            .current_dir(&ctx.mc_path)
+        let mut cmd = std::process::Command::new(&java_bin);
+        cmd.current_dir(&ctx.mc_path)
             .arg("-jar")
             .arg(&ctx.installer_path)
             .arg("--installClient")
-            .arg(&ctx.mc_path)
+            .arg(&ctx.mc_path);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+
+        let output = cmd
             .output()
             .map_err(|e| format!("Failed to execute Forge installer: {}", e))?;
 

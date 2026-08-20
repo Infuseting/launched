@@ -65,16 +65,58 @@ fn argument_rules_allow(arg: &Value) -> bool {
             .and_then(|a| a.as_str())
             .unwrap_or("disallow");
 
-        let matches_os = match rule
-            .get("os")
-            .and_then(|o| o.get("name"))
-            .and_then(|n| n.as_str())
-        {
-            Some(name) => name == os,
-            None => true,
+        // 1. Check OS conditions
+        let matches_os = if let Some(os_obj) = rule.get("os") {
+            let mut ok = true;
+            if let Some(name) = os_obj.get("name").and_then(|n| n.as_str()) {
+                if name != os {
+                    ok = false;
+                }
+            }
+            if let Some(arch) = os_obj.get("arch").and_then(|a| a.as_str()) {
+                let current_arch = if cfg!(target_arch = "x86_64") {
+                    "x64"
+                } else if cfg!(target_arch = "x86") {
+                    "x86"
+                } else if cfg!(target_arch = "aarch64") {
+                    "arm64"
+                } else {
+                    "unknown"
+                };
+                if arch != current_arch && arch != "x86" {
+                    ok = false;
+                }
+            }
+            ok
+        } else {
+            true
         };
 
-        if matches_os {
+        // 2. Check Features conditions (Mojang argument flags)
+        let matches_features = if let Some(features) = rule.get("features").and_then(|f| f.as_object()) {
+            let mut ok = true;
+            for (key, val) in features {
+                let required = val.as_bool().unwrap_or(false);
+                let our_value = match key.as_str() {
+                    "is_demo_user" => false, // Launcher never runs demo user
+                    "has_custom_resolution" => true,
+                    "has_quick_plays_support"
+                    | "is_quick_play_singleplayer"
+                    | "is_quick_play_multiplayer"
+                    | "is_quick_play_realms" => false, // Quick play is not used
+                    _ => false,
+                };
+                if required != our_value {
+                    ok = false;
+                    break;
+                }
+            }
+            ok
+        } else {
+            true
+        };
+
+        if matches_os && matches_features {
             allowed = action == "allow";
         }
     }
@@ -268,10 +310,14 @@ fn find_java(
             } else {
                 path.join("bin/java")
             };
-            if let Ok(output) = std::process::Command::new(&java_bin)
-                .arg("-version")
-                .output()
+            let mut cmd = std::process::Command::new(&java_bin);
+            cmd.arg("-version");
+            #[cfg(windows)]
             {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            if let Ok(output) = cmd.output() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 if stderr.contains("1.8.0") || stderr.contains("\"1.8") {
                     8u8
@@ -343,8 +389,14 @@ fn find_java(
 
     // Check if the system default java matches requirements
     let mut detected_major = 0u8;
-    let output = std::process::Command::new(&java_bin)
-        .arg("-version")
+    let mut cmd = std::process::Command::new(&java_bin);
+    cmd.arg("-version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to check java version: {}", e))?;
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -869,6 +921,13 @@ impl LaunchArguments {
             minecraft_args.push("--versionType".to_string());
             minecraft_args.push("release".to_string());
         }
+
+        // Guarantee that demo mode and quickPlay artifacts are completely removed
+        minecraft_args.retain(|a| {
+            a != "--demo"
+                && !a.starts_with("--quickPlay")
+                && !a.starts_with("${quickPlay")
+        });
 
         // Find correct Java version (MC 1.12.2 needs Java 8)
         let required_java = manifest
