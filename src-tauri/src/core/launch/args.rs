@@ -391,6 +391,12 @@ impl LaunchArguments {
 
         let version_id_owned = if let Some(forge_version) = &session.forge {
             format!("{}-forge-{}", session.minecraft, forge_version)
+        } else if let Some(fabric_version) = &session.fabric {
+            format!("fabric-loader-{}-{}", fabric_version, session.minecraft)
+        } else if let Some(quilt_version) = &session.quilt {
+            format!("quilt-loader-{}-{}", quilt_version, session.minecraft)
+        } else if let Some(neoforge_version) = &session.neoforge {
+            format!("neoforge-{}", neoforge_version)
         } else {
             session.minecraft.clone()
         };
@@ -433,9 +439,21 @@ impl LaunchArguments {
                         if manifest.minecraft_arguments.is_none() {
                             manifest.minecraft_arguments = parent_manifest.minecraft_arguments;
                         }
-                        if manifest.arguments.is_none() {
-                            manifest.arguments = parent_manifest.arguments;
+
+                        if let Some(parent_args) = parent_manifest.arguments {
+                            if let Some(ref mut child_args) = manifest.arguments {
+                                let mut merged_game = parent_args.game;
+                                merged_game.extend(child_args.game.clone());
+                                child_args.game = merged_game;
+
+                                let mut merged_jvm = parent_args.jvm;
+                                merged_jvm.extend(child_args.jvm.clone());
+                                child_args.jvm = merged_jvm;
+                            } else {
+                                manifest.arguments = Some(parent_args);
+                            }
                         }
+
                         let mut merged_from_parent = 0usize;
                         for parent_lib in parent_manifest.libraries {
                             if !manifest.libraries.iter().any(|l| l.name == parent_lib.name) {
@@ -444,7 +462,7 @@ impl LaunchArguments {
                             }
                         }
                         log::info!(
-                            "Merged {} libraries from parent {}",
+                            "Merged {} libraries and arguments from parent {}",
                             merged_from_parent,
                             parent_id
                         );
@@ -648,6 +666,10 @@ impl LaunchArguments {
         // Minecraft game args
         let mut minecraft_args = Vec::new();
 
+        let is_offline = auth.access_token == "offline";
+        let user_type = if is_offline { "mojang".to_string() } else { "msa".to_string() };
+        let xuid = if is_offline { "".to_string() } else { auth.uuid.replace('-', "") };
+
         if let Some(args) = &manifest.arguments {
             let game_placeholders = [
                 ("${auth_player_name}", auth.name.clone()),
@@ -673,8 +695,12 @@ impl LaunchArguments {
                 ),
                 ("${auth_uuid}", auth.uuid.clone()),
                 ("${auth_access_token}", auth.access_token.clone()),
-                ("${user_type}", "msa".to_string()),
+                ("${auth_session}", auth.access_token.clone()),
+                ("${user_type}", user_type.clone()),
                 ("${version_type}", "release".to_string()),
+                ("${clientid}", "00000000402b5328".to_string()),
+                ("${auth_xuid}", xuid.clone()),
+                ("${user_properties}", "{}".to_string()),
                 (
                     "${resolution_width}",
                     settings
@@ -704,88 +730,98 @@ impl LaunchArguments {
 
         if minecraft_args.is_empty() {
             if let Some(arg_line) = manifest.minecraft_arguments {
-            // Old format: single string with placeholders
-            let map = [
-                ("${auth_player_name}", auth.name.clone()),
-                ("${version_name}", version_id.clone()),
-                (
-                    "${game_directory}",
-                    session_dir.to_string_lossy().to_string(),
-                ),
-                (
-                    "${assets_root}",
+                // Old format: single string with placeholders
+                let map = [
+                    ("${auth_player_name}", auth.name.clone()),
+                    ("${version_name}", version_id.clone()),
+                    (
+                        "${game_directory}",
+                        session_dir.to_string_lossy().to_string(),
+                    ),
+                    (
+                        "${assets_root}",
+                        official_mc_path
+                            .join("assets")
+                            .to_string_lossy()
+                            .to_string(),
+                    ),
+                    (
+                        "${assets_index_name}",
+                        manifest
+                            .asset_index
+                            .as_ref()
+                            .map(|a| a.id.clone())
+                            .unwrap_or_else(|| "1.12".to_string()),
+                    ),
+                    ("${auth_uuid}", auth.uuid.clone()),
+                    ("${auth_access_token}", auth.access_token.clone()),
+                    ("${auth_session}", auth.access_token.clone()),
+                    ("${user_type}", user_type.clone()),
+                    ("${version_type}", "release".to_string()),
+                    ("${clientid}", "00000000402b5328".to_string()),
+                    ("${auth_xuid}", xuid.clone()),
+                    ("${user_properties}", "{}".to_string()),
+                    ("${resolution_width}", settings.game_resolution.split('x').next().unwrap_or("854").to_string()),
+                    ("${resolution_height}", settings.game_resolution.split('x').nth(1).unwrap_or("480").to_string()),
+                ];
+
+                let mut result_line = arg_line;
+                for (placeholder, value) in map {
+                    result_line = result_line.replace(placeholder, &value);
+                }
+
+                for arg in result_line.split_whitespace() {
+                    minecraft_args.push(arg.to_string());
+                }
+            } else {
+                // Modern format or fallback
+                minecraft_args.push("--username".to_string());
+                minecraft_args.push(auth.name.clone());
+                minecraft_args.push("--version".to_string());
+                minecraft_args.push(version_id.clone());
+                minecraft_args.push("--gameDir".to_string());
+                minecraft_args.push(session_dir.to_string_lossy().to_string());
+                minecraft_args.push("--assetsDir".to_string());
+                minecraft_args.push(
                     official_mc_path
                         .join("assets")
                         .to_string_lossy()
                         .to_string(),
-                ),
-                (
-                    "${assets_index_name}",
+                );
+                minecraft_args.push("--assetIndex".to_string());
+                minecraft_args.push(
                     manifest
                         .asset_index
                         .as_ref()
                         .map(|a| a.id.clone())
                         .unwrap_or_else(|| "1.12".to_string()),
-                ),
-                ("${auth_uuid}", auth.uuid.clone()),
-                ("${auth_access_token}", auth.access_token.clone()),
-                ("${user_type}", "msa".to_string()),
-                ("${version_type}", "release".to_string()),
-                ("${resolution_width}", settings.game_resolution.split('x').next().unwrap_or("854").to_string()),
-                ("${resolution_height}", settings.game_resolution.split('x').nth(1).unwrap_or("480").to_string()),
-            ];
-
-            let mut result_line = arg_line;
-            for (placeholder, value) in map {
-                result_line = result_line.replace(placeholder, &value);
-            }
-
-            for arg in result_line.split_whitespace() {
-                minecraft_args.push(arg.to_string());
-            }
-            } else {
-            // Modern format or fallback
-            minecraft_args.push("--username".to_string());
-            minecraft_args.push(auth.name.clone());
-            minecraft_args.push("--version".to_string());
-            minecraft_args.push(version_id.clone());
-            minecraft_args.push("--gameDir".to_string());
-            minecraft_args.push(session_dir.to_string_lossy().to_string());
-            minecraft_args.push("--assetsDir".to_string());
-            minecraft_args.push(
-                official_mc_path
-                    .join("assets")
-                    .to_string_lossy()
-                    .to_string(),
-            );
-            minecraft_args.push("--assetIndex".to_string());
-            minecraft_args.push(
-                manifest
-                    .asset_index
-                    .as_ref()
-                    .map(|a| a.id.clone())
-                    .unwrap_or_else(|| "1.12".to_string()),
-            );
-            minecraft_args.push("--uuid".to_string());
-            minecraft_args.push(auth.uuid.clone());
-            minecraft_args.push("--accessToken".to_string());
-            minecraft_args.push(auth.access_token.clone());
-            minecraft_args.push("--userType".to_string());
-            minecraft_args.push("msa".to_string());
-            minecraft_args.push("--versionType".to_string());
-            minecraft_args.push("release".to_string());
-            
-            // Add resolution
-            if let Some((w, h)) = settings.game_resolution.split_once('x') {
-                minecraft_args.push("--width".to_string());
-                minecraft_args.push(w.to_string());
-                minecraft_args.push("--height".to_string());
-                minecraft_args.push(h.to_string());
-            }
+                );
+                minecraft_args.push("--uuid".to_string());
+                minecraft_args.push(auth.uuid.clone());
+                minecraft_args.push("--accessToken".to_string());
+                minecraft_args.push(auth.access_token.clone());
+                minecraft_args.push("--userType".to_string());
+                minecraft_args.push(user_type.clone());
+                minecraft_args.push("--versionType".to_string());
+                minecraft_args.push("release".to_string());
+                if !xuid.is_empty() {
+                    minecraft_args.push("--xuid".to_string());
+                    minecraft_args.push(xuid.clone());
+                    minecraft_args.push("--clientId".to_string());
+                    minecraft_args.push("00000000402b5328".to_string());
+                }
+                
+                // Add resolution
+                if let Some((w, h)) = settings.game_resolution.split_once('x') {
+                    minecraft_args.push("--width".to_string());
+                    minecraft_args.push(w.to_string());
+                    minecraft_args.push("--height".to_string());
+                    minecraft_args.push(h.to_string());
+                }
             }
         }
 
-        // Some Forge profiles provide partial game arguments; guarantee mandatory options.
+        // Some loader profiles provide partial game arguments; guarantee mandatory options.
         if !minecraft_args.iter().any(|a| a == "--username") {
             minecraft_args.push("--username".to_string());
             minecraft_args.push(auth.name.clone());
@@ -827,7 +863,7 @@ impl LaunchArguments {
         }
         if !minecraft_args.iter().any(|a| a == "--userType") {
             minecraft_args.push("--userType".to_string());
-            minecraft_args.push("msa".to_string());
+            minecraft_args.push(user_type);
         }
         if !minecraft_args.iter().any(|a| a == "--versionType") {
             minecraft_args.push("--versionType".to_string());
