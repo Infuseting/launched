@@ -18,6 +18,8 @@ pub struct Session {
     pub minecraft: String,
     pub forge: Option<String>,
     pub fabric: Option<String>,
+    pub neoforge: Option<String>,
+    pub quilt: Option<String>,
     pub sync_dir: String,
     pub sync_url: String,
     pub welcome: String,

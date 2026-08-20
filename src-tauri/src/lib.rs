@@ -138,7 +138,7 @@ async fn launch_game(
     let session_dir = base_dir.join("sessions").join(&session.name);
 
     // Get auth: try keychain first
-    let mut auth = if let Some(pseudo) = crack_pseudo {
+    let auth = if let Some(pseudo) = crack_pseudo {
         log::info!("Launching in crack mode with pseudo: {}", pseudo);
         AuthResponse {
             uuid: "00000000-0000-0000-0000-000000000000".to_string(),
