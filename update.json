@@ -1,7 +1,7 @@
 {
   "version": "1.4.5",
   "notes": "See the assets to download this version and install.",
-  "pub_date": "2026-08-20T19:44:57.237Z",
+  "pub_date": "2026-08-20T19:46:46.307Z",
   "platforms": {
     "linux-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczV2YWJSOWZOdFdBR2VtSU1UL2NKM0FIUjhOQloxSTNEdDBJc2xrZEsvNTAwNDVoZmNra1UvY2F1U0xhTkYyTDFLNldhSTY5aFZlQThmL2FvZ1RlNmc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjU1MDI4CWZpbGU6TGF1bmNoZWRfMS40LjVfYW1kNjQuQXBwSW1hZ2UKYXB2c2lMbGsyOWRwandpMlBQUXpMbzJBaTJsQWFQb2JGdzNYSnNBRU94SmZLc2syNHBScVhxWnhBNmRsbmJPYUxGZlAxYVhsZVB2ZUtjRzlyZ1lSQ3c9PQo=",
@@ -36,11 +36,11 @@
       "url": "https://github.com/Infuseting/launched/releases/download/v1.4.5/Launched_universal.app.tar.gz"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczk4WVpEMHp5WTlWRXo2aEtqSU1uWVlsOWFiY2Y3RTFjdXhBQmgwWFA1dm5hMlBJbzJTN25NQ0VpTHY0UzlmZ1I4RFJ1T1BoeXFTcERMeHNRL05OWEF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjU1MDk1CWZpbGU6TGF1bmNoZWRfMS40LjVfeDY0X2VuLVVTLm1zaQp2cnFtTncvcURZTE9yeFFBTFB1eUVBVE81Mm0wOStTYmNrYUVNSjY4VURPOGNXYU81bkhHVG9xYlBCNEJQeS9qeG5Fc2lHa1pSQ3N4SnN0NDg3akxDZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczIzd1RiZGdIRGZjZXZldzZXYUkyUFl3UlJxRFVwbDNtcDJQOVdLTHg0WTJvZ1NmSUE3WmhyV2JKeTZRMW9pcXB1UlBrcm1paEExRCtHMTFoelRteGdJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjU1MjAzCWZpbGU6TGF1bmNoZWRfMS40LjVfeDY0X2VuLVVTLm1zaQpZcDNOUGx5K09kaUFzTUxoM1ZRajVhT3ZxU0prNi9aWitZMnFVeUR6cDU5TGszVFBOT05mMmpRSFdtak50M0E2TjA5SUdDR1NveXp5dHdBbG9WMUtCUT09Cg==",
       "url": "https://github.com/Infuseting/launched/releases/download/v1.4.5/Launched_1.4.5_x64_en-US.msi"
     },
     "windows-x86_64-msi": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczk4WVpEMHp5WTlWRXo2aEtqSU1uWVlsOWFiY2Y3RTFjdXhBQmgwWFA1dm5hMlBJbzJTN25NQ0VpTHY0UzlmZ1I4RFJ1T1BoeXFTcERMeHNRL05OWEF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjU1MDk1CWZpbGU6TGF1bmNoZWRfMS40LjVfeDY0X2VuLVVTLm1zaQp2cnFtTncvcURZTE9yeFFBTFB1eUVBVE81Mm0wOStTYmNrYUVNSjY4VURPOGNXYU81bkhHVG9xYlBCNEJQeS9qeG5Fc2lHa1pSQ3N4SnN0NDg3akxDZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczIzd1RiZGdIRGZjZXZldzZXYUkyUFl3UlJxRFVwbDNtcDJQOVdLTHg0WTJvZ1NmSUE3WmhyV2JKeTZRMW9pcXB1UlBrcm1paEExRCtHMTFoelRteGdJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MjU1MjAzCWZpbGU6TGF1bmNoZWRfMS40LjVfeDY0X2VuLVVTLm1zaQpZcDNOUGx5K09kaUFzTUxoM1ZRajVhT3ZxU0prNi9aWitZMnFVeUR6cDU5TGszVFBOT05mMmpRSFdtak50M0E2TjA5SUdDR1NveXp5dHdBbG9WMUtCUT09Cg==",
       "url": "https://github.com/Infuseting/launched/releases/download/v1.4.5/Launched_1.4.5_x64_en-US.msi"
     }
   }
