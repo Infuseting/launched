@@ -64,51 +64,47 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Launched v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
 
-      - name: Debug Output
-        if: always()
-        run: |
-          echo "Listing build artifacts:"
-          ls -R src-tauri/target/release/bundle || echo "Bundle dir not found"
+  deploy-updater:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
 
-      - name: Locate updater files
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          echo "Searching for updater manifests in workspace..."
-          find . -type f \( -name "latest.json" -o -name "update.json" \) | sed -n '1,200p'
-
-      - name: Deploy Update Metadata
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Download latest.json from GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p src-tauri/target/release/bundle
-          gh release download "${{ github.ref_name }}" -p "latest.json" --clobber
-          mv latest.json src-tauri/target/release/bundle/update.json
-          echo "Contenu de update.json :"
-          cat src-tauri/target/release/bundle/update.json
+          gh release download "${{ github.ref_name }}" -p "latest.json" --clobber || true
+          if [ -f latest.json ]; then
+            cp latest.json update.json
+            echo "Contenu de update.json :"
+            cat update.json
+          else
+            echo "latest.json non trouvé dans les assets de release"
+          fi
 
-      - name: Upload updater manifest artifact
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: actions/upload-artifact@v4
-        with:
-          name: updater-manifest
-          path: src-tauri/target/release/bundle/update.json
-
-      - name: Publish to GitHub Pages
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: src-tauri/target/release/bundle
-          publish_branch: gh-pages
-          destination_dir: .
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-          force_orphan: false
-          keep_files: true
-
+      - name: Commit and push update.json to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          if git diff --staged --quiet; then
+            echo "Aucune modification dans update.json."
+          else
+            git commit -m "deploy: update.json for ${{ github.ref_name }}"
+            git pull --rebase origin gh-pages || true
+            git push origin gh-pages
+          fi
