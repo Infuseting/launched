@@ -47,7 +47,8 @@ const rawState: LauncherStateModel = {
   dismissedUpdateVersion: null,
   serverStatusInterval: null,
   crackModalOpen: false,
-  crackModalDefaultPseudo: ''
+  crackModalDefaultPseudo: '',
+  discordModalOpen: false
 };
 
 const listeners = new Set<() => void>();

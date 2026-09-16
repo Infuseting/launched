@@ -101,7 +101,9 @@ export class LauncherController {
         if (this.currentCrackModalResolve) {
           this.currentCrackModalResolve(pseudo);
         }
-      }
+      },
+      handleDiscordModalDismiss: (permanent: boolean) => this.handleDiscordModalDismiss(permanent),
+      handleOpenDiscord: () => this.handleOpenDiscord()
     };
   }
 
@@ -120,6 +122,7 @@ export class LauncherController {
     await this.loadInitialData();
 
     await this.checkForUpdates(true);
+    this.triggerDiscordPromptIfEligible();
     this.scheduleStartupUpdateRetries();
 
     setTimeout(() => {
@@ -435,12 +438,70 @@ export class LauncherController {
     }
   }
 
+  private shouldShowDiscordPrompt(): boolean {
+    if (state.currentSettings.dontShowDiscordPrompt) {
+      return false;
+    }
+    try {
+      if (localStorage.getItem('launched_dont_show_discord_prompt') === 'true') {
+        return false;
+      }
+    } catch {
+      // Ignore localStorage read errors
+    }
+    return true;
+  }
+
+  private triggerDiscordPromptIfEligible(): void {
+    if (!this.shouldShowDiscordPrompt()) {
+      return;
+    }
+    const isUpdateBlocking =
+      !!state.updateManifest &&
+      !state.isInstallingUpdate &&
+      state.dismissedUpdateVersion !== state.updateManifest.version;
+
+    if (!isUpdateBlocking) {
+      state.discordModalOpen = true;
+    }
+  }
+
   private dismissUpdatePrompt(): void {
     if (!state.updateManifest) {
       return;
     }
 
     state.dismissedUpdateVersion = state.updateManifest.version;
+    this.triggerDiscordPromptIfEligible();
+  }
+
+  private async handleOpenDiscord(): Promise<void> {
+    try {
+      await open('https://discord.gg/BWaj9JzsX6');
+    } catch (err) {
+      console.error('Failed to open Discord link:', err);
+    }
+    state.discordModalOpen = false;
+    state.currentSettings.dontShowDiscordPrompt = true;
+    try {
+      localStorage.setItem('launched_dont_show_discord_prompt', 'true');
+    } catch {
+      // Ignore
+    }
+    await this.saveSettings();
+  }
+
+  private async handleDiscordModalDismiss(permanent: boolean): Promise<void> {
+    state.discordModalOpen = false;
+    if (permanent) {
+      state.currentSettings.dontShowDiscordPrompt = true;
+      try {
+        localStorage.setItem('launched_dont_show_discord_prompt', 'true');
+      } catch {
+        // Ignore
+      }
+      await this.saveSettings();
+    }
   }
 
   private async handleInstallUpdate(): Promise<void> {

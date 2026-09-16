@@ -161,6 +161,18 @@ Reference:
 
 - [src/components/CrackModal.tsx](src/components/CrackModal.tsx)
 
+### 5.6 Discord Community Modal (Accueil Communauté)
+
+- Pop-up d'accueil orientée "Gaming & Community" incitant à rejoindre le serveur Discord officiel de Launched.
+- Halo d'ambiance Blurple (`#5865F2`) discret et fond dark glassmorphism (`bg-neutral-900/95`, `backdrop-blur-md`).
+- CTA principal immédiat vers le Discord avec icône officielle Discord.
+- Compte à rebours de 5 secondes avec barre de progression bloquant la fermeture, avant d'activer les options "Plus tard" et "Ne plus afficher".
+- Persistance enregistrée dans `settings.json` (`dontShowDiscordPrompt`) et localStorage.
+
+Reference:
+
+- [src/components/DiscordCommunityModal.tsx](src/components/DiscordCommunityModal.tsx)
+
 ## 6. Micro-interactions et Motion
 
 Le motion design est structurel, pas decoratif:

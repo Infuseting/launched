@@ -8,6 +8,7 @@ import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';
 import CrackModal from './components/CrackModal';
+import DiscordCommunityModal from './components/DiscordCommunityModal';
 
 interface AppProps {
   handlers: AppHandlers;
@@ -33,6 +34,9 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
         ) {
           e.preventDefault();
           handlers.handleDismissUpdatePrompt();
+        } else if (launcherState.discordModalOpen) {
+          // Handled inside DiscordCommunityModal (only dismisses if 5s countdown finished)
+          e.preventDefault();
         } else if (launcherState.isServerSelectOpen) {
           e.preventDefault();
           handlers.handleServerSelectToggle(false);
@@ -83,6 +87,12 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           isOpen={launcherState.crackModalOpen}
           defaultPseudo={launcherState.crackModalDefaultPseudo}
           onResolve={handlers.handleCrackModalResolve}
+        />
+
+        <DiscordCommunityModal
+          isOpen={launcherState.discordModalOpen}
+          onJoin={handlers.handleOpenDiscord}
+          onDismiss={handlers.handleDiscordModalDismiss}
         />
       </div>
     </Layout>
