@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   FolderOpen,
   MousePointerClick,
-  Sparkles,
 } from 'lucide-react';
 
 export const SkinTab: React.FC = () => {
@@ -360,15 +359,16 @@ export const SkinTab: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={() => void handleUpload()}
             disabled={!uploadB64 || isUploading}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 text-neutral-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_6px_25px_rgba(52,211,153,0.35)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
+            className="w-full py-2.5 px-4 rounded-xl bg-white text-neutral-950 font-bold text-xs hover:bg-neutral-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm text-center"
           >
             {isUploading ? (
               <span>Application et enregistrement en cours...</span>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
+                <Check className="w-3.5 h-3.5" />
                 <span>Appliquer et Sauvegarder dans ma bibliothèque</span>
               </>
             )}

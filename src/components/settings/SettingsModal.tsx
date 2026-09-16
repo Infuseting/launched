@@ -6,7 +6,7 @@ import AccountSwitcher from './AccountSwitcher';
 import SkinTab from '../skin/SkinTab';
 import SettingsGeneralTab from './SettingsGeneralTab';
 import SettingsAdvancedTab from './SettingsAdvancedTab';
-import { ArrowLeft, Users, Palette, Sliders, Terminal, Sparkles, Layers } from 'lucide-react';
+import { ArrowLeft, Users, Palette, Sliders, Terminal, Layers } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -232,11 +232,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Version pill */}
               <div className="pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-white/40 font-medium px-2">
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   Launched Client
                 </span>
-                <span className="font-mono">v{state.appVersion}</span>
+                <span className="font-mono text-white/50">v{state.appVersion}</span>
               </div>
             </aside>
 

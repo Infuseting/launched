@@ -128,9 +128,11 @@ Reference:
 
 ### 5.3 Microsoft Device Code Modal
 
-- UX guidee en 2 infos centrales: URL + code.
-- Actions directes: ouvrir URL, copier code.
-- Etat erreur dedie visible dans un bloc rouge.
+- Dialogue d'authentification OAuth2 Microsoft en modal centré épuré (`rounded-2xl`, `border-white/10`).
+- UX guidée en 2 infos centrales : code d'authentification en police monospace claire + bouton de copie 1-clic net.
+- CTA principal blanc pur ("Ouvrir la page de connexion") sans dégradé ni halo néon.
+- État erreur dédié visible dans un bloc rouge sobre.
+- Indicateur discret de synchronisation en attente de la validation navigateur.
 
 Reference:
 
@@ -139,13 +141,25 @@ Reference:
 ### 5.4 Update Prompt Modal
 
 - Modale prioritaire (z-index le plus eleve des overlays).
-- Theme vert/emerald pour signaler une action positive systeme.
-- Notes de release scrollables + progression d'installation.
-- CTA principal "Installer maintenant" + secondaire "Plus tard".
+- Esthetique logicielle desktop moderne et sobre : fond neutre sombre (`bg-neutral-900/95`), bordures chirurgicales fines (`border-white/10`), pas de degrades fluorescents ni d'icones IA (sparkles).
+- Header avec comparaison explicite des versions (`v{actuelle} -> v{nouvelle}`) et icone logicielle sobre (`ArrowUpCircle`).
+- Notes de version scrollables avec structure typographique soignee (titres, puces, interlignage aere).
+- Jauge d'installation technique ultra-fine (`h-1.5`) avec pourcentage monospace propre.
+- CTA principal blanc net ("Mettre a jour") + bouton secondaire discret ("Plus tard").
 
 Reference:
 
 - [src/components/UpdatePromptModal.tsx](src/components/UpdatePromptModal.tsx)
+
+### 5.5 Crack Modal (Connexion Hors-Ligne)
+
+- Modal centré sobre pour la saisie de pseudo joueur hors-ligne.
+- Champ de saisie net avec bordure subtile et focus clair.
+- Boutons harmonisés : validation blanc pur ("Valider") et annulation sobre ("Annuler").
+
+Reference:
+
+- [src/components/CrackModal.tsx](src/components/CrackModal.tsx)
 
 ## 6. Micro-interactions et Motion
 

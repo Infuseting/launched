@@ -3,7 +3,7 @@ import type { LauncherState } from '../../state';
 import type { AppHandlers } from '../../types';
 import Slider from '../ui/Slider';
 import Switch from '../ui/Switch';
-import { Cpu, Terminal, RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Cpu, Terminal, RefreshCw, ArrowUpCircle } from 'lucide-react';
 
 interface SettingsGeneralTabProps {
   localMinRam: number;
@@ -82,22 +82,23 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
       </div>
 
       {/* Launcher Update Panel */}
-      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-4">
+      <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-400/25 flex items-center justify-center text-emerald-400">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/90">
+              <ArrowUpCircle className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-white font-bold text-xs">Mise à jour du Launcher</h4>
-              <p className="text-white/40 text-[11px]">Version actuelle : v{state.appVersion}</p>
+              <h4 className="text-white font-semibold text-xs tracking-tight">Mise à jour du Launcher</h4>
+              <p className="text-white/40 text-[11px] font-mono">Version actuelle : v{state.appVersion}</p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={() => void handlers.handleCheckUpdate()}
             disabled={state.isCheckingUpdate || state.isInstallingUpdate}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white text-white hover:text-neutral-950 text-xs font-bold transition-all duration-150 cursor-pointer disabled:opacity-40"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-semibold transition-all duration-150 cursor-pointer disabled:opacity-40"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${state.isCheckingUpdate ? 'animate-spin' : ''}`} />
             <span>{state.isCheckingUpdate ? 'Recherche...' : 'Vérifier'}</span>
@@ -105,15 +106,23 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
         </div>
 
         {state.updateManifest && (
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Version {state.updateManifest.version} disponible !</span>
+          <div className="p-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <span className="text-xs font-semibold text-white block">
+                  Version {state.updateManifest.version} disponible
+                </span>
+                <span className="text-[11px] text-white/40 block truncate">
+                  Une nouvelle version est prête à être installée
+                </span>
+              </div>
             </div>
             <button
+              type="button"
               onClick={() => void handlers.handleInstallUpdate()}
               disabled={state.isInstallingUpdate}
-              className="px-4 py-1.5 rounded-xl bg-emerald-400 text-neutral-950 font-black text-xs hover:brightness-110 transition-all cursor-pointer"
+              className="px-4 py-1.5 rounded-xl bg-white text-neutral-950 font-bold text-xs hover:bg-neutral-200 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 flex-shrink-0 shadow-sm"
             >
               {state.isInstallingUpdate ? 'Installation...' : 'Installer'}
             </button>
