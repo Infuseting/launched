@@ -49,7 +49,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
 
   return (
     <Layout>
-      <div className="relative w-full h-screen">
+      <div className="relative w-full h-full">
         <MainScreen handlers={handlers} />
 
         <SettingsModal

@@ -13,7 +13,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick 
   const user = state.authCache;
 
   return (
-    <header className="fixed top-0 left-0 right-0 p-8 flex justify-between items-center z-40 pointer-events-none">
+    <header className="absolute top-0 left-0 right-0 p-8 pt-5 flex justify-between items-center z-40 pointer-events-none">
       {/* Player Profile Capsule */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}

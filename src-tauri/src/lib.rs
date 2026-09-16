@@ -569,6 +569,32 @@ async fn refresh_active_token(app_handle: tauri::AppHandle) -> Result<crate::aut
         .ok_or_else(|| "Could not find refreshed account".to_string())
 }
 
+#[tauri::command]
+async fn window_minimize(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn window_toggle_maximize(window: tauri::Window) -> Result<bool, String> {
+    let is_max = window.is_maximized().map_err(|e| e.to_string())?;
+    if is_max {
+        window.unmaximize().map_err(|e| e.to_string())?;
+        Ok(false)
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+async fn window_close(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -607,7 +633,11 @@ pub fn run() {
             refresh_active_token,
             save_skin_to_library,
             get_skin_token,
-            upload_skin_raw
+            upload_skin_raw,
+            window_minimize,
+            window_toggle_maximize,
+            window_close,
+            window_is_maximized
         ])
         .on_page_load(|window, _payload| {
             let _ = crate::ui::bridge::inject_bridge(window);

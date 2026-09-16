@@ -158,7 +158,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="fixed inset-0 z-50 bg-neutral-950/98 backdrop-blur-3xl flex flex-col text-white select-none overflow-hidden"
+          className="fixed inset-x-0 bottom-0 top-8 z-50 bg-neutral-950/98 backdrop-blur-3xl flex flex-col text-white select-none overflow-hidden"
         >
           {/* Top Bar Header */}
           <header className="h-16 px-8 border-b border-white/10 flex items-center justify-between bg-black/40 flex-shrink-0">

@@ -65,7 +65,7 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const links = [...(session?.links || []), ...(session?.assetsData?.links || [])];
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-neutral-950 font-sans antialiased select-none">
+    <div className="relative w-full h-full overflow-hidden bg-neutral-950 font-sans antialiased select-none">
       {/* Immersive Dynamic Background */}
       <AnimatePresence mode="wait">
         <motion.div
