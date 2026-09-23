@@ -443,8 +443,10 @@ impl LaunchArguments {
     pub fn guarantee_assets_dir_and_subdirs(assets_dir: &Path) -> Result<(), String> {
         let clean = assets_dir.to_string_lossy();
         let clean_trimmed = clean.trim().trim_matches(['"', '\'']);
-        if clean_trimmed.is_empty()
-            || clean_trimmed.starts_with("http://")
+        if clean_trimmed.is_empty() {
+            return Err("Assets directory path cannot be empty".to_string());
+        }
+        if clean_trimmed.starts_with("http://")
             || clean_trimmed.starts_with("https://")
             || clean_trimmed.contains("://")
             || clean_trimmed.ends_with(".json")
