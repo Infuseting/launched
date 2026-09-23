@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
-import { ArrowLeft, Server, Star, Check, Search, Box } from 'lucide-react';
+import { ArrowLeft, Server, Check, Search, Box } from 'lucide-react';
 
 interface ServerSelectModalProps {
   isOpen: boolean;
@@ -138,9 +138,6 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                                   <h3 className={`font-black text-base tracking-tight ${isActive ? 'text-emerald-300' : 'text-white'}`}>
                                     {s.name}
                                   </h3>
-                                  {s.isDefault && (
-                                    <Star className="w-4 h-4 fill-amber-400 text-amber-400 flex-shrink-0" />
-                                  )}
                                 </div>
 
                                 {s.hostname ? (

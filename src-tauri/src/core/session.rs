@@ -36,8 +36,6 @@ pub struct Session {
     #[serde(alias = "assets_path")]
     pub assets_path: Option<String>,
     pub hostname: Option<String>,
-    #[serde(default)]
-    pub is_default: bool,
     pub links: Option<Vec<SessionLink>>,
     #[serde(default)]
     pub crack: Option<bool>,

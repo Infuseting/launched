@@ -73,7 +73,6 @@ export interface Session {
   credits: string;
   assetsPath?: string;
   hostname?: string;
-  isDefault: boolean;
   links?: SessionLink[];
   assetsData?: AssetMetadata;
   crack?: boolean;

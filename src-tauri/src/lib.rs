@@ -22,6 +22,8 @@ struct AppState {
 #[derive(Serialize, Deserialize, Default)]
 struct Prefs {
     last_session_name: Option<String>,
+    #[serde(default)]
+    has_user_selected: bool,
 }
 
 fn get_prefs_path(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
@@ -57,14 +59,16 @@ async fn get_sessions(
         .unwrap_or_else(|_| "https://launched.infuseting.fr/sessions".to_string());
     let sessions = SessionManager::fetch_sessions(&sessions_url).await?;
 
-    // Check if we have a last session to restore
+    // Check if we have an explicit user-selected session to restore
     let prefs = load_prefs(&app_handle);
-    if let Some(last_name) = prefs.last_session_name {
-        if let Some(session) = sessions.iter().find(|s| s.name == last_name) {
-            let mut active = state.active_session.lock().unwrap();
-            if active.is_none() {
-                *active = Some(session.clone());
-                log::info!("Restored active session from prefs: {}", session.name);
+    if prefs.has_user_selected {
+        if let Some(last_name) = prefs.last_session_name {
+            if let Some(session) = sessions.iter().find(|s| s.name == last_name) {
+                let mut active = state.active_session.lock().unwrap();
+                if active.is_none() {
+                    *active = Some(session.clone());
+                    log::info!("Restored active session from prefs: {}", session.name);
+                }
             }
         }
     }
@@ -75,13 +79,18 @@ async fn get_sessions(
 #[tauri::command]
 async fn get_active_session_name(app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
     let prefs = load_prefs(&app_handle);
-    Ok(prefs.last_session_name)
+    if prefs.has_user_selected {
+        Ok(prefs.last_session_name)
+    } else {
+        Ok(None)
+    }
 }
 
 #[tauri::command]
 async fn set_active_session(app_handle: tauri::AppHandle, name: String) -> Result<(), String> {
     let mut prefs = load_prefs(&app_handle);
     prefs.last_session_name = Some(name);
+    prefs.has_user_selected = true;
     save_prefs(&app_handle, &prefs);
     Ok(())
 }
@@ -107,6 +116,7 @@ async fn sync_session(
     // Save to prefs
     let mut prefs = load_prefs(&app_handle);
     prefs.last_session_name = Some(session.name.clone());
+    prefs.has_user_selected = true;
     save_prefs(&app_handle, &prefs);
 
     // 1. Ensure Minecraft and Mod Loader are installed

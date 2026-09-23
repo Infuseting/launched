@@ -49,7 +49,6 @@ fn test_session_effective_components_legacy_fallback() {
         credits: "".to_string(),
         assets_path: None,
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -74,7 +73,6 @@ fn test_session_effective_components_legacy_fallback() {
         credits: "".to_string(),
         assets_path: None,
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -107,7 +105,6 @@ fn test_session_custom_components_priority() {
         credits: "".to_string(),
         assets_path: None,
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -375,7 +372,6 @@ fn test_session_assets_path_customization_and_fallback() {
         credits: "".to_string(),
         assets_path: Some("/custom/assets/directory".to_string()),
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -399,7 +395,6 @@ fn test_session_assets_path_customization_and_fallback() {
         credits: "".to_string(),
         assets_path: None,
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -423,7 +418,6 @@ fn test_session_assets_path_customization_and_fallback() {
         credits: "".to_string(),
         assets_path: Some("   ".to_string()),
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -447,7 +441,6 @@ fn test_session_assets_path_customization_and_fallback() {
         credits: "".to_string(),
         assets_path: Some("   /custom/assets/directory   ".to_string()),
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -471,7 +464,6 @@ fn test_session_assets_path_customization_and_fallback() {
         credits: "".to_string(),
         assets_path: Some("\"/custom/assets/directory\"".to_string()),
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };
@@ -495,7 +487,6 @@ fn test_session_assets_path_customization_and_fallback() {
         credits: "".to_string(),
         assets_path: Some("https://launched.infuseting.fr/api/sessions/stolbovo/assets.json".to_string()),
         hostname: None,
-        is_default: false,
         links: None,
         crack: None,
     };

@@ -61,8 +61,11 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
     return () => clearInterval(intervalId);
   }, [backgroundPool.length, pickRandomBackground]);
 
-  // Combine links from session and assetsData
-  const links = [...(session?.links || []), ...(session?.assetsData?.links || [])];
+  // Combine links from session and assetsData without duplicates
+  const rawLinks = [...(session?.links || []), ...(session?.assetsData?.links || [])];
+  const links = rawLinks.filter(
+    (link, index, self) => index === self.findIndex((l) => (l.url && l.url === link.url) || (l.name && l.name === link.name))
+  );
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-neutral-950 font-sans antialiased select-none">
