@@ -52,8 +52,9 @@ async fn get_sessions(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Session>, String> {
-    let sessions =
-        SessionManager::fetch_sessions("https://launched.infuseting.fr/sessions").await?;
+    let sessions_url = std::env::var("LAUNCHED_SESSIONS_URL")
+        .unwrap_or_else(|_| "https://launched.infuseting.fr/sessions".to_string());
+    let sessions = SessionManager::fetch_sessions(&sessions_url).await?;
 
     // Check if we have a last session to restore
     let prefs = load_prefs(&app_handle);
