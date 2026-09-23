@@ -380,6 +380,9 @@ export class LauncherController {
       if (index >= 0) {
         state.activeSessionIndex = index;
       }
+    } else if (state.globalSessions.length > 0) {
+      // First launch: let the user choose their session
+      state.serverSelectModalOpen = true;
     }
     await this.fetchAssetMetadata(state.activeSessionIndex);
     this.silentlyRefreshToken();

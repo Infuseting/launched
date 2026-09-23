@@ -29,6 +29,11 @@ web/
 src-tauri/*.pfx
 src-tauri/cert_base64.txt
 
+# Environment files
+.env
+.env*.local
+.env.*
+
 # Agent working artifacts
 .agents/
 

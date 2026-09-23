@@ -493,7 +493,7 @@ fn test_session_assets_path_customization_and_fallback() {
         welcome: "Welcome".to_string(),
         jvm_arg: "".to_string(),
         credits: "".to_string(),
-        assets_path: Some("https://galade.fr/launched/stolbovo/assets.json".to_string()),
+        assets_path: Some("https://launched.infuseting.fr/api/sessions/stolbovo/assets.json".to_string()),
         hostname: None,
         is_default: false,
         links: None,
