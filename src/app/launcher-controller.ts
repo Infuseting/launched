@@ -97,6 +97,7 @@ export class LauncherController {
         }
       },
       handleSessionSelect: (index: number) => this.handleSessionSelect(index),
+      handleRefreshSessions: () => this.handleRefreshSessions(),
       handleCrackModalResolve: (pseudo: string | null) => {
         if (this.currentCrackModalResolve) {
           this.currentCrackModalResolve(pseudo);
@@ -384,7 +385,7 @@ export class LauncherController {
       // First launch: let the user choose their session
       state.isServerSelectOpen = true;
     }
-    await this.fetchAssetMetadata(state.activeSessionIndex);
+    await Promise.all(state.globalSessions.map((_, i) => this.fetchAssetMetadata(i)));
     this.silentlyRefreshToken();
   }
 
@@ -534,6 +535,21 @@ export class LauncherController {
       await settingsService.saveSettingsInternal(settings);
     } catch (error) {
       console.error('Failed to save settings:', error);
+    }
+  }
+
+  public async handleRefreshSessions(): Promise<void> {
+    try {
+      const sessions = await sessionService.getSessions();
+      state.globalSessions = sessions;
+      if (state.activeSessionIndex >= sessions.length) {
+        state.activeSessionIndex = Math.max(0, sessions.length - 1);
+      }
+      await Promise.all(sessions.map((_, i) => this.fetchAssetMetadata(i)));
+      await this.fetchPlayerCount();
+      console.log('[sessions] Successfully refreshed sessions:', sessions.length);
+    } catch (err) {
+      console.error('[sessions] Failed to refresh sessions:', err);
     }
   }
 

@@ -138,5 +138,6 @@ export interface AppHandlers {
   handleServerSelectToggle: (show: boolean) => void;
   handleDeviceCodeModalToggle: (show: boolean) => void;
   handleSessionSelect: (index: number) => Promise<void>;
+  handleRefreshSessions: () => Promise<void>;
   handleCrackModalResolve: (pseudo: string | null) => void;
 }

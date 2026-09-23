@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
-import { ArrowLeft, Server, Check, Search, Box } from 'lucide-react';
+import { ArrowLeft, Server, Check, Search, Box, RotateCw } from 'lucide-react';
 
 interface ServerSelectModalProps {
   isOpen: boolean;
   state: LauncherState;
   onSelect: (index: number) => void;
   onClose: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
@@ -15,8 +16,25 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   state,
   onSelect,
   onClose,
+  onRefresh,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (isRefreshing || !onRefresh) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        onRefresh(),
+        new Promise((resolve) => setTimeout(resolve, 500)),
+      ]);
+    } catch (err) {
+      console.error('Failed to refresh sessions:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const filteredSessions = state.globalSessions
     .map((s, index) => ({ ...s, originalIndex: index }))
@@ -54,16 +72,31 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
               </div>
             </div>
 
-            {/* Search Input in header */}
-            <div className="relative w-80">
-              <Search className="w-4 h-4 text-white/30 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher par nom ou version..."
-                className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/50 rounded-2xl pl-10 pr-4 py-2 text-xs text-white placeholder-white/30 outline-none transition-colors"
-              />
+            {/* Header Right Group: Refresh Button & Search Input */}
+            <div className="flex items-center gap-2.5">
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  aria-label="Actualiser les serveurs"
+                  title="Actualiser les serveurs"
+                  className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 hover:border-white/20 text-white/70 hover:text-white transition-all cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  <RotateCw className={`w-4 h-4 transition-transform ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+                </button>
+              )}
+
+              <div className="relative w-80">
+                <Search className="w-4 h-4 text-white/30 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher par nom ou version..."
+                  className="w-full bg-white/5 border border-white/10 focus:border-emerald-500/50 rounded-2xl pl-10 pr-4 py-2 text-xs text-white placeholder-white/30 outline-none transition-colors"
+                />
+              </div>
             </div>
           </header>
 

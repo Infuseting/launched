@@ -65,6 +65,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
             await handlers.handleSessionSelect(index);
           }}
           onClose={() => handlers.handleServerSelectToggle(false)}
+          onRefresh={handlers.handleRefreshSessions}
         />
 
         <MicrosoftDeviceCodeModal
