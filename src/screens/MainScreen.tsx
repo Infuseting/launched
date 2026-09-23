@@ -61,8 +61,19 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
     return () => clearInterval(intervalId);
   }, [backgroundPool.length, pickRandomBackground]);
 
-  // Combine links from session and assetsData
-  const links = [...(session?.links || []), ...(session?.assetsData?.links || [])];
+  // Combine and deduplicate links from session and assetsData
+  const links = React.useMemo(() => {
+    const rawLinks = [...(session?.assetsData?.links || []), ...(session?.links || [])];
+    const seen = new Set<string>();
+    return rawLinks.filter((link) => {
+      const normalized = link.url.trim().toLowerCase().replace(/\/+$/, '');
+      if (seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
+  }, [session?.links, session?.assetsData?.links]);
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-neutral-950 font-sans antialiased select-none">

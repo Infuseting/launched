@@ -52,8 +52,23 @@ async fn get_sessions(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Session>, String> {
-    let sessions =
-        SessionManager::fetch_sessions("https://galade.fr/launched/servers.json").await?;
+    let servers_url = std::env::var("LAUNCHED_SERVERS_URL")
+        .unwrap_or_else(|_| "https://launched.infuseting.fr/sessions".to_string());
+
+    let sessions = match SessionManager::fetch_sessions(&servers_url).await {
+        Ok(s) => {
+            log::info!("Fetched {} sessions from {}", s.len(), servers_url);
+            s
+        }
+        Err(e) => {
+            log::warn!(
+                "Failed to fetch sessions from {}: {}. Falling back to legacy galade.fr",
+                servers_url,
+                e
+            );
+            SessionManager::fetch_sessions("https://galade.fr/launched/servers.json").await?
+        }
+    };
 
     // Check if we have a last session to restore
     let prefs = load_prefs(&app_handle);
