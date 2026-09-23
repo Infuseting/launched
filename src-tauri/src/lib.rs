@@ -53,6 +53,7 @@ async fn get_sessions(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<Session>, String> {
     let sessions_url = std::env::var("LAUNCHED_SESSIONS_URL")
+        .or_else(|_| std::env::var("LAUNCHED_SESSION_URL"))
         .unwrap_or_else(|_| "https://launched.infuseting.fr/sessions".to_string());
     let sessions = SessionManager::fetch_sessions(&sessions_url).await?;
 
