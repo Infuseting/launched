@@ -382,7 +382,7 @@ export class LauncherController {
       }
     } else if (state.globalSessions.length > 0) {
       // First launch: let the user choose their session
-      state.serverSelectModalOpen = true;
+      state.isServerSelectOpen = true;
     }
     await this.fetchAssetMetadata(state.activeSessionIndex);
     this.silentlyRefreshToken();
