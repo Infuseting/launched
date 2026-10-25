@@ -8,7 +8,6 @@ use crate::core::meta::models::AssetIndexReference;
 use crate::core::retry::retry_with_backoff;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
-const JRE_MANIFEST_URL: &str = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
 
 #[derive(Debug, Deserialize)]
 pub struct VersionManifestIndex {
@@ -144,28 +143,6 @@ fn current_os_name() -> &'static str {
         "osx"
     } else {
         "linux"
-    }
-}
-
-fn get_jre_platform_id() -> &'static str {
-    if cfg!(target_os = "windows") {
-        if cfg!(target_arch = "x86_64") {
-            "windows-x64"
-        } else {
-            "windows-x86"
-        }
-    } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            "mac-os-arm64"
-        } else {
-            "mac-os"
-        }
-    } else {
-        if cfg!(target_arch = "x86_64") {
-            "linux"
-        } else {
-            "linux-i386"
-        }
     }
 }
 
@@ -464,115 +441,13 @@ pub async fn install_version_with_assets(
 
 /// Downloads a specific Java runtime component from Mojang's manifest.
 pub async fn download_jre(component: &str) -> Result<PathBuf, String> {
-    let client = Client::new();
     let mc_path = get_official_mc_path().await?;
-    let platform = get_jre_platform_id();
-
-    // Path where this component will be stored: .minecraft/runtime/<component>/<platform>/<component>
-    let jre_base_path = mc_path
-        .join("runtime")
-        .join(component)
-        .join(platform)
-        .join(component);
-    let java_bin = if cfg!(windows) {
-        jre_base_path.join("bin/java.exe")
-    } else {
-        jre_base_path.join("bin/java")
-    };
-
-    if java_bin.exists() {
-        return Ok(jre_base_path);
-    }
-
-    log::info!(
-        "Downloading Java runtime component: {} for {}",
-        component,
-        platform
-    );
-
-    // 1. Fetch JRE manifest index
-    let index: JreManifestIndex = client
-        .get(JRE_MANIFEST_URL)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch JRE manifest index: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse JRE manifest index: {}", e))?;
-
-    let platform_map = index
-        .platforms
-        .get(platform)
-        .ok_or_else(|| format!("Platform {} not found in JRE manifest index", platform))?;
-
-    let component_list = platform_map.get(component).ok_or_else(|| {
-        format!(
-            "Component {} not found for platform {} in JRE manifest index",
-            component, platform
-        )
-    })?;
-
-    let component_entry = component_list.first().ok_or_else(|| {
-        format!(
-            "No entries for component {} on platform {}",
-            component, platform
-        )
-    })?;
-
-    // 2. Fetch component manifest
-    let component_manifest: JreComponentManifest = client
-        .get(&component_entry.manifest.url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch JRE component manifest: {}", e))?
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse JRE component manifest: {}", e))?;
-
-    // 3. Download all files
-    let mut downloaded = 0;
-    let mut skipped = 0;
-    let total_files = component_manifest.files.len();
-
-    for (path, file) in component_manifest.files {
-        if file.r#type == "directory" {
-            let dir_path = jre_base_path.join(path);
-            fs::create_dir_all(dir_path).await.ok();
-            continue;
-        }
-
-        if file.r#type == "file" {
-            if let Some(downloads) = file.downloads {
-                if let Some(raw) = downloads.raw {
-                    let dest_path = jre_base_path.join(&path);
-                    match download_file(&client, &raw.url, &dest_path).await {
-                        Ok(true) => {
-                            downloaded += 1;
-                            // Make executable if needed
-                            #[cfg(unix)]
-                            if file.executable.unwrap_or(false) || path.contains("bin/") {
-                                use std::os::unix::fs::PermissionsExt;
-                                if let Ok(metadata) = fs::metadata(&dest_path).await {
-                                    let mut perms = metadata.permissions();
-                                    perms.set_mode(0o755);
-                                    fs::set_permissions(&dest_path, perms).await.ok();
-                                }
-                            }
-                        }
-                        Ok(false) => skipped += 1,
-                        Err(e) => log::warn!("Failed to download JRE file {}: {}", path, e),
-                    }
-                }
-            }
-        }
-    }
-
-    log::info!(
-        "JRE {} downloaded: {} new files, {} skipped out of {}.",
-        component,
-        downloaded,
-        skipped,
-        total_files
-    );
-    Ok(jre_base_path)
+    let java_bin = crate::core::install::runtime::JreManager::new(mc_path)
+        .ensure_jre(None, component)
+        .await?;
+    java_bin
+        .parent()
+        .and_then(|bin| bin.parent())
+        .map(|root| root.to_path_buf())
+        .ok_or_else(|| format!("Invalid Java executable path: {}", java_bin.display()))
 }

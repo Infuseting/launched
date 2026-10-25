@@ -81,6 +81,28 @@ pub fn get_java_binary(jre_base_path: &Path) -> PathBuf {
     }
 }
 
+/// Check the JVM itself: java.exe can exist while required runtime files are missing.
+pub(crate) async fn validate_java(java_bin: &Path) -> Result<(), String> {
+    let mut command = tokio::process::Command::new(java_bin);
+    command.arg("-version").kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(15), command.output())
+        .await
+        .map_err(|_| format!("Java validation timed out at {}", java_bin.display()))?
+        .map_err(|e| format!("Cannot run Java at {}: {}", java_bin.display(), e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "Java runtime is unusable at {} ({}): {} {}",
+            java_bin.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stdout).trim(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
 pub struct JreManager {
     engine: DownloadEngine,
     mc_path: PathBuf,
@@ -166,22 +188,12 @@ impl JreManager {
 
         let java_bin = get_java_binary(&jre_base_path);
 
-        let is_valid_jre = if java_bin.exists() {
-            let modules = jre_base_path.join("lib").join("modules");
-            let rt_jar = jre_base_path.join("lib").join("rt.jar");
-            modules.exists() || rt_jar.exists()
-        } else {
-            false
-        };
-
-        if is_valid_jre {
+        if validate_java(&java_bin).await.is_ok() {
             return Ok(java_bin);
         }
 
-        // If corrupted or partial installation exists, clean it up before downloading
-        if jre_base_path.exists() {
-            let _ = fs::remove_dir_all(&jre_base_path).await;
-        }
+        // Revalidate every manifest file and repair missing/corrupt files in place.
+        // The download engine checks SHA-1 and propagates failures.
 
         log::info!("Downloading isolated Mojang Java runtime '{}' for '{}'...", component, platform);
 
@@ -239,18 +251,6 @@ impl JreManager {
             .download_all(window, tasks, &format!("Installing Java ({})", component))
             .await?;
 
-        let is_now_valid = if java_bin.exists() {
-            let modules = jre_base_path.join("lib").join("modules");
-            let rt_jar = jre_base_path.join("lib").join("rt.jar");
-            modules.exists() || rt_jar.exists()
-        } else {
-            false
-        };
-
-        if !is_now_valid {
-            return Err(format!("Java installation incomplete: missing runtime files at {:?}", jre_base_path));
-        }
-
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -261,7 +261,32 @@ impl JreManager {
             }
         }
 
+        validate_java(&java_bin).await?;
         log::info!("Mojang JRE '{}' ready at {:?}", component, java_bin);
         Ok(java_bin)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn rejects_missing_java() {
+        let root = std::env::temp_dir().join(format!("jre-missing-{}", uuid::Uuid::new_v4()));
+        assert!(validate_java(&get_java_binary(&root)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_incomplete_runtime_even_when_binary_and_modules_exist() {
+        let root = std::env::temp_dir().join(format!("jre-partial-{}", uuid::Uuid::new_v4()));
+        let java = get_java_binary(&root);
+        fs::create_dir_all(java.parent().unwrap()).await.unwrap();
+        fs::create_dir_all(root.join("lib")).await.unwrap();
+        fs::write(&java, b"incomplete executable").await.unwrap();
+        fs::write(root.join("lib/modules"), b"partial modules").await.unwrap();
+        // Both previous presence checks accepted this installation.
+        assert!(validate_java(&java).await.is_err());
+        fs::remove_dir_all(root).await.unwrap();
     }
 }
