@@ -1,6 +1,6 @@
 use crate::auth::AuthResponse;
 use crate::core::launch::models::{LibraryRule, VersionManifest};
-use crate::core::session::Session;
+use crate::core::session::{LoaderKind, Session};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::fs;
@@ -520,6 +520,7 @@ impl LaunchArguments {
         auth: &AuthResponse,
         settings: &crate::core::settings::AppSettings,
     ) -> Result<Self, String> {
+        let version_id_owned = session.installed_version_id()?;
         ensure_pointblank_effect_hotfix(session_dir);
 
         // Resolve the official .minecraft path
@@ -536,17 +537,6 @@ impl LaunchArguments {
         let _ = fs::create_dir_all(assets_dir.join("indexes"));
         let _ = fs::create_dir_all(assets_dir.join("objects"));
 
-        let version_id_owned = if let Some(forge_version) = &session.forge {
-            format!("{}-forge-{}", session.minecraft, forge_version)
-        } else if let Some(fabric_version) = &session.fabric {
-            format!("fabric-loader-{}-{}", fabric_version, session.minecraft)
-        } else if let Some(quilt_version) = &session.quilt {
-            format!("quilt-loader-{}-{}", quilt_version, session.minecraft)
-        } else if let Some(neoforge_version) = &session.neoforge {
-            format!("neoforge-{}", neoforge_version)
-        } else {
-            session.minecraft.clone()
-        };
         let version_id = &version_id_owned;
 
         let version_json_path = official_mc_path
@@ -561,7 +551,7 @@ impl LaunchArguments {
             ));
         }
 
-        if let Some(forge_version) = &session.forge {
+        if let Some((LoaderKind::Forge, forge_version)) = session.selected_loader()? {
             if !crate::core::install::forge::is_legacy_forge_layout(&session.minecraft) {
                 let forge_client_jar = official_mc_path
                     .join("libraries")
@@ -730,9 +720,10 @@ impl LaunchArguments {
         );
 
         // 2. Add vanilla client JAR only when it is truly needed.
-        // Modern Forge (bootstraplauncher) resolves Minecraft client modules itself; adding
+        // Modern Forge and NeoForge resolve Minecraft client modules themselves; adding
         // versions/<mc>/<mc>.jar here creates module conflicts (minecraft vs _1._20._1).
-        let is_modern_forge_bootstrap = session.forge.is_some()
+        let is_modern_forge_bootstrap = matches!(session.selected_loader()?,
+            Some((LoaderKind::Forge | LoaderKind::NeoForge, _)))
             && manifest
                 .main_class
                 .contains("cpw.mods.bootstraplauncher.BootstrapLauncher");
@@ -1178,7 +1169,7 @@ impl LaunchArguments {
             jvm_args.push("--enable-native-access=ALL-UNNAMED".to_string());
 
             // Forge bootstrap libraries may reflectively access MethodHandles internals on modern JVMs.
-            if session.forge.is_some() {
+            if matches!(session.selected_loader()?, Some((LoaderKind::Forge | LoaderKind::NeoForge, _))) {
                 jvm_args.push("--add-opens=java.base/java.lang.invoke=ALL-UNNAMED".to_string());
                 jvm_args.push("--add-opens=java.base/java.util.jar=ALL-UNNAMED".to_string());
             }

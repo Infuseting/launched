@@ -31,5 +31,6 @@ src-tauri/cert_base64.txt
 
 # Agent working artifacts
 .agents/
+.verification/
 
 

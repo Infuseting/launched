@@ -53,6 +53,7 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
             .get(&url)
             .send()
             .await
+            .and_then(|response| response.error_for_status())
             .map_err(|e| format!("Failed to fetch Fabric profile for {}: {}", mc_version, e))?;
 
         let content = response
@@ -60,6 +61,11 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
             .await
             .map_err(|e| format!("Failed to read Fabric profile content: {}", e))?;
 
+        let profile: FabricProfile = serde_json::from_str(&content)
+            .map_err(|e| format!("Invalid Fabric profile: {}", e))?;
+        if profile.id != fabric_version_id || profile.inherits_from.as_deref() != Some(mc_version) {
+            return Err("Fabric profile does not match the requested Minecraft/loader version".to_string());
+        }
         fs::write(&version_json_path, &content)
             .await
             .map_err(|e| format!("Failed to save Fabric version JSON: {}", e))?;
@@ -72,6 +78,10 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
 
     let profile: FabricProfile = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse Fabric profile: {}", e))?;
+    if profile.id != fabric_version_id || profile.inherits_from.as_deref() != Some(mc_version)
+        || profile.main_class.as_deref().unwrap_or("").is_empty() || profile.libraries.is_empty() {
+        return Err("Invalid or mismatched Fabric profile. Remove the cached profile and re-sync.".to_string());
+    }
 
     for lib in profile.libraries {
         // Resolve library path
@@ -92,7 +102,7 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
             .join(version)
             .join(&jar_name);
 
-        if !lib_path.exists() {
+        if !lib_path.is_file() || fs::metadata(&lib_path).await.map(|m| m.len() == 0).unwrap_or(true) {
             if let Some(parent) = lib_path.parent() {
                 fs::create_dir_all(parent)
                     .await
@@ -108,12 +118,12 @@ pub async fn install_fabric(mc_version: &str, loader_version: &str) -> Result<()
 
             let download_url = format!("{}{}", formatted_base, package_path_to_maven_path(&lib.name));
 
-            // Skip errors for individual libraries to keep installation robust
-            if let Ok(response) = client.get(&download_url).send().await {
-                if let Ok(bytes) = response.bytes().await {
-                    let _ = fs::write(&lib_path, &bytes).await;
-                }
-            }
+            let bytes = client.get(&download_url).send().await
+                .and_then(|response| response.error_for_status())
+                .map_err(|e| format!("Failed to download Fabric library {}: {}", lib.name, e))?
+                .bytes().await.map_err(|e| e.to_string())?;
+            fs::write(&lib_path, &bytes).await
+                .map_err(|e| format!("Failed to save Fabric library {}: {}", lib.name, e))?;
         }
     }
 
