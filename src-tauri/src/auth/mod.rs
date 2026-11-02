@@ -23,3 +23,4 @@ pub trait AuthStrategy {
      */
     async fn authenticate(&self, window: &tauri::Window) -> Result<AuthResponse, String>;
 }
+pub mod discord;

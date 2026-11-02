@@ -14,7 +14,21 @@ export async function launchGame(session: Session, showLogs: boolean, crackPseud
 }
 
 export async function fetchJson(url: string): Promise<AssetMetadata> {
-  return await invoke<AssetMetadata>("fetch_json", { url });
+  const metadata = await invoke<AssetMetadata>("fetch_json", { url });
+  const protectedImage = (source: string): Promise<string> => {
+    const imageUrl = new URL(source, url);
+    if (imageUrl.origin !== new URL(url).origin || !imageUrl.pathname.startsWith('/api/sessions/')) {
+      return Promise.resolve(imageUrl.toString());
+    }
+    return invoke<string>('fetch_session_image', { url: imageUrl.toString() });
+  };
+  const [background, logo, icon, links] = await Promise.all([
+    Array.isArray(metadata.background) ? Promise.all(metadata.background.map(protectedImage)) : protectedImage(metadata.background),
+    metadata.logo ? protectedImage(metadata.logo) : undefined,
+    metadata.icon ? protectedImage(metadata.icon) : undefined,
+    Promise.all((metadata.links ?? []).map(async link => ({ ...link, icon: await protectedImage(link.icon) }))),
+  ]);
+  return { background, logo, icon, links };
 }
 
 export async function getActiveSessionName(): Promise<string | null> {

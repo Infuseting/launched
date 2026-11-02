@@ -8,6 +8,7 @@ interface ServerSelectModalProps {
   state: LauncherState;
   onSelect: (index: number) => void;
   onClose: () => void;
+  onRefresh: () => Promise<void>;
 }
 
 export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
@@ -15,6 +16,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   state,
   onSelect,
   onClose,
+  onRefresh,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -70,11 +72,14 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
           {/* Main Grid Content */}
           <main className="flex-1 overflow-y-auto p-10 custom-scrollbar">
             <div className="max-w-6xl mx-auto space-y-6">
-              <div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
                 <h2 className="text-2xl font-black tracking-tight">Choisissez votre Destination</h2>
                 <p className="text-white/40 text-xs mt-1">
                   Sélectionnez le serveur ou le modpack sur lequel vous souhaitez vous connecter.
                 </p>
+                </div>
+                <button type="button" disabled={state.sessionsLoading || state.isSyncing} onClick={() => void onRefresh()} className="min-h-11 shrink-0 rounded-xl border border-white/10 px-4 text-xs font-semibold text-white/80 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50">{state.sessionsLoading ? 'Actualisation…' : 'Actualiser'}</button>
               </div>
 
               {filteredSessions.length === 0 ? (

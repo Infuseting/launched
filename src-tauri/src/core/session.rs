@@ -133,10 +133,8 @@ impl SessionManager {
     /**
      * Fetches sessions from the remote servers.json URL.
      */
-    pub async fn fetch_sessions(url: &str) -> Result<Vec<Session>, String> {
-        reqwest::get(url)
-            .await
-            .map_err(|e| e.to_string())?
+    pub async fn fetch_sessions(app: &tauri::AppHandle, url: &str) -> Result<Vec<Session>, String> {
+        crate::auth::discord::site_get(app, url).await?
             .json::<Vec<Session>>()
             .await
             .map_err(|e| e.to_string())

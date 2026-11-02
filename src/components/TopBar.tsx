@@ -40,14 +40,14 @@ export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick 
         <div className="flex flex-col pr-2">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-bold text-white tracking-tight group-hover:text-emerald-300 transition-colors">
-              {user ? user.name : 'Non connecté'}
+              {user ? user.name : state.discordUser?.username ?? 'Non connecté'}
             </span>
             {user && (
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 opacity-80" />
             )}
           </div>
           <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-            {user ? 'Compte Actif' : 'Mode Invité'}
+            {user ? 'Compte Minecraft' : 'Compte Discord'}
           </span>
         </div>
       </motion.div>

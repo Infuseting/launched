@@ -71,6 +71,11 @@ export class LauncherController {
 
   constructor() {
     this.handlers = {
+      handleDiscordLogin: () => this.handleDiscordLogin(),
+      handleDiscordLogout: () => this.handleDiscordLogout(),
+      handleDiscordCancel: () => authService.cancelDiscordLogin(),
+      handleDiscordRestore: () => this.restoreDiscord(),
+      handleRefreshSessions: () => this.loadSessions(),
       syncAndLoad: () => this.syncAndLoad(),
       fetchAssetMetadata: (index: number) => this.fetchAssetMetadata(index),
       handleAccountSwap: (uuid: string) => this.handleAccountSwap(uuid),
@@ -119,6 +124,7 @@ export class LauncherController {
    */
   public async initialize(): Promise<void> {
     this.registerExternalLinksHandler();
+    await listen('discord-auth-required', () => this.clearDiscordState());
     await this.loadInitialData();
 
     await this.checkForUpdates(true);
@@ -217,7 +223,7 @@ export class LauncherController {
   }
 
   private async syncAndLoad(): Promise<void> {
-    if (state.isSyncing || state.globalSessions.length === 0) {
+    if (!state.discordUser || state.isSyncing || state.globalSessions.length === 0) {
       return;
     }
 
@@ -352,13 +358,13 @@ export class LauncherController {
     }
 
     try {
-      session.assetsData = await sessionService.fetchJson(session.assetsPath);
+      const assets = await sessionService.fetchJson(session.assetsPath);
+      if (state.discordUser && state.globalSessions[index] === session) session.assetsData = assets;
     } catch (error) {
       console.error(`Failed to fetch assets for ${session.name}:`, error);
     }
   }
   private async loadInitialData(): Promise<void> {
-    state.globalSessions = await sessionService.getSessions();
     state.currentSettings = await settingsService.getSettings();
     state.allAccounts = await authService.getAllAccounts();
 
@@ -377,15 +383,86 @@ export class LauncherController {
     } catch (error) {
       console.error('Failed to get auth:', error);
     }
-    const lastSessionName = await sessionService.getActiveSessionName();
-    if (lastSessionName) {
-      const index = state.globalSessions.findIndex(session => session.name === lastSessionName);
-      if (index >= 0) {
-        state.activeSessionIndex = index;
-      }
-    }
-    await this.fetchAssetMetadata(state.activeSessionIndex);
+    await this.restoreDiscord();
     this.silentlyRefreshToken();
+  }
+
+  private clearDiscordState(): void {
+    state.discordUser = null;
+    state.globalSessions = [];
+    state.activeSessionIndex = 0;
+    state.serverStatus = null;
+    state.isSettingsOpen = false;
+    state.isServerSelectOpen = false;
+    state.discordModalOpen = false;
+  }
+
+  private async restoreDiscord(): Promise<void> {
+    state.discordChecking = true;
+    state.discordError = null;
+    try {
+      state.discordUser = await authService.getDiscordAuth();
+      if (state.discordUser) await this.loadSessions();
+    } catch (error) {
+      state.discordError = getErrorMessage(error);
+    } finally {
+      state.discordChecking = false;
+    }
+  }
+
+  private async handleDiscordLogin(): Promise<void> {
+    if (state.discordBusy) return;
+    state.discordBusy = true;
+    state.discordError = null;
+    try {
+      state.discordUser = await authService.loginDiscord();
+      await this.loadSessions();
+    } catch (error) {
+      state.discordError = getErrorMessage(error);
+    } finally {
+      state.discordBusy = false;
+    }
+  }
+
+  private async handleDiscordLogout(): Promise<void> {
+    if (state.discordBusy || state.isSyncing) return;
+    state.discordBusy = true;
+    state.discordError = null;
+    try {
+      await authService.logoutDiscord();
+      this.clearDiscordState();
+    } catch (error) {
+      state.discordError = getErrorMessage(error);
+    } finally {
+      state.discordBusy = false;
+    }
+  }
+
+  private async loadSessions(): Promise<void> {
+    if (!state.discordUser || state.sessionsLoading) return;
+    const identity = state.discordUser.discordId;
+    const selectedUrl = state.globalSessions[state.activeSessionIndex]?.syncUrl;
+    state.sessionsLoading = true;
+    state.sessionsError = null;
+    try {
+      const sessions = await sessionService.getSessions();
+      if (state.discordUser?.discordId !== identity) return;
+      state.globalSessions = sessions;
+      state.activeSessionIndex = Math.max(0, sessions.findIndex(session => session.syncUrl === selectedUrl));
+      const lastSessionName = await sessionService.getActiveSessionName();
+      if (!selectedUrl && lastSessionName) {
+        const index = state.globalSessions.findIndex(session => session.name === lastSessionName);
+        if (index >= 0) {
+          state.activeSessionIndex = index;
+        }
+      }
+      await this.fetchAssetMetadata(state.activeSessionIndex);
+    } catch (error) {
+      state.globalSessions = [];
+      state.sessionsError = getErrorMessage(error);
+    } finally {
+      state.sessionsLoading = false;
+    }
   }
 
   private silentlyRefreshToken(): void {
@@ -453,6 +530,7 @@ export class LauncherController {
   }
 
   private triggerDiscordPromptIfEligible(): void {
+    if (!state.discordUser) return;
     if (!this.shouldShowDiscordPrompt()) {
       return;
     }

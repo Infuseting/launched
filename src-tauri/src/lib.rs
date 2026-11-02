@@ -3,6 +3,7 @@ pub mod core;
 pub mod ui;
 
 use crate::auth::{microsoft::MicrosoftAuth, AuthResponse, AuthStrategy};
+use crate::auth::discord::{self, get_discord_auth, login_discord, logout_discord, cancel_discord_login, fetch_session_image};
 use crate::core::install::InstallService;
 use crate::core::launch::args::LaunchArguments;
 use crate::core::launch::LaunchService;
@@ -55,20 +56,16 @@ async fn get_sessions(
     let servers_url = std::env::var("LAUNCHED_SERVERS_URL")
         .unwrap_or_else(|_| "https://launched.infuseting.fr/sessions".to_string());
 
-    let sessions = match SessionManager::fetch_sessions(&servers_url).await {
-        Ok(s) => {
-            log::info!("Fetched {} sessions from {}", s.len(), servers_url);
-            s
-        }
-        Err(e) => {
-            log::warn!(
-                "Failed to fetch sessions from {}: {}. Falling back to legacy galade.fr",
-                servers_url,
-                e
-            );
-            SessionManager::fetch_sessions("https://galade.fr/launched/servers.json").await?
-        }
+    let servers_url = if std::env::var("LAUNCHED_SERVERS_URL").is_ok() { servers_url } else {
+        discord::site_url()?.join("sessions").map_err(|e| e.to_string())?.to_string()
     };
+    let sessions = SessionManager::fetch_sessions(&app_handle, &servers_url).await?;
+    {
+        let mut active = state.active_session.lock().unwrap();
+        if let Some(previous) = active.as_ref() {
+            *active = sessions.iter().find(|s| s.sync_url == previous.sync_url).cloned();
+        }
+    }
 
     // Check if we have a last session to restore
     let prefs = load_prefs(&app_handle);
@@ -83,6 +80,14 @@ async fn get_sessions(
     }
 
     Ok(sessions)
+}
+
+// Resolve fresh server configuration before sync/launch, including already installed sessions.
+async fn authorized_session(app: &tauri::AppHandle, requested: &Session) -> Result<Session, String> {
+    let url = std::env::var("LAUNCHED_SERVERS_URL").unwrap_or(discord::site_url()?.join("sessions").map_err(|e| e.to_string())?.to_string());
+    SessionManager::fetch_sessions(app, &url).await?.into_iter()
+        .find(|session| session.sync_url == requested.sync_url)
+        .ok_or_else(|| "Vous n’avez plus accès à cette session. Actualisez la liste des sessions.".into())
 }
 
 #[tauri::command]
@@ -106,6 +111,7 @@ async fn sync_session(
     window: tauri::Window,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    let session = authorized_session(&app_handle, &session).await?;
     let install_service = InstallService;
     let sync_service = SyncService;
     let base_dir = app_handle.path().app_data_dir().unwrap();
@@ -130,7 +136,7 @@ async fn sync_session(
     // 2. Sync session-specific files
     std::fs::create_dir_all(&session_dir).map_err(|e| e.to_string())?;
     sync_service
-        .sync(&window, &session_dir, &session.sync_url, &session.sync_dir)
+        .sync(&app_handle, &window, &session_dir, &session.sync_url, &session.sync_dir)
         .await
 }
 
@@ -149,6 +155,10 @@ async fn launch_game(
     let session = session
         .or_else(|| state.active_session.lock().unwrap().clone())
         .ok_or_else(|| "No session selected".to_string())?;
+    let session = authorized_session(&app_handle, &session).await?;
+    if crack_pseudo.is_some() && !session.crack.unwrap_or(false) {
+        return Err("Cette session requiert un compte Minecraft.".into());
+    }
 
     let session_dir = base_dir.join("sessions").join(&session.name);
 
@@ -366,10 +376,8 @@ async fn ping_service(url: String) -> Result<bool, String> {
 
 
 #[tauri::command]
-async fn fetch_json(url: String) -> Result<serde_json::Value, String> {
-    reqwest::get(url)
-        .await
-        .map_err(|e| e.to_string())?
+async fn fetch_json(app_handle: tauri::AppHandle, url: String) -> Result<serde_json::Value, String> {
+    discord::site_get(&app_handle, &url).await?
         .json::<serde_json::Value>()
         .await
         .map_err(|e| e.to_string())
@@ -619,8 +627,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
+        .manage(discord::DiscordState::default())
         .invoke_handler(tauri::generate_handler![
             get_sessions,
+            get_discord_auth,
+            login_discord,
+            cancel_discord_login,
+            logout_discord,
+            fetch_session_image,
             sync_session,
             launch_game,
             login_microsoft,

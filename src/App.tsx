@@ -9,6 +9,7 @@ import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';
 import CrackModal from './components/CrackModal';
 import DiscordCommunityModal from './components/DiscordCommunityModal';
+import DiscordLoginScreen from './components/DiscordLoginScreen';
 
 interface AppProps {
   handlers: AppHandlers;
@@ -53,8 +54,17 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
 
   return (
     <Layout>
+      {!launcherState.discordUser || launcherState.discordChecking ? <>
+        <DiscordLoginScreen state={launcherState} handlers={handlers} />
+        <UpdatePromptModal state={launcherState} handlers={handlers} />
+      </> :
       <div className="relative w-full h-full">
         <MainScreen handlers={handlers} />
+        {launcherState.sessionsLoading && <p role="status" className="absolute inset-x-8 top-24 z-40 rounded-2xl bg-neutral-900/95 p-4 text-center text-sm text-white/80">Chargement de vos sessions…</p>}
+        {(launcherState.sessionsError || (!launcherState.sessionsLoading && launcherState.globalSessions.length === 0)) && <div className="absolute inset-x-8 top-24 z-40 rounded-2xl border border-white/10 bg-neutral-900/95 p-5 text-center text-white">
+          <p role={launcherState.sessionsError ? 'alert' : 'status'} className="text-sm">{launcherState.sessionsError || 'Aucune session accessible pour ce compte Discord. Demandez un accès au créateur de votre session.'}</p>
+          <button type="button" disabled={launcherState.sessionsLoading} onClick={() => void handlers.handleRefreshSessions()} className="mt-3 min-h-11 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20 disabled:opacity-50">Actualiser les sessions</button>
+        </div>}
 
         <SettingsModal
           isOpen={launcherState.isSettingsOpen}
@@ -69,6 +79,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
             await handlers.handleSessionSelect(index);
           }}
           onClose={() => handlers.handleServerSelectToggle(false)}
+          onRefresh={handlers.handleRefreshSessions}
         />
 
         <MicrosoftDeviceCodeModal
@@ -94,7 +105,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           onJoin={handlers.handleOpenDiscord}
           onDismiss={handlers.handleDiscordModalDismiss}
         />
-      </div>
+      </div>}
     </Layout>
   );
 };

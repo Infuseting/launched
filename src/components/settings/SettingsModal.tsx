@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { state as sourceState, type LauncherState } from '../../state';
 import type { AppHandlers, AppSettings, SessionSettings } from '../../types';
-import AccountSwitcher from './AccountSwitcher';
+import AccountsTab from './AccountsTab';
 import SkinTab from '../skin/SkinTab';
 import SettingsGeneralTab from './SettingsGeneralTab';
 import SettingsAdvancedTab from './SettingsAdvancedTab';
@@ -21,6 +21,7 @@ interface SettingsModalProps {
     | 'saveSettings'
     | 'handleCheckUpdate'
     | 'handleInstallUpdate'
+    | 'handleDiscordLogout'
   >;
 }
 
@@ -144,7 +145,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const tabs = [
-    { id: 'account', label: 'Comptes & Profil', icon: Users, desc: 'Gestion des sessions Microsoft et crack' },
+    { id: 'account', label: 'Comptes', icon: Users, desc: 'Minecraft et Discord' },
     { id: 'skin', label: 'Skin Studio 3D', icon: Palette, desc: 'Aperçu 3D, bibliothèque et personnalisation' },
     { id: 'general', label: 'Général & RAM', icon: Sliders, desc: 'Mémoire allouée, logs et mises à jour' },
     { id: 'advanced', label: 'Options Avancées', icon: Terminal, desc: 'Arguments JVM et commande wrapper' },
@@ -175,7 +176,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <div className="flex items-center gap-2">
                 <span className="text-sm font-black tracking-tight">Paramètres</span>
-                {sessionName && (
+                {sessionName && activeSettingsTab !== 'account' && (
                   <span className="text-[11px] font-medium text-white/50 bg-white/5 px-2.5 py-0.5 rounded-lg border border-white/5 flex items-center gap-1.5">
                     <Layers className="w-3 h-3 text-emerald-400" />
                     Session : {sessionName}
@@ -184,7 +185,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-[11px] text-white/40 font-medium">
+            <div className={`items-center gap-2 text-[11px] text-white/40 font-medium ${activeSettingsTab === 'account' ? 'hidden' : 'flex'}`}>
               <span>Modifications sauvegardées automatiquement</span>
             </div>
           </header>
@@ -192,7 +193,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Main Full-Page Body */}
           <div className="flex-1 flex overflow-hidden">
             {/* Left Sidebar Navigation */}
-            <aside className="w-72 border-r border-white/10 bg-black/20 p-6 flex flex-col justify-between flex-shrink-0">
+            <aside className="w-56 lg:w-64 border-r border-white/10 bg-black/20 p-4 lg:p-5 flex flex-col justify-between flex-shrink-0">
               <nav className="space-y-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/30 px-3 block mb-3">
                   Navigation
@@ -241,7 +242,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </aside>
 
             {/* Right Content Area */}
-            <main className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            <main className="flex-1 min-w-0 overflow-y-auto p-6 xl:p-10 custom-scrollbar">
               <div className="max-w-4xl mx-auto">
                 <AnimatePresence mode="wait">
                   {activeSettingsTab === 'account' && (
@@ -253,20 +254,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       transition={{ duration: 0.2 }}
                       className="space-y-6"
                     >
-                      <div>
-                        <h2 className="text-2xl font-black tracking-tight">Gestion des Comptes</h2>
-                        <p className="text-white/40 text-xs mt-1">
-                          Connectez et gérez vos comptes Minecraft pour rejoindre vos serveurs préférés.
-                        </p>
-                      </div>
-
-                      <AccountSwitcher
-                        accounts={state.allAccounts}
-                        activeUuid={state.authCache?.uuid}
-                        onSwap={handlers.handleAccountSwap}
-                        onRemove={handlers.handleAccountRemove}
-                        onAdd={handlers.handleLoginAdd}
-                      />
+                      <AccountsTab state={state} handlers={handlers} />
                     </motion.div>
                   )}
 

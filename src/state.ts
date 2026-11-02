@@ -2,6 +2,12 @@ import React from 'react';
 import type { LauncherStateModel } from './types';
 
 const rawState: LauncherStateModel = {
+  discordUser: null,
+  discordChecking: true,
+  discordBusy: false,
+  discordError: null,
+  sessionsLoading: false,
+  sessionsError: null,
   activeSessionIndex: 0,
   globalSessions: [],
   currentSettings: {

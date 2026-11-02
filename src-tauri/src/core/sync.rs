@@ -50,10 +50,8 @@ impl SyncService {
     /**
      * Fetches manifest from the remote URL.
      */
-    pub async fn fetch_manifest(&self, url: &str) -> Result<Vec<SyncFile>, String> {
-        reqwest::get(url)
-            .await
-            .map_err(|e| e.to_string())?
+    pub async fn fetch_manifest(&self, app: &tauri::AppHandle, url: &str) -> Result<Vec<SyncFile>, String> {
+        crate::auth::discord::site_get(app, url).await?
             .json::<Vec<SyncFile>>()
             .await
             .map_err(|e| e.to_string())
@@ -64,12 +62,13 @@ impl SyncService {
      */
     pub async fn sync(
         &self,
+        app: &tauri::AppHandle,
         window: &tauri::Window,
         base_dir: &Path,
         manifest_url: &str,
         sync_dirs: &str,
     ) -> Result<(), String> {
-        let manifest = self.fetch_manifest(manifest_url).await?;
+        let manifest = self.fetch_manifest(app, manifest_url).await?;
         let sync_dir_list: Vec<&str> = sync_dirs.split(',').collect();
 
         // 1. Cleanup: Scan each sync_dir and delete files not in manifest
@@ -159,7 +158,7 @@ impl SyncService {
             }
 
             let file_url = format!("{}/{}", base_download_url, normalized_name);
-            self.download_file(&file_url, &local_file_path, Some(&sync_file.md5)).await?;
+            self.download_file(app, &file_url, &local_file_path, Some(&sync_file.md5)).await?;
         }
 
         Ok(())
@@ -236,13 +235,13 @@ impl SyncService {
     /**
      * Downloads a file from a URL to a destination path with retry logic.
      */
-    async fn download_file(&self, url: &str, dest: &Path, expected_md5: Option<&str>) -> Result<(), String> {
+    async fn download_file(&self, app: &tauri::AppHandle, url: &str, dest: &Path, expected_md5: Option<&str>) -> Result<(), String> {
         let url = url.to_string();
         let dest = dest.to_path_buf();
         let expected_md5 = expected_md5.map(|s| s.to_string());
 
         retry_with_backoff(|| async {
-            let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+            let response = crate::auth::discord::site_get(app, &url).await?;
             if !response.status().is_success() {
                 return Err(format!(
                     "Failed to download file from {}: status {}",

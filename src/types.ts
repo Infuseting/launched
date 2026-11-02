@@ -4,6 +4,12 @@ export interface AuthResponse {
   access_token: string;
 }
 
+export interface DiscordUser {
+  discordId: string;
+  username: string;
+  avatar: string | null;
+}
+
 export interface DeviceCodePayload {
   user_code: string;
   verification_uri: string;
@@ -97,6 +103,12 @@ export interface AppSettings {
 }
 
 export interface LauncherStateModel {
+  discordUser: DiscordUser | null;
+  discordChecking: boolean;
+  discordBusy: boolean;
+  discordError: string | null;
+  sessionsLoading: boolean;
+  sessionsError: string | null;
   activeSessionIndex: number;
   globalSessions: Session[];
   currentSettings: AppSettings;
@@ -127,6 +139,11 @@ export interface LauncherStateModel {
 }
 
 export interface AppHandlers {
+  handleDiscordLogin: () => Promise<void>;
+  handleDiscordLogout: () => Promise<void>;
+  handleDiscordCancel: () => Promise<void>;
+  handleDiscordRestore: () => Promise<void>;
+  handleRefreshSessions: () => Promise<void>;
   syncAndLoad: () => Promise<void>;
   fetchAssetMetadata: (index: number) => Promise<void>;
   handleAccountSwap: (uuid: string) => Promise<void>;

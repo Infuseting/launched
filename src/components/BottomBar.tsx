@@ -159,7 +159,7 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
           whileHover={!isSyncing ? { scale: 1.03, y: -2 } : {}}
           whileTap={!isSyncing ? { scale: 0.97 } : {}}
           onClick={onPlayClick}
-          disabled={isSyncing}
+          disabled={isSyncing || !session || state.sessionsLoading}
           className={`
             relative overflow-hidden
             w-full h-[60px] rounded-2xl
