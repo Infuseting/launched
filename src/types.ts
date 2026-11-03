@@ -99,7 +99,7 @@ export interface AppSettings {
   sessions: Record<string, SessionSettings>;
   defaultSettings: SessionSettings;
   lastCrackPseudo?: string;
-  dontShowDiscordPrompt?: boolean;
+  discordLoginSkipped?: boolean;
 }
 
 export interface LauncherStateModel {
@@ -136,7 +136,6 @@ export interface LauncherStateModel {
   serverStatusInterval: ReturnType<typeof setInterval> | null;
   crackModalOpen: boolean;
   crackModalDefaultPseudo: string;
-  discordModalOpen: boolean;
 }
 
 export interface AppHandlers {
@@ -161,6 +160,4 @@ export interface AppHandlers {
   handleDeviceCodeModalToggle: (show: boolean) => void;
   handleSessionSelect: (index: number) => Promise<void>;
   handleCrackModalResolve: (pseudo: string | null) => void;
-  handleDiscordModalDismiss: (permanent: boolean) => Promise<void>;
-  handleOpenDiscord: () => Promise<void>;
 }

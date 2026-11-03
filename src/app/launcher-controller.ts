@@ -108,9 +108,7 @@ export class LauncherController {
         if (this.currentCrackModalResolve) {
           this.currentCrackModalResolve(pseudo);
         }
-      },
-      handleDiscordModalDismiss: (permanent: boolean) => this.handleDiscordModalDismiss(permanent),
-      handleOpenDiscord: () => this.handleOpenDiscord()
+      }
     };
   }
 
@@ -126,11 +124,10 @@ export class LauncherController {
    */
   public async initialize(): Promise<void> {
     this.registerExternalLinksHandler();
-    await listen('discord-auth-required', () => this.clearDiscordState());
+    await listen('discord-auth-required', () => { void this.handleDiscordAuthRequired(); });
     await this.loadInitialData();
 
     await this.checkForUpdates(true);
-    this.triggerDiscordPromptIfEligible();
     this.scheduleStartupUpdateRetries();
 
     setTimeout(() => {
@@ -402,7 +399,6 @@ export class LauncherController {
     state.serverStatus = null;
     state.isSettingsOpen = false;
     state.isServerSelectOpen = false;
-    state.discordModalOpen = false;
   }
 
   private async restoreDiscord(): Promise<void> {
@@ -412,14 +408,53 @@ export class LauncherController {
     state.discordChecking = true;
     state.discordError = null;
     try {
+      if (state.currentSettings.discordLoginSkipped === true) {
+        await this.activatePublicAccess();
+        return;
+      }
       const user = await authService.getDiscordAuth();
       if (revision !== this.discordAccessRevision) return;
       state.discordUser = user;
-      if (state.discordUser) await this.loadSessions();
+      if (user) {
+        await this.rememberDiscordChoice(false);
+        await this.loadSessions();
+      } else if (state.currentSettings.discordLoginSkipped === false) {
+        await this.activatePublicAccess();
+      }
     } catch (error) {
-      if (revision === this.discordAccessRevision) state.discordError = getErrorMessage(error);
+      if (revision === this.discordAccessRevision) {
+        if (state.currentSettings.discordLoginSkipped !== undefined) {
+          await this.activatePublicAccess(false);
+        }
+        state.discordError = getErrorMessage(error);
+      }
     } finally {
       if (revision === this.discordAccessRevision) state.discordChecking = false;
+    }
+  }
+
+  private async rememberDiscordChoice(skipped: boolean): Promise<void> {
+    if (state.currentSettings.discordLoginSkipped === skipped) return;
+    state.currentSettings.discordLoginSkipped = skipped;
+    await this.saveSettings();
+  }
+
+  private async activatePublicAccess(remember = true): Promise<void> {
+    await authService.continueWithoutDiscord();
+    this.clearDiscordState();
+    state.discordSkipped = true;
+    if (remember) await this.rememberDiscordChoice(true);
+    await this.loadSessions();
+  }
+
+  private async handleDiscordAuthRequired(): Promise<void> {
+    const hasChosen = state.currentSettings.discordLoginSkipped !== undefined;
+    this.clearDiscordState();
+    if (!hasChosen) return;
+    try {
+      await this.activatePublicAccess();
+    } catch (error) {
+      state.discordError = getErrorMessage(error);
     }
   }
 
@@ -429,10 +464,7 @@ export class LauncherController {
     state.discordBusy = true;
     state.discordError = null;
     try {
-      await authService.continueWithoutDiscord();
-      this.clearDiscordState();
-      state.discordSkipped = true;
-      await this.loadSessions();
+      await this.activatePublicAccess();
     } catch (error) {
       state.discordError = getErrorMessage(error);
     } finally {
@@ -449,6 +481,7 @@ export class LauncherController {
       const user = await authService.loginDiscord();
       this.clearDiscordState();
       state.discordUser = user;
+      await this.rememberDiscordChoice(false);
       await this.loadSessions();
     } catch (error) {
       state.discordError = getErrorMessage(error);
@@ -464,6 +497,7 @@ export class LauncherController {
     try {
       await authService.logoutDiscord();
       this.clearDiscordState();
+      await this.activatePublicAccess();
     } catch (error) {
       state.discordError = getErrorMessage(error);
     } finally {
@@ -550,71 +584,12 @@ export class LauncherController {
     }
   }
 
-  private shouldShowDiscordPrompt(): boolean {
-    if (state.currentSettings.dontShowDiscordPrompt) {
-      return false;
-    }
-    try {
-      if (localStorage.getItem('launched_dont_show_discord_prompt') === 'true') {
-        return false;
-      }
-    } catch {
-      // Ignore localStorage read errors
-    }
-    return true;
-  }
-
-  private triggerDiscordPromptIfEligible(): void {
-    if (!state.discordUser) return;
-    if (!this.shouldShowDiscordPrompt()) {
-      return;
-    }
-    const isUpdateBlocking =
-      !!state.updateManifest &&
-      !state.isInstallingUpdate &&
-      state.dismissedUpdateVersion !== state.updateManifest.version;
-
-    if (!isUpdateBlocking) {
-      state.discordModalOpen = true;
-    }
-  }
-
   private dismissUpdatePrompt(): void {
     if (!state.updateManifest) {
       return;
     }
 
     state.dismissedUpdateVersion = state.updateManifest.version;
-    this.triggerDiscordPromptIfEligible();
-  }
-
-  private async handleOpenDiscord(): Promise<void> {
-    try {
-      await open('https://discord.gg/BWaj9JzsX6');
-    } catch (err) {
-      console.error('Failed to open Discord link:', err);
-    }
-    state.discordModalOpen = false;
-    state.currentSettings.dontShowDiscordPrompt = true;
-    try {
-      localStorage.setItem('launched_dont_show_discord_prompt', 'true');
-    } catch {
-      // Ignore
-    }
-    await this.saveSettings();
-  }
-
-  private async handleDiscordModalDismiss(permanent: boolean): Promise<void> {
-    state.discordModalOpen = false;
-    if (permanent) {
-      state.currentSettings.dontShowDiscordPrompt = true;
-      try {
-        localStorage.setItem('launched_dont_show_discord_prompt', 'true');
-      } catch {
-        // Ignore
-      }
-      await this.saveSettings();
-    }
   }
 
   private async handleInstallUpdate(): Promise<void> {

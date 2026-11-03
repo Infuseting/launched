@@ -8,8 +8,8 @@ import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';
 import CrackModal from './components/CrackModal';
-import DiscordCommunityModal from './components/DiscordCommunityModal';
 import DiscordLoginScreen from './components/DiscordLoginScreen';
+import { LoaderCircle } from 'lucide-react';
 
 interface AppProps {
   handlers: AppHandlers;
@@ -35,9 +35,6 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
         ) {
           e.preventDefault();
           handlers.handleDismissUpdatePrompt();
-        } else if (launcherState.discordModalOpen) {
-          // Handled inside DiscordCommunityModal (only dismisses if 5s countdown finished)
-          e.preventDefault();
         } else if (launcherState.isServerSelectOpen) {
           e.preventDefault();
           handlers.handleServerSelectToggle(false);
@@ -54,7 +51,10 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
 
   return (
     <Layout>
-      {(!launcherState.discordUser && !launcherState.discordSkipped) || launcherState.discordChecking ? <>
+      {launcherState.discordChecking ? <div role="status" className="flex h-full items-center justify-center gap-2 bg-neutral-950 text-sm text-white/60">
+        <LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />
+        Chargement…
+      </div> : !launcherState.discordUser && !launcherState.discordSkipped ? <>
         <DiscordLoginScreen state={launcherState} handlers={handlers} />
         <UpdatePromptModal state={launcherState} handlers={handlers} />
       </> :
@@ -98,12 +98,6 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           isOpen={launcherState.crackModalOpen}
           defaultPseudo={launcherState.crackModalDefaultPseudo}
           onResolve={handlers.handleCrackModalResolve}
-        />
-
-        <DiscordCommunityModal
-          isOpen={launcherState.discordModalOpen}
-          onJoin={handlers.handleOpenDiscord}
-          onDismiss={handlers.handleDiscordModalDismiss}
         />
       </div>}
     </Layout>

@@ -20,8 +20,8 @@ pub struct AppSettings {
     pub game_resolution: String,
     pub active_account_uuid: Option<String>,
     pub last_crack_pseudo: Option<String>,
-    #[serde(default)]
-    pub dont_show_discord_prompt: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discord_login_skipped: Option<bool>,
 
     // Session-specific Overrides
     pub sessions: HashMap<String, SessionSettings>,
@@ -60,7 +60,7 @@ impl Default for AppSettings {
             game_resolution: "400x300".to_string(),
             active_account_uuid: None,
             last_crack_pseudo: None,
-            dont_show_discord_prompt: None,
+            discord_login_skipped: None,
             sessions: HashMap::new(),
             default_settings: SessionSettings::default(),
         }
@@ -113,7 +113,7 @@ impl SettingsManager {
                     game_resolution: old.game_resolution,
                     active_account_uuid: old.active_account_uuid,
                     last_crack_pseudo: old.last_crack_pseudo,
-                    dont_show_discord_prompt: None,
+                    discord_login_skipped: None,
                     sessions: HashMap::new(),
                     default_settings: SessionSettings {
                         min_ram: old.min_ram,

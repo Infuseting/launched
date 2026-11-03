@@ -8,6 +8,7 @@ const state = {
   globalSessions: [], activeSessionIndex: 0, sessionsLoading: false, sessionsError: null,
   isSyncing: false, isSettingsOpen: false, isServerSelectOpen: false,
   allAccounts: [{ uuid: 'minecraft', name: 'Player' }], authCache: { uuid: 'minecraft' },
+  currentSettings: {},
 };
 const user = { discordId: '123456789012345678', username: 'test.user', avatar: null };
 const rows = [{ name: 'Public', syncUrl: 'https://launcher.test/public' }, { name: 'Private', syncUrl: 'https://launcher.test/private' }];
@@ -21,10 +22,12 @@ let revoked = false;
 let guest = false;
 let pendingRestore = null;
 let pendingSessions = null;
+let savedSettings = {};
+let restoreCalls = 0;
 globalThis.__discordControllerTest = {
   state,
   auth: {
-    getDiscordAuth: async () => { if (pendingRestore) return pendingRestore; if (restoreError) throw restoreError; return guest ? null : storedUser; },
+    getDiscordAuth: async () => { restoreCalls++; if (pendingRestore) return pendingRestore; if (restoreError) throw restoreError; return guest ? null : storedUser; },
     loginDiscord: async () => { if (loginError) throw loginError; guest = false; return user; },
     logoutDiscord: async () => { if (logoutError) throw logoutError; revoked = true; guest = false; },
     continueWithoutDiscord: async () => { guest = true; },
@@ -32,6 +35,9 @@ globalThis.__discordControllerTest = {
   sessions: {
     getSessions: async () => { sessionCalls++; if (pendingSessions) { const response = pendingSessions; pendingSessions = null; return response; } if (sessionError) throw sessionError; return guest ? rows.slice(0, 1) : rows; },
     getActiveSessionName: async () => 'Private',
+  },
+  settings: {
+    saveSettingsInternal: async settings => { savedSettings = structuredClone(settings); },
   },
 };
 const virtual = source => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
@@ -44,7 +50,7 @@ const mocks = {
   '../state': 'export const state=globalThis.__discordControllerTest.state;',
   '../services/auth': 'export const { getDiscordAuth, loginDiscord, logoutDiscord, continueWithoutDiscord }=globalThis.__discordControllerTest.auth;',
   '../services/sessions': 'export const { getSessions, getActiveSessionName }=globalThis.__discordControllerTest.sessions;',
-  '../services/settings': 'export const unused=true;',
+  '../services/settings': 'export const { saveSettingsInternal }=globalThis.__discordControllerTest.settings;',
   '../services/status': 'export const unused=true;',
   '../services/updater': 'export const unused=true;',
 };
@@ -68,7 +74,7 @@ test('startup restores a verified Discord identity before fetching any sessions'
   assert.equal(state.activeSessionIndex, 0);
 });
 
-test('logout revokes first, clears all Discord/session UI, and preserves Minecraft accounts', async () => {
+test('logout revokes first, returns to public sessions, and preserves Minecraft accounts', async () => {
   state.isSettingsOpen = true;
   state.isServerSelectOpen = true;
   logoutError = 'Site inaccessible';
@@ -80,7 +86,8 @@ test('logout revokes first, clears all Discord/session UI, and preserves Minecra
   await handlers.handleDiscordLogout();
   assert.equal(revoked, true);
   assert.equal(state.discordUser, null);
-  assert.deepEqual(state.globalSessions, []);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  assert.equal(state.discordSkipped, true);
   assert.equal(state.isSettingsOpen, false);
   assert.equal(state.isServerSelectOpen, false);
   assert.equal(state.allAccounts[0].uuid, 'minecraft');
@@ -88,11 +95,17 @@ test('logout revokes first, clears all Discord/session UI, and preserves Minecra
 });
 
 test('failed restoration and session requests remain retryable without exposing cached sessions', async () => {
+  state.discordSkipped = false;
+  guest = false;
+  state.currentSettings.discordLoginSkipped = false;
   restoreError = 'Réseau indisponible';
   await handlers.handleDiscordRestore();
   assert.equal(state.discordUser, null);
   assert.equal(state.discordChecking, false);
   assert.equal(state.discordError, restoreError);
+  assert.equal(state.discordSkipped, true);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  assert.equal(state.currentSettings.discordLoginSkipped, false);
   restoreError = null;
   sessionError = 'Accès refusé';
   await handlers.handleDiscordLogin();
@@ -170,5 +183,58 @@ test('late authenticated session requests cannot restore private sessions after 
   assert.equal(state.discordUser, null);
   assert.equal(state.discordSkipped, true);
   assert.equal(state.sessionsLoading, false);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+});
+
+function simulateRestart() {
+  state.discordUser = null;
+  state.discordSkipped = false;
+  state.discordChecking = true;
+  state.discordError = null;
+  state.globalSessions = [];
+  state.currentSettings = structuredClone(savedSettings);
+  guest = false;
+  return new LauncherController().getHandlers();
+}
+
+test('a saved public-only choice survives a restart even when credentials still exist', async () => {
+  assert.equal(savedSettings.discordLoginSkipped, true);
+  storedUser = user;
+  const callsBeforeRestart = restoreCalls;
+  await simulateRestart().handleDiscordRestore();
+  assert.equal(restoreCalls, callsBeforeRestart);
+  assert.equal(guest, true);
+  assert.equal(state.discordChecking, false);
+  assert.equal(state.discordSkipped, true);
+  assert.equal(state.discordUser, null);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+});
+
+test('signing in after a saved skip restores the chosen account on the next start', async () => {
+  await handlers.handleDiscordLogin();
+  assert.equal(savedSettings.discordLoginSkipped, false);
+  await simulateRestart().handleDiscordRestore();
+  assert.equal(state.discordSkipped, false);
+  assert.deepEqual(state.discordUser, user);
+  assert.deepEqual(state.globalSessions, rows);
+});
+
+test('expired credentials on a returning installation use public sessions without another prompt', async () => {
+  storedUser = null;
+  await simulateRestart().handleDiscordRestore();
+  assert.equal(state.discordSkipped, true);
+  assert.equal(state.discordUser, null);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  assert.equal(savedSettings.discordLoginSkipped, true);
+});
+
+test('a restart after logout stays public and never requests a saved identity', async () => {
+  await handlers.handleDiscordLogin();
+  await handlers.handleDiscordLogout();
+  storedUser = null;
+  const callsBeforeRestart = restoreCalls;
+  await simulateRestart().handleDiscordRestore();
+  assert.equal(restoreCalls, callsBeforeRestart);
+  assert.equal(state.discordSkipped, true);
   assert.deepEqual(state.globalSessions, rows.slice(0, 1));
 });
