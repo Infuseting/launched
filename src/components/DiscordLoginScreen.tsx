@@ -12,7 +12,7 @@ export default function DiscordLoginScreen({ state, handlers }: { state: Launche
           <DiscordIcon className="h-7 w-9" />
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Bienvenue sur Launched</h1>
-        <p className="mt-2 text-sm text-white/55">Connectez-vous pour continuer.</p>
+        <p className="mt-2 text-sm text-white/55">Connectez-vous avec Discord.</p>
 
         {(state.discordError || busy) && (
           <div className="mt-5" role={state.discordError ? 'alert' : 'status'} aria-live={state.discordError ? 'assertive' : 'polite'}>
@@ -40,11 +40,9 @@ export default function DiscordLoginScreen({ state, handlers }: { state: Launche
         <div className="mt-2 flex h-10 items-center justify-center">
           {state.discordBusy ? (
             <button type="button" onClick={() => void handlers.handleDiscordCancel()} className="min-h-10 rounded-lg px-4 text-xs text-white/65 hover:text-white focus-visible:outline-2 focus-visible:outline-indigo-300">Annuler</button>
-          ) : state.discordError && !busy ? (
-            <button type="button" onClick={() => void handlers.handleDiscordRestore()} className="min-h-10 rounded-lg px-4 text-xs text-white/65 hover:text-white focus-visible:outline-2 focus-visible:outline-indigo-300">Réessayer la connexion enregistrée</button>
-          ) : !busy ? (
-            <p className="text-xs text-white/45">La connexion s’ouvre dans votre navigateur.</p>
-          ) : null}
+          ) : (
+            <button type="button" onClick={() => void handlers.handleContinueWithoutDiscord()} className="min-h-10 rounded-lg px-4 text-xs text-white/65 hover:text-white focus-visible:outline-2 focus-visible:outline-indigo-300">Continuer sans se connecter</button>
+          )}
         </div>
       </div>
     </div>

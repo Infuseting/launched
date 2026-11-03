@@ -22,6 +22,7 @@ interface SettingsModalProps {
     | 'handleCheckUpdate'
     | 'handleInstallUpdate'
     | 'handleDiscordLogout'
+    | 'handleDiscordLogin'
   >;
 }
 

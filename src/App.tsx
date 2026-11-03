@@ -54,7 +54,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
 
   return (
     <Layout>
-      {!launcherState.discordUser || launcherState.discordChecking ? <>
+      {(!launcherState.discordUser && !launcherState.discordSkipped) || launcherState.discordChecking ? <>
         <DiscordLoginScreen state={launcherState} handlers={handlers} />
         <UpdatePromptModal state={launcherState} handlers={handlers} />
       </> :
@@ -62,7 +62,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
         <MainScreen handlers={handlers} />
         {launcherState.sessionsLoading && <p role="status" className="absolute inset-x-8 top-24 z-40 rounded-2xl bg-neutral-900/95 p-4 text-center text-sm text-white/80">Chargement de vos sessions…</p>}
         {(launcherState.sessionsError || (!launcherState.sessionsLoading && launcherState.globalSessions.length === 0)) && <div className="absolute inset-x-8 top-24 z-40 rounded-2xl border border-white/10 bg-neutral-900/95 p-5 text-center text-white">
-          <p role={launcherState.sessionsError ? 'alert' : 'status'} className="text-sm">{launcherState.sessionsError || 'Aucune session accessible pour ce compte Discord. Demandez un accès au créateur de votre session.'}</p>
+          <p role={launcherState.sessionsError ? 'alert' : 'status'} className="text-sm">{launcherState.sessionsError || (launcherState.discordSkipped ? 'Aucune session publique disponible.' : 'Aucune session accessible pour ce compte Discord. Demandez un accès au créateur de votre session.')}</p>
           <button type="button" disabled={launcherState.sessionsLoading} onClick={() => void handlers.handleRefreshSessions()} className="mt-3 min-h-11 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20 disabled:opacity-50">Actualiser les sessions</button>
         </div>}
 

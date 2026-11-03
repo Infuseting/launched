@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { AuthResponse, DiscordUser } from "../types";
 
 export const getDiscordAuth = () => invoke<DiscordUser | null>('get_discord_auth');
+export const continueWithoutDiscord = () => invoke<void>('continue_without_discord');
 export const loginDiscord = () => invoke<DiscordUser>('login_discord');
 export const logoutDiscord = () => invoke<void>('logout_discord');
 export const cancelDiscordLogin = () => invoke<void>('cancel_discord_login');

@@ -3,7 +3,7 @@ pub mod core;
 pub mod ui;
 
 use crate::auth::{microsoft::MicrosoftAuth, AuthResponse, AuthStrategy};
-use crate::auth::discord::{self, get_discord_auth, login_discord, logout_discord, cancel_discord_login, fetch_session_image};
+use crate::auth::discord::{self, get_discord_auth, login_discord, logout_discord, cancel_discord_login, continue_without_discord, fetch_session_image};
 use crate::core::install::InstallService;
 use crate::core::launch::args::LaunchArguments;
 use crate::core::launch::LaunchService;
@@ -631,6 +631,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_sessions,
             get_discord_auth,
+            continue_without_discord,
             login_discord,
             cancel_discord_login,
             logout_discord,

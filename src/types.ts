@@ -104,6 +104,7 @@ export interface AppSettings {
 
 export interface LauncherStateModel {
   discordUser: DiscordUser | null;
+  discordSkipped: boolean;
   discordChecking: boolean;
   discordBusy: boolean;
   discordError: string | null;
@@ -140,6 +141,7 @@ export interface LauncherStateModel {
 
 export interface AppHandlers {
   handleDiscordLogin: () => Promise<void>;
+  handleContinueWithoutDiscord: () => Promise<void>;
   handleDiscordLogout: () => Promise<void>;
   handleDiscordCancel: () => Promise<void>;
   handleDiscordRestore: () => Promise<void>;

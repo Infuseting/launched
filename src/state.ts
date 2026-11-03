@@ -3,6 +3,7 @@ import type { LauncherStateModel } from './types';
 
 const rawState: LauncherStateModel = {
   discordUser: null,
+  discordSkipped: false,
   discordChecking: true,
   discordBusy: false,
   discordError: null,

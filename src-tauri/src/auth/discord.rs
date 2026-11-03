@@ -5,7 +5,10 @@ use base64::{
 use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 use tauri::{Emitter, Manager};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -16,6 +19,21 @@ use tokio::{
 pub struct DiscordState {
     login: tokio::sync::Mutex<()>,
     cancel: tokio::sync::Notify,
+    guest: AtomicBool,
+}
+
+fn guest_mode(app: &tauri::AppHandle) -> bool {
+    app.state::<DiscordState>().guest.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+pub fn continue_without_discord(state: tauri::State<'_, DiscordState>) -> Result<(), String> {
+    let _guard = state
+        .login
+        .try_lock()
+        .map_err(|_| "Annulez la connexion Discord avant de continuer.")?;
+    state.guest.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -93,15 +111,23 @@ fn clear(app: &tauri::AppHandle) -> Result<(), String> {
 async fn checked(
     app: &tauri::AppHandle,
     response: reqwest::Response,
-    token: &str,
+    token: Option<&str>,
 ) -> Result<reqwest::Response, String> {
     if response.status() == StatusCode::UNAUTHORIZED {
         // An old in-flight request must not disconnect a newly signed-in account.
-        if load(app)?.is_some_and(|credentials| credentials.token == token) {
-            clear(app)?;
-            let _ = app.emit("discord-auth-required", ());
+        if let Some(token) = token {
+            if !guest_mode(app) && load(app)?.is_some_and(|credentials| credentials.token == token)
+            {
+                clear(app)?;
+                let _ = app.emit("discord-auth-required", ());
+            }
         }
-        return Err("Connexion Discord expirée. Reconnectez-vous.".into());
+        return Err(if token.is_some() {
+            "Connexion Discord expirée. Reconnectez-vous."
+        } else {
+            "Le site n’a pas autorisé l’accès aux sessions publiques. Réessayez dans un instant."
+        }
+        .into());
     }
     if !response.status().is_success() {
         return Err(format!(
@@ -115,14 +141,24 @@ async fn checked(
 // Credentials are only attached to the configured site, never to Minecraft/CDN URLs.
 pub async fn site_get(app: &tauri::AppHandle, url: &str) -> Result<reqwest::Response, String> {
     let target = trusted_target(url, &site_url()?)?;
-    let credentials = load(app)?.ok_or("Connexion Discord requise.")?;
-    let response = client()?
-        .get(target)
-        .bearer_auth(&credentials.token)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    checked(app, response, &credentials.token).await
+    let credentials = if guest_mode(app) {
+        None
+    } else {
+        Some(load(app)?.ok_or("Connexion Discord requise.")?)
+    };
+    let mut request = client()?.get(target);
+    if let Some(credentials) = &credentials {
+        request = request.bearer_auth(&credentials.token);
+    }
+    let response = request.send().await.map_err(|e| e.to_string())?;
+    checked(
+        app,
+        response,
+        credentials
+            .as_ref()
+            .map(|credentials| credentials.token.as_str()),
+    )
+    .await
 }
 
 fn trusted_target(url: &str, site: &Url) -> Result<Url, String> {
@@ -138,7 +174,7 @@ fn trusted_target(url: &str, site: &Url) -> Result<Url, String> {
 
 #[tauri::command]
 pub async fn get_discord_auth(app_handle: tauri::AppHandle) -> Result<Option<DiscordUser>, String> {
-    if load(&app_handle)?.is_none() {
+    if guest_mode(&app_handle) || load(&app_handle)?.is_none() {
         return Ok(None);
     }
     let url = site_url()?
@@ -247,6 +283,9 @@ async fn login(app: &tauri::AppHandle) -> Result<DiscordUser, String> {
         serde_json::to_vec(&credentials).map_err(|e| e.to_string())?,
     )
     .map_err(|_| "Impossible d’enregistrer la connexion sur cet ordinateur.")?;
+    app.state::<DiscordState>()
+        .guest
+        .store(false, Ordering::SeqCst);
     Ok(credentials.user)
 }
 
@@ -398,7 +437,12 @@ pub async fn logout_discord(app_handle: tauri::AppHandle) -> Result<(), String> 
             return Err("Le site n’a pas confirmé la déconnexion. Réessayez.".into());
         }
     }
-    clear(&app_handle)
+    clear(&app_handle)?;
+    app_handle
+        .state::<DiscordState>()
+        .guest
+        .store(false, Ordering::SeqCst);
+    Ok(())
 }
 
 #[tauri::command]

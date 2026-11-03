@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
 const state = {
-  discordUser: null, discordChecking: false, discordBusy: false, discordError: null,
+  discordUser: null, discordSkipped: false, discordChecking: false, discordBusy: false, discordError: null,
   globalSessions: [], activeSessionIndex: 0, sessionsLoading: false, sessionsError: null,
   isSyncing: false, isSettingsOpen: false, isServerSelectOpen: false,
   allAccounts: [{ uuid: 'minecraft', name: 'Player' }], authCache: { uuid: 'minecraft' },
@@ -18,15 +18,19 @@ let logoutError = null;
 let sessionError = null;
 let sessionCalls = 0;
 let revoked = false;
+let guest = false;
+let pendingRestore = null;
+let pendingSessions = null;
 globalThis.__discordControllerTest = {
   state,
   auth: {
-    getDiscordAuth: async () => { if (restoreError) throw restoreError; return storedUser; },
-    loginDiscord: async () => { if (loginError) throw loginError; return user; },
-    logoutDiscord: async () => { if (logoutError) throw logoutError; revoked = true; },
+    getDiscordAuth: async () => { if (pendingRestore) return pendingRestore; if (restoreError) throw restoreError; return guest ? null : storedUser; },
+    loginDiscord: async () => { if (loginError) throw loginError; guest = false; return user; },
+    logoutDiscord: async () => { if (logoutError) throw logoutError; revoked = true; guest = false; },
+    continueWithoutDiscord: async () => { guest = true; },
   },
   sessions: {
-    getSessions: async () => { sessionCalls++; if (sessionError) throw sessionError; return rows; },
+    getSessions: async () => { sessionCalls++; if (pendingSessions) { const response = pendingSessions; pendingSessions = null; return response; } if (sessionError) throw sessionError; return guest ? rows.slice(0, 1) : rows; },
     getActiveSessionName: async () => 'Private',
   },
 };
@@ -38,7 +42,7 @@ const mocks = {
   '@tauri-apps/api/event': 'export const listen=async()=>()=>{};',
   '@tauri-apps/plugin-shell': 'export const open=async()=>{};',
   '../state': 'export const state=globalThis.__discordControllerTest.state;',
-  '../services/auth': 'export const { getDiscordAuth, loginDiscord, logoutDiscord }=globalThis.__discordControllerTest.auth;',
+  '../services/auth': 'export const { getDiscordAuth, loginDiscord, logoutDiscord, continueWithoutDiscord }=globalThis.__discordControllerTest.auth;',
   '../services/sessions': 'export const { getSessions, getActiveSessionName }=globalThis.__discordControllerTest.sessions;',
   '../services/settings': 'export const unused=true;',
   '../services/status': 'export const unused=true;',
@@ -116,4 +120,55 @@ test('native OAuth failures are shown in the launcher and allow another login at
   await handlers.handleDiscordLogin();
   assert.equal(state.discordError, null);
   assert.deepEqual(state.discordUser, user);
+});
+
+test('continuing without Discord loads public sessions and permits a later sign-in', async () => {
+  await handlers.handleDiscordLogout();
+  await handlers.handleContinueWithoutDiscord();
+  assert.equal(state.discordSkipped, true);
+  assert.equal(state.discordUser, null);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  assert.equal(state.allAccounts[0].uuid, 'minecraft');
+  await handlers.handleDiscordRestore();
+  assert.equal(state.discordSkipped, true);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  loginError = 'Connexion annulée.';
+  await handlers.handleDiscordLogin();
+  assert.equal(state.discordSkipped, true);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  loginError = null;
+  await handlers.handleDiscordLogin();
+  assert.equal(state.discordSkipped, false);
+  assert.deepEqual(state.discordUser, user);
+  assert.deepEqual(state.globalSessions, rows);
+});
+
+test('a late saved-account restoration cannot replace the explicit public-only choice', async () => {
+  let finishRestore;
+  pendingRestore = new Promise(resolve => { finishRestore = resolve; });
+  const restoration = handlers.handleDiscordRestore();
+  assert.equal(state.discordChecking, true);
+  await handlers.handleContinueWithoutDiscord();
+  finishRestore(user);
+  await restoration;
+  pendingRestore = null;
+  assert.equal(state.discordChecking, false);
+  assert.equal(state.discordUser, null);
+  assert.equal(state.discordSkipped, true);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+});
+
+test('late authenticated session requests cannot restore private sessions after continuing without Discord', async () => {
+  await handlers.handleDiscordLogin();
+  let finishSessions;
+  pendingSessions = new Promise(resolve => { finishSessions = resolve; });
+  const oldRequest = handlers.handleRefreshSessions();
+  assert.equal(state.sessionsLoading, true);
+  await handlers.handleContinueWithoutDiscord();
+  finishSessions(rows);
+  await oldRequest;
+  assert.equal(state.discordUser, null);
+  assert.equal(state.discordSkipped, true);
+  assert.equal(state.sessionsLoading, false);
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
 });
