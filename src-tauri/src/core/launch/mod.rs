@@ -4,8 +4,10 @@
 pub mod args;
 pub mod models;
 
+use crate::core::discord_presence::{self, DiscordPresence};
 use crate::core::launch::args::LaunchArguments;
 use std::process::{Command, Stdio};
+use tauri::Manager;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
@@ -18,7 +20,13 @@ impl LaunchService {
     /**
      * Launches the game process.
      */
-    pub fn launch(&self, args: LaunchArguments, show_logs: bool, app_handle: &tauri::AppHandle) -> Result<(), String> {
+    pub fn launch(
+        &self,
+        args: LaunchArguments,
+        show_logs: bool,
+        app_handle: &tauri::AppHandle,
+        presence: &DiscordPresence,
+    ) -> Result<(), String> {
         // Guarantee that the directory path passed to --assetsDir exists on disk prior to process execution
         if let Some(assets_dir) = LaunchArguments::extract_assets_dir(&args.minecraft_args) {
             LaunchArguments::guarantee_assets_dir_and_subdirs(&assets_dir)
@@ -41,6 +49,14 @@ impl LaunchService {
             Command::new(&args.java_path)
         };
 
+        match app_handle.path().app_data_dir() {
+            Ok(app_dir) => {
+                if let Err(error) = discord_presence::configure_java(&mut cmd, &args.game_dir, &app_dir, presence) {
+                    log::warn!("Discord Rich Presence unavailable: {error}");
+                }
+            }
+            Err(error) => log::warn!("Discord Rich Presence unavailable: {error}"),
+        }
         cmd.args(jvm_args);
         cmd.current_dir(&args.game_dir);
 

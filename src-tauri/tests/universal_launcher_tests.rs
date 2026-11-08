@@ -52,6 +52,7 @@ fn test_session_effective_components_legacy_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let comps = session_forge.effective_components();
@@ -77,6 +78,7 @@ fn test_session_effective_components_legacy_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let comps_neo = session_neoforge.effective_components();
@@ -110,6 +112,7 @@ fn test_session_custom_components_priority() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     assert_eq!(session.effective_components(), custom_comps);
@@ -378,6 +381,7 @@ fn test_session_assets_path_customization_and_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let resolved_custom = LaunchArguments::resolve_assets_dir(&session_custom, &official_mc_path);
@@ -402,6 +406,7 @@ fn test_session_assets_path_customization_and_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let resolved_default = LaunchArguments::resolve_assets_dir(&session_default, &official_mc_path);
@@ -426,6 +431,7 @@ fn test_session_assets_path_customization_and_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let resolved_ws = LaunchArguments::resolve_assets_dir(&session_whitespace, &official_mc_path);
@@ -450,6 +456,7 @@ fn test_session_assets_path_customization_and_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let resolved_padded = LaunchArguments::resolve_assets_dir(&session_padded, &official_mc_path);
@@ -474,6 +481,7 @@ fn test_session_assets_path_customization_and_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let resolved_quoted = LaunchArguments::resolve_assets_dir(&session_quoted, &official_mc_path);
@@ -498,6 +506,7 @@ fn test_session_assets_path_customization_and_fallback() {
         is_default: false,
         links: None,
         crack: None,
+        discord_presence: None,
     };
 
     let resolved_url = LaunchArguments::resolve_assets_dir(&session_url, &official_mc_path);

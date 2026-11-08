@@ -1,3 +1,4 @@
+use crate::core::discord_presence::DiscordPresence;
 use serde::{Deserialize, Serialize};
 
 /**
@@ -49,6 +50,12 @@ pub struct Session {
     pub links: Option<Vec<SessionLink>>,
     #[serde(default)]
     pub crack: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "crate::core::discord_presence::deserialize_optional",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub discord_presence: Option<DiscordPresence>,
 }
 
 impl Session {

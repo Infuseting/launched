@@ -28,6 +28,14 @@ impl SecretManager {
         Ok(vec![])
     }
 
+    pub fn get_active_account(app_handle: &tauri::AppHandle, active_uuid: Option<&str>) -> Option<AuthResponse> {
+        let accounts = Self::get_all_accounts(app_handle).unwrap_or_default();
+        let index = active_uuid
+            .and_then(|uuid| accounts.iter().position(|account| account.uuid == uuid))
+            .unwrap_or(0);
+        accounts.into_iter().nth(index)
+    }
+
     /**
      * Saves the full list of accounts securely.
      */
@@ -40,7 +48,9 @@ impl SecretManager {
             let _ = std::fs::create_dir_all(parent);
         }
         std::fs::write(&path, &json)
-            .map_err(|e| format!("Failed to save local accounts: {}", e))
+            .map_err(|e| format!("Failed to save local accounts: {}", e))?;
+        crate::core::discord_presence::notify_account_change(app_handle);
+        Ok(())
     }
 
     /**
@@ -68,6 +78,7 @@ impl SecretManager {
     pub fn clear_all(app_handle: &tauri::AppHandle) -> Result<(), String> {
         let path = Self::local_path(app_handle);
         let _ = std::fs::remove_file(path);
+        crate::core::discord_presence::notify_account_change(app_handle);
         Ok(())
     }
 }

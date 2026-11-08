@@ -4,6 +4,8 @@ pub mod ui;
 
 use crate::auth::{microsoft::MicrosoftAuth, AuthResponse, AuthStrategy};
 use crate::auth::discord::{self, get_discord_auth, login_discord, logout_discord, cancel_discord_login, continue_without_discord, fetch_session_image};
+use crate::auth::secrets::SecretManager;
+use crate::core::discord_presence::{self, DiscordPresence, LauncherPresenceState};
 use crate::core::install::InstallService;
 use crate::core::launch::args::LaunchArguments;
 use crate::core::launch::LaunchService;
@@ -173,13 +175,7 @@ async fn launch_game(
         }
     } else {
         let mut settings = SettingsManager::load(&app_handle);
-        let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
-        
-        let mut auth = settings
-            .active_account_uuid
-            .as_ref()
-            .and_then(|active_uuid| accounts.iter().find(|a| a.uuid == *active_uuid).cloned())
-            .or_else(|| accounts.into_iter().next())
+        let mut auth = SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref())
             .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
 
         // Validate token before launch; if expired, try refresh_token once.
@@ -250,7 +246,10 @@ async fn launch_game(
         }
     }
 
-    launch_service.launch(args, show_logs, &app_handle)
+    let presence = session.discord_presence.unwrap_or_else(|| {
+        DiscordPresence::launched(Some(&session.name), Some(&auth.uuid))
+    });
+    launch_service.launch(args, show_logs, &app_handle, &presence)
 }
 
 #[tauri::command]
@@ -278,25 +277,16 @@ async fn get_available_ram() -> Result<u32, String> {
 
 #[tauri::command]
 async fn get_auth(app_handle: tauri::AppHandle) -> Result<Option<AuthResponse>, String> {
-    let settings = SettingsManager::load(&app_handle);
-    let accounts = crate::auth::secrets::SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
-    
-    // Return active if saved in settings
-    if let Some(ref active_uuid) = settings.active_account_uuid {
-        if let Some(acc) = accounts.iter().find(|a| a.uuid == *active_uuid) {
-            return Ok(Some(acc.clone()));
-        }
+    let mut settings = SettingsManager::load(&app_handle);
+    let account = SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref());
+    if let Some(account) = account
+        .as_ref()
+        .filter(|account| settings.active_account_uuid.as_deref() != Some(account.uuid.as_str()))
+    {
+        settings.active_account_uuid = Some(account.uuid.clone());
+        let _ = SettingsManager::save(&app_handle, &settings);
     }
-    
-    // Fallback to the first account available
-    if !accounts.is_empty() {
-        let mut new_settings = settings.clone();
-        new_settings.active_account_uuid = Some(accounts[0].uuid.clone());
-        let _ = SettingsManager::save(&app_handle, &new_settings);
-        return Ok(Some(accounts[0].clone()));
-    }
-    
-    Ok(None)
+    Ok(account)
 }
 
 #[tauri::command]
@@ -628,6 +618,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .manage(discord::DiscordState::default())
+        .manage(LauncherPresenceState::default())
         .invoke_handler(tauri::generate_handler![
             get_sessions,
             get_discord_auth,
@@ -679,6 +670,14 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+            if let Ok(app_dir) = app.path().app_data_dir() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = discord_presence::launcher_presence(&handle, &app_dir).await {
+                        log::warn!("Discord Rich Presence unavailable: {error}");
+                    }
+                });
             }
             Ok(())
         })

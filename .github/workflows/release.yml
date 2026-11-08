@@ -33,6 +33,12 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Java setup for the Minecraft presence agent
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:

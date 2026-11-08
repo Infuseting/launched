@@ -1,3 +1,4 @@
+pub mod discord_presence;
 pub mod download;
 pub mod install;
 pub mod launch;

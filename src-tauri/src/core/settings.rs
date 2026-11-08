@@ -135,6 +135,8 @@ impl SettingsManager {
             let _ = std::fs::create_dir_all(parent);
         }
         let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-        std::fs::write(&path, json).map_err(|e| e.to_string())
+        std::fs::write(&path, json).map_err(|e| e.to_string())?;
+        crate::core::discord_presence::notify_account_change(app_handle);
+        Ok(())
     }
 }
