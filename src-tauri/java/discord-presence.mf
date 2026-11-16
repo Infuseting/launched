@@ -1,1 +1,1 @@
-Premain-Class: DiscordPresenceAgent
+Premain-Class: fr.infuseting.launched.discord.DiscordPresenceAgent

@@ -389,6 +389,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn agent_keeps_the_default_package_free_for_signed_minecraft_classes() {
+        let jar = zip::ZipArchive::new(io::Cursor::new(AGENT_JAR)).unwrap();
+        let classes: Vec<_> = jar
+            .file_names()
+            .filter(|name| name.ends_with(".class"))
+            .collect();
+        assert!(!classes.is_empty());
+        assert!(classes.iter().all(|name| name.contains('/')));
+    }
+
+    #[test]
     fn launched_activity_uses_branding_and_the_selected_minecraft_head() {
         let launcher =
             DiscordPresence::launched(None, Some("c5ef3347-4593-4f39-8bb1-2eaa40dd986e"));

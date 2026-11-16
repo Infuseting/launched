@@ -1,3 +1,6 @@
+// Legacy Minecraft loads signed classes from the default package.
+package fr.infuseting.launched.discord;
+
 import java.io.IOException;
 
 public final class DiscordPresenceAgent {

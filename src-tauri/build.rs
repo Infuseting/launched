@@ -11,7 +11,9 @@ fn java_tool(name: &str) -> Command {
 }
 
 fn build_discord_agent() {
-    println!("cargo:rerun-if-changed=java/DiscordPresenceAgent.java");
+    const AGENT_CLASS: &str = "fr/infuseting/launched/discord/DiscordPresenceAgent";
+    let source = format!("java/{AGENT_CLASS}.java");
+    println!("cargo:rerun-if-changed={source}");
     println!("cargo:rerun-if-changed=java/discord-presence.mf");
     println!("cargo:rerun-if-env-changed=JAVA_HOME");
 
@@ -19,7 +21,7 @@ fn build_discord_agent() {
     let status = java_tool("javac")
         .args(["--release", "8", "-d"])
         .arg(&output)
-        .arg("java/DiscordPresenceAgent.java")
+        .arg(source)
         .status()
         .expect("A JDK (Java 17 or newer) is required to build Launched's Discord agent");
     assert!(status.success(), "Could not compile the Discord agent");
@@ -30,7 +32,7 @@ fn build_discord_agent() {
         .arg("java/discord-presence.mf")
         .arg("-C")
         .arg(&output)
-        .arg("DiscordPresenceAgent.class")
+        .arg(format!("{AGENT_CLASS}.class"))
         .status()
         .expect("The JDK jar tool is required to package the Discord agent");
     assert!(status.success(), "Could not package the Discord agent");
