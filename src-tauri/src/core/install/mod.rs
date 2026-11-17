@@ -70,9 +70,6 @@ impl InstallService {
         session: &Session,
     ) -> Result<(), String> {
         let selected = session.selected_loader()?;
-        if matches!(selected, Some((LoaderKind::Quilt, _))) {
-            return Err("L’installation de Quilt n’est pas encore prise en charge.".to_string());
-        }
         let official_mc_path = mojang::get_official_mc_path().await?;
         let assets_dir = crate::core::launch::args::LaunchArguments::resolve_assets_dir(session, &official_mc_path);
 

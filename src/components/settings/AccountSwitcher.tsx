@@ -37,7 +37,19 @@ export const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ accounts, acti
               <div className="flex min-w-0 items-center gap-3.5">
                 <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-neutral-800">
                   <Box aria-hidden="true" className="h-5 w-5 text-white/35" />
-                  <img src={'https://mc-heads.net/avatar/' + account.uuid + '/64'} alt="" className="absolute inset-0 h-full w-full object-cover rendering-pixelated" onError={event => { event.currentTarget.style.display = 'none'; }} />
+                  <img
+                    src={'https://mc-heads.net/avatar/' + account.uuid + '/64'}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover rendering-pixelated"
+                    onError={(event) => {
+                      const current = event.currentTarget.src;
+                      if (current.includes('mc-heads.net')) {
+                        event.currentTarget.src = `https://minotar.net/avatar/${account.uuid}/64`;
+                      } else {
+                        event.currentTarget.style.display = 'none';
+                      }
+                    }}
+                  />
                 </div>
                 <div className="min-w-0">
                   <p title={account.name} className="truncate text-sm font-semibold text-white">{account.name}</p>

@@ -57,11 +57,24 @@ const rawState: LauncherStateModel = {
   crackModalDefaultPseudo: ''
 };
 
+function createSnapshot(source: LauncherStateModel): LauncherStateModel {
+  return {
+    ...source,
+    syncProgress: { ...source.syncProgress },
+    currentSettings: {
+      ...source.currentSettings,
+      defaultSettings: { ...source.currentSettings.defaultSettings },
+      sessions: { ...source.currentSettings.sessions },
+    },
+    mojangStatus: { ...source.mojangStatus },
+  };
+}
+
 const listeners = new Set<() => void>();
-let lastSnapshot = JSON.parse(JSON.stringify(rawState));
+let lastSnapshot: LauncherStateModel = createSnapshot(rawState);
 
 function notify() {
-  lastSnapshot = JSON.parse(JSON.stringify(rawState));
+  lastSnapshot = createSnapshot(rawState);
   listeners.forEach(l => l());
 }
 
@@ -103,25 +116,39 @@ function createRecursiveProxy<T extends object>(obj: T): T {
 
 /**
  * Global mutable launcher state exposed through a reactive proxy.
- *
- * React components must read it through `useLauncherState` to receive updates.
  */
 export const state = createRecursiveProxy(rawState);
 
 export type LauncherState = LauncherStateModel;
 
+const subscribeToState = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
 /**
  * Subscribes React to launcher state mutations through `useSyncExternalStore`.
  */
 export function useLauncherState(): LauncherState {
-  const subscribe = React.useCallback((listener: () => void) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  }, []);
+  return React.useSyncExternalStore(subscribeToState, () => lastSnapshot);
+}
 
-  const getSnapshot = React.useCallback(() => {
-    return lastSnapshot;
-  }, []);
+/**
+ * Fine-grained selector hook subscribing to launcher state slices via useSyncExternalStore.
+ */
+export function useLauncherSelector<T>(
+  selector: (state: LauncherStateModel) => T,
+  isEqual: (a: T, b: T) => boolean = Object.is
+): T {
+  const currentState = useLauncherState();
+  const lastSelectedRef = React.useRef<T | undefined>(undefined);
+  const nextSelected = selector(currentState);
 
-  return React.useSyncExternalStore(subscribe, getSnapshot);
+  if (lastSelectedRef.current !== undefined && isEqual(lastSelectedRef.current, nextSelected)) {
+    return lastSelectedRef.current;
+  }
+  lastSelectedRef.current = nextSelected;
+  return nextSelected;
 }

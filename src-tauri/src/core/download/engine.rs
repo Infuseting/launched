@@ -37,6 +37,7 @@ pub struct DownloadProgress {
 pub struct DownloadEngine {
     client: Client,
     concurrency: usize,
+    auth_token: Option<String>,
 }
 
 impl Default for DownloadEngine {
@@ -57,7 +58,13 @@ impl DownloadEngine {
         Self {
             client,
             concurrency: concurrency.clamp(4, 64),
+            auth_token: None,
         }
+    }
+
+    pub fn with_auth_token(mut self, auth_token: Option<String>) -> Self {
+        self.auth_token = auth_token;
+        self
     }
 
     /// Verifies if a local file exists and matches size and/or checksum.
@@ -168,9 +175,11 @@ impl DownloadEngine {
     }
 
     async fn download_to_temp(&self, url: &str, temp_path: &Path, expected_checksum: &Option<Checksum>) -> Result<(), String> {
-        let mut response = self
-            .client
-            .get(url)
+        let mut request = self.client.get(url);
+        if let Some(token) = &self.auth_token {
+            request = request.bearer_auth(token);
+        }
+        let mut response = request
             .send()
             .await
             .map_err(|e| format!("HTTP request error for {}: {}", url, e))?;

@@ -9,6 +9,7 @@ interface ServerSelectModalProps {
   onSelect: (index: number) => void;
   onClose: () => void;
   onRefresh: () => Promise<void>;
+  onFetchAssets?: (index: number) => Promise<void>;
 }
 
 export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
@@ -17,8 +18,19 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   onSelect,
   onClose,
   onRefresh,
+  onFetchAssets,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+
+  React.useEffect(() => {
+    if (isOpen && onFetchAssets) {
+      state.globalSessions.forEach((s, index) => {
+        if (!s.assetsData && s.assetsPath) {
+          void onFetchAssets(index);
+        }
+      });
+    }
+  }, [isOpen, state.globalSessions, onFetchAssets]);
 
   const filteredSessions = state.globalSessions
     .map((s, index) => ({ ...s, originalIndex: index }))
@@ -183,11 +195,6 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                             {s.fabric && (
                               <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/20">
                                 Fabric {s.fabric}
-                              </span>
-                            )}
-                            {s.quilt && (
-                              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/20">
-                                Quilt {s.quilt}
                               </span>
                             )}
                           </div>

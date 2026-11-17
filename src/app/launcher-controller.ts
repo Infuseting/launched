@@ -95,6 +95,15 @@ export class LauncherController {
       },
       handleServerSelectToggle: (show: boolean) => {
         state.isServerSelectOpen = show;
+        if (show) {
+          void Promise.all(
+            state.globalSessions.map((s, index) => {
+              if (!s.assetsData && s.assetsPath) {
+                return this.fetchAssetMetadata(index);
+              }
+            })
+          );
+        }
       },
       handleDeviceCodeModalToggle: (show: boolean) => {
         state.deviceCodeModalOpen = show;
@@ -359,7 +368,12 @@ export class LauncherController {
 
     try {
       const assets = await sessionService.fetchJson(session.assetsPath);
-      if (revision === this.discordAccessRevision && (state.discordUser || state.discordSkipped) && state.globalSessions[index] === session) session.assetsData = assets;
+      if (revision === this.discordAccessRevision && (state.discordUser || state.discordSkipped)) {
+        const currentSession = state.globalSessions[index];
+        if (currentSession && (currentSession === session || currentSession.syncUrl === session.syncUrl)) {
+          currentSession.assetsData = assets;
+        }
+      }
     } catch (error) {
       console.error(`Failed to fetch assets for ${session.name}:`, error);
     }
@@ -524,7 +538,26 @@ export class LauncherController {
           state.activeSessionIndex = index;
         }
       }
-      await this.fetchAssetMetadata(state.activeSessionIndex);
+
+      const deepLink = await sessionService.getDeepLinkUrl();
+      if (deepLink) {
+        const slug = sessionService.extractSessionSlugFromDeepLink(deepLink);
+        if (slug) {
+          const matchIndex = state.globalSessions.findIndex(s => {
+            if (s.slug && s.slug.toLowerCase() === slug.toLowerCase()) return true;
+            if (s.name.toLowerCase() === slug.toLowerCase()) return true;
+            if (s.syncUrl && s.syncUrl.toLowerCase().includes(`/sessions/${slug.toLowerCase()}/`)) return true;
+            return false;
+          });
+          if (matchIndex >= 0) {
+            state.activeSessionIndex = matchIndex;
+            state.isServerSelectOpen = false;
+            void sessionService.setActiveSession(state.globalSessions[matchIndex].name).catch(() => {});
+          }
+        }
+      }
+
+      await Promise.all(state.globalSessions.map((_, index) => this.fetchAssetMetadata(index)));
     } catch (error) {
       if (revision !== this.discordAccessRevision) return;
       state.globalSessions = [];

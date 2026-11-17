@@ -2,6 +2,8 @@
  * Handles building JVM arguments and launching the game.
  */
 pub mod args;
+pub mod builder;
+pub mod java;
 pub mod models;
 
 use crate::core::discord_presence::{self, DiscordPresence};

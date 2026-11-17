@@ -67,11 +67,11 @@ export interface SessionLink {
 
 export interface Session {
   name: string;
+  slug?: string;
   minecraft: string;
   forge?: string;
   fabric?: string;
   neoforge?: string;
-  quilt?: string;
   syncDir: string;
   syncUrl: string;
   welcome: string;

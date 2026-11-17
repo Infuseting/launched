@@ -36,11 +36,11 @@ fn test_maven_coordinate_resolution() {
 fn test_session_effective_components_legacy_fallback() {
     let session_forge = Session {
         name: "Forge Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: Some("47.2.0".to_string()),
         neoforge: None,
         fabric: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -62,11 +62,11 @@ fn test_session_effective_components_legacy_fallback() {
 
     let session_neoforge = Session {
         name: "NeoForge Session".to_string(),
+        slug: None,
         minecraft: "1.20.4".to_string(),
         forge: None,
         neoforge: Some("20.4.80".to_string()),
         fabric: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -96,11 +96,11 @@ fn test_session_custom_components_priority() {
 
     let session = Session {
         name: "Custom Components".to_string(),
+        slug: None,
         minecraft: "1.12.2".to_string(),
         forge: Some("14.23.5.2860".to_string()),
         neoforge: None,
         fabric: None,
-        quilt: None,
         components: Some(custom_comps.clone()),
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -365,11 +365,11 @@ fn test_session_assets_path_customization_and_fallback() {
     // 1. Explicit custom assets path
     let session_custom = Session {
         name: "Custom Assets Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: None,
         fabric: None,
         neoforge: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -390,11 +390,11 @@ fn test_session_assets_path_customization_and_fallback() {
     // 2. None -> fallback to official .minecraft/assets
     let session_default = Session {
         name: "Default Assets Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: None,
         fabric: None,
         neoforge: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -415,11 +415,11 @@ fn test_session_assets_path_customization_and_fallback() {
     // 3. Whitespace string -> fallback to official .minecraft/assets
     let session_whitespace = Session {
         name: "Whitespace Assets Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: None,
         fabric: None,
         neoforge: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -440,11 +440,11 @@ fn test_session_assets_path_customization_and_fallback() {
     // 4. Whitespace-padded custom assets path -> trimmed cleanly
     let session_padded = Session {
         name: "Padded Assets Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: None,
         fabric: None,
         neoforge: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -465,11 +465,11 @@ fn test_session_assets_path_customization_and_fallback() {
     // 5. Quoted custom assets path -> quotes stripped
     let session_quoted = Session {
         name: "Quoted Assets Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: None,
         fabric: None,
         neoforge: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
@@ -490,11 +490,11 @@ fn test_session_assets_path_customization_and_fallback() {
     // 6. Remote URL / assets.json (launcher UI metadata) -> ignored and falls back to official .minecraft/assets
     let session_url = Session {
         name: "Remote URL Assets Session".to_string(),
+        slug: None,
         minecraft: "1.20.1".to_string(),
         forge: None,
         fabric: None,
         neoforge: None,
-        quilt: None,
         components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),

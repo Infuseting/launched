@@ -111,7 +111,6 @@ pub async fn upload_skin_to_mojang(
         .map_err(|e| format!("Base64 decode error: {}", e))?;
 
     let variant_upper = variant.to_uppercase();
-    let token = access_token.to_string();
 
     // Build multipart body manually
     let boundary = "LaunchedMCSkinBoundary";
@@ -129,24 +128,27 @@ pub async fn upload_skin_to_mojang(
 
     let content_type = format!("multipart/form-data; boundary={}", boundary);
 
-    // ureq is a blocking client — run it on a dedicated thread
-    tokio::task::spawn_blocking(move || {
-        let resp = ureq::post("https://api.minecraftservices.com/minecraft/profile/skins")
-            .set("Authorization", &format!("Bearer {}", token))
-            .set("Content-Type", &content_type)
-            .send_bytes(&body);
+    let client = reqwest::Client::builder()
+        .http1_only()
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
 
-        match resp {
-            Ok(_) => Ok(()),
-            Err(ureq::Error::Status(code, resp)) => {
-                let body = resp.into_string().unwrap_or_default();
-                Err(format!("Mojang skin upload failed: HTTP {} – {}", code, body))
-            }
-            Err(e) => Err(format!("Network error: {}", e)),
-        }
-    })
-    .await
-    .map_err(|e| format!("Thread error: {}", e))?
+    let resp = client
+        .post("https://api.minecraftservices.com/minecraft/profile/skins")
+        .bearer_auth(access_token)
+        .header("Content-Type", &content_type)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Mojang skin upload failed: HTTP {} – {}", status, text));
+    }
+
+    Ok(())
 }
 
 /// Resets skin to Mojang default (Steve/Alex).

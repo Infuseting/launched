@@ -24,6 +24,9 @@ let pendingRestore = null;
 let pendingSessions = null;
 let savedSettings = {};
 let restoreCalls = 0;
+let fetchedAssetsUrls = [];
+let mockDeepLink = null;
+let activeSessionSaved = null;
 globalThis.__discordControllerTest = {
   state,
   auth: {
@@ -35,6 +38,17 @@ globalThis.__discordControllerTest = {
   sessions: {
     getSessions: async () => { sessionCalls++; if (pendingSessions) { const response = pendingSessions; pendingSessions = null; return response; } if (sessionError) throw sessionError; return guest ? rows.slice(0, 1) : rows; },
     getActiveSessionName: async () => 'Private',
+    fetchJson: async (url) => { fetchedAssetsUrls.push(url); return { background: '/bg.png', icon: '/icon.png', logo: '/logo.png', links: [] }; },
+    getDeepLinkUrl: async () => mockDeepLink,
+    setActiveSession: async (name) => { activeSessionSaved = name; },
+    extractSessionSlugFromDeepLink: (url) => {
+      if (!url || !url.startsWith('launched://')) return null;
+      let path = url.slice('launched://'.length);
+      path = path.split('?')[0].split('#')[0].replace(/\/+$/, '');
+      if (path.startsWith('session/')) path = path.slice('session/'.length);
+      path = decodeURIComponent(path).trim();
+      return path || null;
+    },
   },
   settings: {
     saveSettingsInternal: async settings => { savedSettings = structuredClone(settings); },
@@ -49,7 +63,7 @@ const mocks = {
   '@tauri-apps/plugin-shell': 'export const open=async()=>{};',
   '../state': 'export const state=globalThis.__discordControllerTest.state;',
   '../services/auth': 'export const { getDiscordAuth, loginDiscord, logoutDiscord, continueWithoutDiscord }=globalThis.__discordControllerTest.auth;',
-  '../services/sessions': 'export const { getSessions, getActiveSessionName }=globalThis.__discordControllerTest.sessions;',
+  '../services/sessions': 'export const { getSessions, getActiveSessionName, fetchJson, getDeepLinkUrl, extractSessionSlugFromDeepLink, setActiveSession }=globalThis.__discordControllerTest.sessions;',
   '../services/settings': 'export const { saveSettingsInternal }=globalThis.__discordControllerTest.settings;',
   '../services/status': 'export const unused=true;',
   '../services/updater': 'export const unused=true;',
@@ -237,4 +251,46 @@ test('a restart after logout stays public and never requests a saved identity', 
   assert.equal(restoreCalls, callsBeforeRestart);
   assert.equal(state.discordSkipped, true);
   assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+});
+
+test('loading sessions fetches asset metadata and images for all sessions directly without clicking', async () => {
+  fetchedAssetsUrls = [];
+  const testSessions = [
+    { name: 'Server 1', syncUrl: 'https://launcher.test/s1', assetsPath: 'https://launcher.test/s1/assets.json' },
+    { name: 'Server 2', syncUrl: 'https://launcher.test/s2', assetsPath: 'https://launcher.test/s2/assets.json' },
+    { name: 'Server 3', syncUrl: 'https://launcher.test/s3', assetsPath: 'https://launcher.test/s3/assets.json' },
+  ];
+  pendingSessions = testSessions;
+  await handlers.handleRefreshSessions();
+  assert.equal(state.globalSessions.length, 3);
+  assert.equal(fetchedAssetsUrls.length, 3);
+  assert.ok(state.globalSessions[0].assetsData);
+  assert.ok(state.globalSessions[1].assetsData);
+  assert.ok(state.globalSessions[2].assetsData);
+  assert.equal(state.globalSessions[1].assetsData.icon, '/icon.png');
+});
+
+test('extractSessionSlugFromDeepLink parses various deep link URL formats', () => {
+  const { extractSessionSlugFromDeepLink } = globalThis.__discordControllerTest.sessions;
+  assert.equal(extractSessionSlugFromDeepLink('launched://session/survie-rp'), 'survie-rp');
+  assert.equal(extractSessionSlugFromDeepLink('launched://session/survie-rp/'), 'survie-rp');
+  assert.equal(extractSessionSlugFromDeepLink('launched://survie-rp'), 'survie-rp');
+  assert.equal(extractSessionSlugFromDeepLink('launched://session/mon%20serveur?ref=web'), 'mon serveur');
+  assert.equal(extractSessionSlugFromDeepLink('https://example.com'), null);
+  assert.equal(extractSessionSlugFromDeepLink(''), null);
+});
+
+test('deep link URL on startup automatically selects matching session and closes select modal', async () => {
+  mockDeepLink = 'launched://session/pvp-faction';
+  const testSessions = [
+    { name: 'Survie RP', slug: 'survie-rp', syncUrl: 'https://launcher.test/api/sessions/survie-rp/sync' },
+    { name: 'PvP Faction', slug: 'pvp-faction', syncUrl: 'https://launcher.test/api/sessions/pvp-faction/sync' },
+  ];
+  pendingSessions = testSessions;
+  state.isServerSelectOpen = true;
+  await handlers.handleRefreshSessions();
+  assert.equal(state.activeSessionIndex, 1);
+  assert.equal(state.isServerSelectOpen, false);
+  assert.equal(activeSessionSaved, 'PvP Faction');
+  mockDeepLink = null;
 });

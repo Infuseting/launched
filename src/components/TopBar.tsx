@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLauncherState } from '../state';
+import { useAuth } from '../hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Settings, User as UserIcon, ShieldCheck } from 'lucide-react';
 
@@ -9,8 +9,21 @@ interface TopBarProps {
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick }) => {
-  const state = useLauncherState();
-  const user = state.authCache;
+  const { authCache: user, discordUser } = useAuth();
+  const [avatarFailed, setAvatarFailed] = React.useState(false);
+  const [fallbackTried, setFallbackTried] = React.useState(false);
+
+  React.useEffect(() => {
+    setAvatarFailed(false);
+    setFallbackTried(false);
+  }, [user?.uuid]);
+
+  const avatarSrc = React.useMemo(() => {
+    if (!user?.uuid) return null;
+    return fallbackTried
+      ? `https://minotar.net/avatar/${user.uuid}/64`
+      : `https://mc-heads.net/avatar/${user.uuid}/64`;
+  }, [user?.uuid, fallbackTried]);
 
   return (
     <header className="absolute top-0 left-0 right-0 p-8 pt-5 flex justify-between items-center z-40 pointer-events-none">
@@ -23,13 +36,17 @@ export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick 
         className="group pointer-events-auto flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl bg-neutral-900/70 hover:bg-neutral-850/90 border border-white/10 hover:border-white/20 backdrop-blur-2xl transition-all duration-200 cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
       >
         <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-neutral-800 border border-white/10 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform duration-200">
-          {user ? (
+          {avatarSrc && !avatarFailed ? (
             <img
-              src={`https://mc-heads.net/avatar/${user.uuid}/64`}
-              alt={user.name}
+              src={avatarSrc}
+              alt={user?.name ?? ''}
               className="w-full h-full object-cover rendering-pixelated"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
+              onError={() => {
+                if (!fallbackTried) {
+                  setFallbackTried(true);
+                } else {
+                  setAvatarFailed(true);
+                }
               }}
             />
           ) : (
@@ -40,7 +57,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick 
         <div className="flex flex-col pr-2">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-bold text-white tracking-tight group-hover:text-emerald-300 transition-colors">
-              {user ? user.name : state.discordUser?.username ?? 'Non connecté'}
+              {user ? user.name : discordUser?.username ?? 'Non connecté'}
             </span>
             {user && (
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 opacity-80" />

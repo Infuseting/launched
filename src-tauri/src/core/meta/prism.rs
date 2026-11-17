@@ -112,14 +112,12 @@ impl PrismMetaClient {
         }
     }
 
-    /// Fallback fetcher from official Mojang / Fabric / Quilt APIs if Prism Meta is unreachable.
+    /// Fallback fetcher from official Mojang / Fabric APIs if Prism Meta is unreachable.
     async fn fallback_fetch_component(&self, uid: &str, version: &str) -> Result<ComponentManifest, String> {
         if uid == "net.minecraft" {
             self.fallback_fetch_mojang_minecraft(version).await
         } else if uid == "net.fabricmc.fabric-loader" {
             self.fallback_fetch_fabric_loader(version).await
-        } else if uid == "org.quiltmc.quilt-loader" {
-            self.fallback_fetch_quilt_loader(version).await
         } else {
             Err(format!("Could not fetch component {} {} from Meta API or fallback", uid, version))
         }
@@ -160,14 +158,6 @@ impl PrismMetaClient {
         let raw_json: serde_json::Value = self.engine.fetch_json(&url).await?;
         let manifest: ComponentManifest = serde_json::from_value(raw_json)
             .map_err(|e| format!("Failed to parse Fabric loader profile: {}", e))?;
-        Ok(manifest)
-    }
-
-    async fn fallback_fetch_quilt_loader(&self, version: &str) -> Result<ComponentManifest, String> {
-        let url = format!("https://meta.quiltmc.org/v3/versions/loader/{}/profile/json", version);
-        let raw_json: serde_json::Value = self.engine.fetch_json(&url).await?;
-        let manifest: ComponentManifest = serde_json::from_value(raw_json)
-            .map_err(|e| format!("Failed to parse Quilt loader profile: {}", e))?;
         Ok(manifest)
     }
 
@@ -325,8 +315,6 @@ pub fn get_default_maven_base(lib_name: &str) -> &'static str {
         "https://maven.neoforged.net/releases/"
     } else if lib_name.starts_with("net.fabricmc:") {
         "https://maven.fabricmc.net/"
-    } else if lib_name.starts_with("org.quiltmc:") {
-        "https://maven.quiltmc.org/repository/release/"
     } else if lib_name.starts_with("org.spongepowered:") {
         "https://repo.spongepowered.org/maven/"
     } else {

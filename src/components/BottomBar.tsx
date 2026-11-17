@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { useLauncherState } from '../state';
+import { useLauncherSelector } from '../state';
+import { useSessions } from '../hooks/useSessions';
+import { useSyncProgress } from '../hooks/useSyncProgress';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, ChevronUp, Users, Server, Shield, Layers, Download, FileText } from 'lucide-react';
 
@@ -10,19 +12,21 @@ interface BottomBarProps {
 }
 
 export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelectClick, isSyncing }) => {
-  const state = useLauncherState();
-  const session = state.globalSessions[state.activeSessionIndex];
+  const { activeSession: session, sessionsLoading } = useSessions();
+  const { syncProgress } = useSyncProgress();
+  const serverStatus = useLauncherSelector(s => s.serverStatus);
+  const mojangStatus = useLauncherSelector(s => s.mojangStatus);
   const [showStatusPopover, setShowStatusPopover] = useState(false);
   const [showSyncTooltip, setShowSyncTooltip] = useState(false);
 
-  const playersOnline = state.serverStatus?.players?.online ?? 0;
-  const playersMax = state.serverStatus?.players?.max ?? 0;
-  const isOnline = state.serverStatus?.online ?? false;
+  const playersOnline = serverStatus?.players?.online ?? 0;
+  const playersMax = serverStatus?.players?.max ?? 0;
+  const isOnline = serverStatus?.online ?? false;
 
-  const currentFile = state.syncProgress.current_file || '';
-  const filesDone = state.syncProgress.files_done || 0;
-  const totalFiles = state.syncProgress.total_files || 0;
-  const percentage = Math.round(state.syncProgress.percentage || 0);
+  const currentFile = syncProgress.current_file || '';
+  const filesDone = syncProgress.files_done || 0;
+  const totalFiles = syncProgress.total_files || 0;
+  const percentage = Math.round(syncProgress.percentage || 0);
 
   // Short display label for the button face
   const fileNameOnly = currentFile ? currentFile.split(/[/\\]/).pop() || currentFile : 'Synchronisation...';
@@ -65,9 +69,9 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
                   <span>Services Mojang</span>
                 </div>
                 {[
-                  { id: 'auth', label: 'Authentification', ok: state.mojangStatus?.auth ?? true },
-                  { id: 'session', label: 'Sessions multijoueur', ok: state.mojangStatus?.session ?? true },
-                  { id: 'api', label: 'API & Skins', ok: state.mojangStatus?.api ?? true },
+                  { id: 'auth', label: 'Authentification', ok: mojangStatus?.auth ?? true },
+                  { id: 'session', label: 'Sessions multijoueur', ok: mojangStatus?.session ?? true },
+                  { id: 'api', label: 'API & Skins', ok: mojangStatus?.api ?? true },
                 ].map((svc) => (
                   <div key={svc.id} className="flex justify-between items-center text-[11px] text-white/75 px-1">
                     <span>{svc.label}</span>
@@ -159,7 +163,7 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
           whileHover={!isSyncing ? { scale: 1.03, y: -2 } : {}}
           whileTap={!isSyncing ? { scale: 0.97 } : {}}
           onClick={onPlayClick}
-          disabled={isSyncing || !session || state.sessionsLoading}
+          disabled={isSyncing || !session || sessionsLoading}
           className={`
             relative overflow-hidden
             w-full h-[60px] rounded-2xl

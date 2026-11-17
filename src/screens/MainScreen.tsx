@@ -1,5 +1,6 @@
 import React from 'react';
-import { useLauncherState } from '../state';
+import { useSessions } from '../hooks/useSessions';
+import { useSyncProgress } from '../hooks/useSyncProgress';
 import type { AppHandlers } from '../types';
 import TopBar from '../components/TopBar';
 import BottomBar from '../components/BottomBar';
@@ -11,8 +12,8 @@ interface MainScreenProps {
 }
 
 export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
-  const state = useLauncherState();
-  const session = state.globalSessions[state.activeSessionIndex];
+  const { activeSession: session } = useSessions();
+  const { isSyncing } = useSyncProgress();
 
   const backgroundSource = session?.assetsData?.background;
 
@@ -132,7 +133,7 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
         <BottomBar
           onPlayClick={() => handlers.syncAndLoad()}
           onServerSelectClick={() => handlers.handleServerSelectToggle(true)}
-          isSyncing={state.isSyncing}
+          isSyncing={isSyncing}
         />
       </div>
     </div>

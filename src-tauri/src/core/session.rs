@@ -24,18 +24,17 @@ pub enum LoaderKind {
     Forge,
     Fabric,
     NeoForge,
-    Quilt,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub name: String,
+    pub slug: Option<String>,
     pub minecraft: String,
     pub forge: Option<String>,
     pub fabric: Option<String>,
     pub neoforge: Option<String>,
-    pub quilt: Option<String>,
     pub components: Option<Vec<ComponentSpec>>,
     pub sync_dir: String,
     pub sync_url: String,
@@ -67,7 +66,6 @@ impl Session {
             (LoaderKind::Forge, &self.forge),
             (LoaderKind::Fabric, &self.fabric),
             (LoaderKind::NeoForge, &self.neoforge),
-            (LoaderKind::Quilt, &self.quilt),
         ] {
             if let Some(version) = version.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
                 if selected.is_some() {
@@ -86,9 +84,6 @@ impl Session {
                 format!("fabric-loader-{}-{}", version, self.minecraft)
             }
             Some((LoaderKind::NeoForge, version)) => format!("neoforge-{}", version),
-            Some((LoaderKind::Quilt, version)) => {
-                format!("quilt-loader-{}-{}", version, self.minecraft)
-            }
             None => self.minecraft.clone(),
         })
     }
@@ -119,11 +114,6 @@ impl Session {
             components.push(ComponentSpec {
                 uid: "net.fabricmc.fabric-loader".to_string(),
                 version: fabric_ver.to_string(),
-            });
-        } else if let Some(quilt_ver) = &self.quilt.as_deref().filter(|v| !v.trim().is_empty()) {
-            components.push(ComponentSpec {
-                uid: "org.quiltmc.quilt-loader".to_string(),
-                version: quilt_ver.to_string(),
             });
         }
 

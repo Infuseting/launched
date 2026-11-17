@@ -80,6 +80,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           }}
           onClose={() => handlers.handleServerSelectToggle(false)}
           onRefresh={handlers.handleRefreshSessions}
+          onFetchAssets={handlers.fetchAssetMetadata}
         />
 
         <MicrosoftDeviceCodeModal

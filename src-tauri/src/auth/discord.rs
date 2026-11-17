@@ -161,6 +161,14 @@ pub async fn site_get(app: &tauri::AppHandle, url: &str) -> Result<reqwest::Resp
     .await
 }
 
+pub fn current_auth_token(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    if guest_mode(app) {
+        Ok(None)
+    } else {
+        Ok(load(app)?.map(|c| c.token))
+    }
+}
+
 fn trusted_target(url: &str, site: &Url) -> Result<Url, String> {
     let target = Url::parse(url).map_err(|e| e.to_string())?;
     if target.origin() != site.origin()

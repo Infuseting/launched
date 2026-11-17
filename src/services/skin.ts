@@ -63,7 +63,29 @@ export async function uploadSkin(
   return invoke<SkinEntry>("save_skin_to_library", { name, textureB64, variant });
 }
 
-export async function applySkinFromHistory(skinId: string): Promise<void> {
+export async function applySkinFromHistory(skinId: string, entry?: SkinEntry): Promise<void> {
+  if (entry) {
+    try {
+      const binary = atob(entry.textureB64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "image/png" });
+
+      const form = new FormData();
+      form.append("variant", entry.variant.toUpperCase());
+      form.append("file", blob, "skin.png");
+
+      const dummyReq = new Request("https://dummy", { method: "POST", body: form });
+      const contentType = dummyReq.headers.get("content-type")!;
+      const buffer = await dummyReq.arrayBuffer();
+      const body = Array.from(new Uint8Array(buffer));
+
+      await invoke("upload_skin_raw", { contentType, body });
+      return;
+    } catch {
+      // Fallback to backend apply
+    }
+  }
   return invoke<void>("apply_skin_from_history", { skinId });
 }
 

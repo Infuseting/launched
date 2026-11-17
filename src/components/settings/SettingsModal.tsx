@@ -44,8 +44,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const currentEffective = getSessionSettings(state.currentSettings, sessionName);
 
-  const [localMinRam, setLocalMinRam] = React.useState(currentEffective.minRam);
-  const [localMaxRam, setLocalMaxRam] = React.useState(currentEffective.maxRam);
+  const toGb = React.useCallback((val: number): number => {
+    if (val <= 0) return 1;
+    return val < 64 ? val : Math.max(1, Math.round(val / 1024));
+  }, []);
+
+  const [localMinRam, setLocalMinRam] = React.useState(toGb(currentEffective.minRam));
+  const [localMaxRam, setLocalMaxRam] = React.useState(toGb(currentEffective.maxRam));
   const [localShowLogs, setLocalShowLogs] = React.useState(currentEffective.showLogs);
   const [localJvmArgs, setLocalJvmArgs] = React.useState(currentEffective.jvmArgs);
   const [localWrapperCommand, setLocalWrapperCommand] = React.useState(currentEffective.wrapperCommand);
@@ -112,22 +117,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const current = getSessionSettings(state.currentSettings, sessionName);
-      setLocalMinRam(current.minRam);
-      setLocalMaxRam(current.maxRam);
+      setLocalMinRam(toGb(current.minRam));
+      setLocalMaxRam(toGb(current.maxRam));
       setLocalShowLogs(current.showLogs);
       setLocalJvmArgs(current.jvmArgs);
       setLocalWrapperCommand(current.wrapperCommand);
     }
-  }, [isOpen, activeSettingsTab, state.currentSettings, sessionName, getSessionSettings]);
+  }, [isOpen, activeSettingsTab, state.currentSettings, sessionName, getSessionSettings, toGb]);
 
-  const handleMinRamChange = (val: number) => {
-    setLocalMinRam(val);
-    updateSetting('minRam', val);
+  const handleMinRamChange = (valGb: number) => {
+    setLocalMinRam(valGb);
+    updateSetting('minRam', valGb * 1024);
   };
 
-  const handleMaxRamChange = (val: number) => {
-    setLocalMaxRam(val);
-    updateSetting('maxRam', val);
+  const handleMaxRamChange = (valGb: number) => {
+    setLocalMaxRam(valGb);
+    updateSetting('maxRam', valGb * 1024);
   };
 
   const handleShowLogsChange = (val: boolean) => {
@@ -299,7 +304,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         localMinRam={localMinRam}
                         localMaxRam={localMaxRam}
                         localShowLogs={localShowLogs}
-                        maxSystemRam={maxSystemRam}
+                        maxSystemRam={Math.max(2, Math.round(maxSystemRam / 1024))}
                         state={state}
                         handlers={handlers}
                         onMinRamChange={handleMinRamChange}
