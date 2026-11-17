@@ -6,6 +6,7 @@ import TopBar from '../components/TopBar';
 import BottomBar from '../components/BottomBar';
 import SocialLinks from '../components/SocialLinks';
 import { motion, AnimatePresence } from 'framer-motion';
+import defaultBackground from '../assets/default-bg.jpg';
 
 interface MainScreenProps {
   handlers: Pick<AppHandlers, 'syncAndLoad' | 'handleSettingsToggle' | 'handleServerSelectToggle' | 'handleTabChange'>;
@@ -18,15 +19,18 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const backgroundSource = session?.assetsData?.background;
 
   const backgroundPool = React.useMemo(() => {
+    let pool: string[] = [];
     if (Array.isArray(backgroundSource)) {
-      return backgroundSource.filter((url): url is string => typeof url === 'string' && url.length > 0);
+      pool = backgroundSource.filter((url): url is string => typeof url === 'string' && url.length > 0);
+    } else if (typeof backgroundSource === 'string' && backgroundSource.length > 0) {
+      pool = [backgroundSource];
     }
 
-    if (typeof backgroundSource === 'string' && backgroundSource.length > 0) {
-      return [backgroundSource];
+    if (pool.length === 0) {
+      return [defaultBackground];
     }
 
-    return [];
+    return pool;
   }, [backgroundSource]);
 
   const pickRandomBackground = React.useCallback((exclude?: string) => {
@@ -98,6 +102,11 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
               alt="Session Background"
               className="w-full h-full object-cover select-none brightness-85"
               draggable={false}
+              onError={(e) => {
+                if (e.currentTarget.src !== defaultBackground) {
+                  e.currentTarget.src = defaultBackground;
+                }
+              }}
             />
           )}
         </motion.div>

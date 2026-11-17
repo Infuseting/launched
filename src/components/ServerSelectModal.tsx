@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
 import { ArrowLeft, Server, Star, Check, Search, Box } from 'lucide-react';
+import defaultBackground from '../assets/default-bg.jpg';
 
 interface ServerSelectModalProps {
   isOpen: boolean;
@@ -104,9 +105,10 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {filteredSessions.map((s) => {
                     const isActive = s.originalIndex === state.activeSessionIndex;
-                    const bgUrl = Array.isArray(s.assetsData?.background)
+                    const rawBg = Array.isArray(s.assetsData?.background)
                       ? s.assetsData.background[0]
                       : s.assetsData?.background;
+                    const bgUrl = rawBg || defaultBackground;
 
                     return (
                       <motion.div
@@ -132,7 +134,16 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                         {/* Background Banner Preview */}
                         {bgUrl && (
                           <div className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
-                            <img src={bgUrl} alt="" className="w-full h-full object-cover select-none" />
+                            <img
+                              src={bgUrl}
+                              alt=""
+                              className="w-full h-full object-cover select-none"
+                              onError={(e) => {
+                                if (e.currentTarget.src !== defaultBackground) {
+                                  e.currentTarget.src = defaultBackground;
+                                }
+                              }}
+                            />
                             <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent" />
                           </div>
                         )}
