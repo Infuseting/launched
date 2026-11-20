@@ -52,6 +52,8 @@ pub fn run() {
             set_active_session,
             fetch_json,
             get_deep_link_url,
+            get_session_optional_files,
+            set_session_optional_files,
             // Discord Auth
             get_discord_auth,
             continue_without_discord,

@@ -177,7 +177,6 @@ mod tests {
                 LoaderKind::Forge => session.forge = Some(version.to_string()),
                 LoaderKind::Fabric => session.fabric = Some(version.to_string()),
                 LoaderKind::NeoForge => session.neoforge = Some(version.to_string()),
-                _ => unreachable!(),
             }
             assert_eq!(session.selected_loader().unwrap(), Some((kind, version)));
             assert_eq!(session.installed_version_id().unwrap(), id);
@@ -198,7 +197,6 @@ mod tests {
                     LoaderKind::Forge => session.forge = Some("52.0.28".to_string()),
                     LoaderKind::Fabric => session.fabric = Some("0.16.9".to_string()),
                     LoaderKind::NeoForge => session.neoforge = Some("21.1.80".to_string()),
-                    _ => unreachable!(),
                 }
             }
             assert!(session.selected_loader().is_err());

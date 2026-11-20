@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
-import { ArrowLeft, Server, Star, Check, Search, Box } from 'lucide-react';
+import type { Session } from '../types';
+import { ArrowLeft, Server, Star, Check, Search, Box, Settings } from 'lucide-react';
 import defaultBackground from '../assets/default-bg.jpg';
 
 interface ServerSelectModalProps {
@@ -11,6 +12,7 @@ interface ServerSelectModalProps {
   onClose: () => void;
   onRefresh: () => Promise<void>;
   onFetchAssets?: (index: number) => Promise<void>;
+  onOpenOptionalMods?: (session: Session) => void;
 }
 
 export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
@@ -20,6 +22,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   onClose,
   onRefresh,
   onFetchAssets,
+  onOpenOptionalMods,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -216,16 +219,32 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                           <span className="text-white/40 text-[11px]">
                             {isActive ? 'Session prête au lancement' : 'Cliquer pour sélectionner'}
                           </span>
-                          <button
-                            type="button"
-                            className={`px-3.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                              isActive
-                                ? 'bg-emerald-400 text-neutral-950 font-black'
-                                : 'bg-white/10 group-hover:bg-white text-white group-hover:text-neutral-950'
-                            }`}
-                          >
-                            {isActive ? 'Sélectionné' : 'Rejoindre'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {onOpenOptionalMods && (
+                              <button
+                                type="button"
+                                title="Configurer les mods & fichiers optionnels"
+                                disabled={state.isSyncing}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenOptionalMods(s);
+                                }}
+                                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/25 text-white/60 hover:text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <Settings className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={`px-3.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                                isActive
+                                  ? 'bg-emerald-400 text-neutral-950 font-black'
+                                  : 'bg-white/10 group-hover:bg-white text-white group-hover:text-neutral-950'
+                              }`}
+                            >
+                              {isActive ? 'Sélectionné' : 'Rejoindre'}
+                            </button>
+                          </div>
                         </div>
                       </motion.div>
                     );

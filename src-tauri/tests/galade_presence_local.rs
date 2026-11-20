@@ -6,7 +6,7 @@ use fs2::FileExt;
 use std::{
     fs::{self, File},
     path::Path,
-    process::{Child, Command, Stdio},
+    process::{Child, Command},
     thread,
     time::{Duration, Instant},
 };
@@ -21,6 +21,7 @@ impl Drop for RunningGame {
 }
 
 #[test]
+#[ignore = "manual Minecraft smoke test: requires LAUNCHED_GALADE_TEST_DIR and LAUNCHED_GALADE_TEST_MODE with a prepared installation"]
 fn galade_launch_with_the_production_presence_agent() {
     let root = std::env::var_os("LAUNCHED_GALADE_TEST_DIR").unwrap();
     let root = Path::new(&root);

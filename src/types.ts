@@ -91,6 +91,20 @@ export interface SessionSettings {
   jvmArgs: string;
   wrapperCommand: string;
   showLogs: boolean;
+  enabledOptionalFiles?: string[];
+  optionalFilesConfigured?: boolean;
+}
+
+export interface OptionalFileItem {
+  destPath: string;
+  name: string;
+  folder: string;
+  size: string;
+  md5: string;
+  isEnabled: boolean;
+  isDownloaded: boolean;
+  hasUpdate?: boolean;
+  oldVersionPath?: string | null;
 }
 
 export interface AppSettings {
@@ -136,6 +150,10 @@ export interface LauncherStateModel {
   serverStatusInterval: ReturnType<typeof setInterval> | null;
   crackModalOpen: boolean;
   crackModalDefaultPseudo: string;
+  optionalModsModalOpen: boolean;
+  optionalModsModalSession: Session | null;
+  optionalModsIsFirstSync: boolean;
+  optionalModsHasUpdates: boolean;
 }
 
 export interface AppHandlers {
@@ -160,4 +178,7 @@ export interface AppHandlers {
   handleDeviceCodeModalToggle: (show: boolean) => void;
   handleSessionSelect: (index: number) => Promise<void>;
   handleCrackModalResolve: (pseudo: string | null) => void;
+  handleOpenOptionalMods: (session: Session, isFirstSync?: boolean) => void;
+  handleCloseOptionalMods: () => void;
+  handleSaveOptionalMods: (sessionName: string, enabledFiles: string[], allOptionalFiles?: string[]) => Promise<void>;
 }

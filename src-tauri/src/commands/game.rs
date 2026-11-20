@@ -22,8 +22,7 @@ pub async fn sync_session(
     let session = authorized_session(&app_handle, &session).await?;
     let install_service = InstallService;
     let sync_service = SyncService;
-    let base_dir = app_handle.path().app_data_dir().unwrap();
-    let session_dir = base_dir.join("sessions").join(&session.name);
+    let session_dir = crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name).await?;
 
     // Save as active session
     {
@@ -43,8 +42,24 @@ pub async fn sync_session(
 
     // 2. Sync session-specific files
     std::fs::create_dir_all(&session_dir).map_err(|e| e.to_string())?;
+
+    let settings = crate::core::settings::SettingsManager::load(&app_handle);
+    let session_settings = settings
+        .sessions
+        .get(&session.name)
+        .cloned()
+        .unwrap_or(settings.default_settings);
+    let enabled_optional = session_settings.enabled_optional_files.as_deref();
+
     sync_service
-        .sync(&app_handle, &window, &session_dir, &session.sync_url, &session.sync_dir)
+        .sync(
+            &app_handle,
+            &window,
+            &session_dir,
+            &session.sync_url,
+            &session.sync_dir,
+            enabled_optional,
+        )
         .await
 }
 
@@ -57,8 +72,6 @@ pub async fn launch_game(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let launch_service = LaunchService;
-    let base_dir = app_handle.path().app_data_dir().unwrap();
-
     // Use provided session or fallback to active session in state
     let session = session
         .or_else(|| state.active_session.lock().unwrap().clone())
@@ -68,7 +81,7 @@ pub async fn launch_game(
         return Err("Cette session requiert un compte Minecraft.".into());
     }
 
-    let session_dir = base_dir.join("sessions").join(&session.name);
+    let session_dir = crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name).await?;
 
     // Get auth: try keychain first
     let auth = if let Some(pseudo) = crack_pseudo {

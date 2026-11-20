@@ -8,6 +8,7 @@ import ServerSelectModal from './components/ServerSelectModal';
 import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';
 import CrackModal from './components/CrackModal';
+import { OptionalModsModal } from './components/OptionalModsModal';
 import DiscordLoginScreen from './components/DiscordLoginScreen';
 import { LoaderCircle } from 'lucide-react';
 
@@ -22,7 +23,10 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (launcherState.crackModalOpen) {
+        if (launcherState.optionalModsModalOpen) {
+          e.preventDefault();
+          handlers.handleCloseOptionalMods();
+        } else if (launcherState.crackModalOpen) {
           e.preventDefault();
           handlers.handleCrackModalResolve(null);
         } else if (launcherState.deviceCodeModalOpen) {
@@ -81,6 +85,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           onClose={() => handlers.handleServerSelectToggle(false)}
           onRefresh={handlers.handleRefreshSessions}
           onFetchAssets={handlers.fetchAssetMetadata}
+          onOpenOptionalMods={(session) => handlers.handleOpenOptionalMods(session)}
         />
 
         <MicrosoftDeviceCodeModal
@@ -99,6 +104,15 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           isOpen={launcherState.crackModalOpen}
           defaultPseudo={launcherState.crackModalDefaultPseudo}
           onResolve={handlers.handleCrackModalResolve}
+        />
+
+        <OptionalModsModal
+          isOpen={launcherState.optionalModsModalOpen}
+          session={launcherState.optionalModsModalSession}
+          isFirstSync={launcherState.optionalModsIsFirstSync}
+          hasUpdates={launcherState.optionalModsHasUpdates}
+          onClose={handlers.handleCloseOptionalMods}
+          onSave={handlers.handleSaveOptionalMods}
         />
       </div>}
     </Layout>

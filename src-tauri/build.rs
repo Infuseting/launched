@@ -41,4 +41,15 @@ fn build_discord_agent() {
 fn main() {
     build_discord_agent();
     tauri_build::build();
+    // Tauri embeds Common Controls v6 in the app binary, but Rust test harnesses
+    // also import TaskDialogIndirect and need their own activation manifest.
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
+        && env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
+    {
+        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+        println!("cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'");
+        // The app already has Tauri's resource manifest; generating another one
+        // would create a duplicate resource. Test harnesses still need embedding.
+        println!("cargo:rustc-link-arg-bin=app=/MANIFEST:NO");
+    }
 }

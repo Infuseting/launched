@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Session, AssetMetadata } from "../types";
+import type { Session, AssetMetadata, OptionalFileItem } from "../types";
 
 export async function getSessions(): Promise<Session[]> {
   return await invoke<Session[]>("get_sessions");
@@ -64,4 +64,16 @@ export function extractSessionSlugFromDeepLink(url: string): string | null {
   }
   path = decodeURIComponent(path).trim();
   return path || null;
+}
+
+export async function getSessionOptionalFiles(session: Session): Promise<OptionalFileItem[]> {
+  return await invoke<OptionalFileItem[]>("get_session_optional_files", { session });
+}
+
+export async function setSessionOptionalFiles(
+  session: Session,
+  enabledFiles: string[],
+  allOptionalFiles: string[] = []
+): Promise<void> {
+  await invoke("set_session_optional_files", { session, enabledFiles, allOptionalFiles });
 }

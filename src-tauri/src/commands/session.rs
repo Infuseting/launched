@@ -75,3 +75,29 @@ pub async fn fetch_json(app_handle: tauri::AppHandle, url: String) -> Result<ser
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_session_optional_files(
+    app_handle: tauri::AppHandle,
+    session: Session,
+) -> Result<Vec<crate::core::optional_files::OptionalFileDto>, String> {
+    let session = authorized_session(&app_handle, &session).await?;
+    crate::core::optional_files::OptionalFilesManager::get_optional_files(&app_handle, &session).await
+}
+
+#[tauri::command]
+pub async fn set_session_optional_files(
+    app_handle: tauri::AppHandle,
+    session: Session,
+    enabled_files: Vec<String>,
+    all_optional_files: Vec<String>,
+) -> Result<(), String> {
+    let session = authorized_session(&app_handle, &session).await?;
+    crate::core::optional_files::OptionalFilesManager::save_optional_files(
+        &app_handle,
+        &session,
+        enabled_files,
+        all_optional_files,
+    )
+    .await
+}

@@ -8,3 +8,5 @@ pub mod skin;
 pub mod sync;
 pub mod settings;
 pub mod retry;
+pub mod optional_files;
+pub(crate) mod sync_conflicts;

@@ -5,6 +5,7 @@ import { state } from '../state';
 import type {
   AppHandlers,
   DeviceCodePayload,
+  Session,
   SyncProgress,
   UpdateDownloadEvent
 } from '../types';
@@ -68,6 +69,9 @@ export class LauncherController {
   private readonly handlers: AppHandlers;
   private pendingUpdate: PendingUpdate | null = null;
   private currentCrackModalResolve: ((pseudo: string | null) => void) | null = null;
+  private currentOptionalModsResolve: ((confirmed: boolean) => void) | null = null;
+  private optionalModsSaving = false;
+  private launchPending = false;
   private discordAccessRevision = 0;
 
   constructor() {
@@ -117,7 +121,17 @@ export class LauncherController {
         if (this.currentCrackModalResolve) {
           this.currentCrackModalResolve(pseudo);
         }
-      }
+      },
+      handleOpenOptionalMods: (session, isFirstSync) => {
+        if (state.isSyncing || this.launchPending || this.optionalModsSaving) return;
+        state.optionalModsModalSession = session;
+        state.optionalModsIsFirstSync = !!isFirstSync;
+        state.optionalModsHasUpdates = false;
+        state.optionalModsModalOpen = true;
+      },
+      handleCloseOptionalMods: () => this.handleCloseOptionalMods(),
+      handleSaveOptionalMods: (sessionName, enabledFiles, allOptionalFiles) =>
+        this.handleSaveOptionalMods(sessionName, enabledFiles, allOptionalFiles)
     };
   }
 
@@ -230,13 +244,82 @@ export class LauncherController {
     });
   }
 
+  private async promptOptionalMods(
+    session: Session,
+    isFirstSync = false,
+    hasUpdates = false
+  ): Promise<boolean> {
+    state.optionalModsModalSession = session;
+    state.optionalModsIsFirstSync = isFirstSync;
+    state.optionalModsHasUpdates = hasUpdates;
+    state.optionalModsModalOpen = true;
+
+    return new Promise<boolean>((resolve) => {
+      this.currentOptionalModsResolve = (confirmed: boolean) => {
+        state.optionalModsModalOpen = false;
+        state.optionalModsModalSession = null;
+        state.optionalModsHasUpdates = false;
+        this.currentOptionalModsResolve = null;
+        resolve(confirmed);
+      };
+    });
+  }
+
+  private handleCloseOptionalMods(): void {
+    if (this.optionalModsSaving) return;
+    state.optionalModsModalOpen = false;
+    state.optionalModsModalSession = null;
+    state.optionalModsHasUpdates = false;
+    if (this.currentOptionalModsResolve) {
+      this.currentOptionalModsResolve(false);
+      this.currentOptionalModsResolve = null;
+    }
+  }
+
+  private async handleSaveOptionalMods(
+    sessionName: string,
+    enabledFiles: string[],
+    allOptionalFiles: string[] = []
+  ): Promise<void> {
+    if (this.optionalModsSaving) return;
+    const session = state.optionalModsModalSession;
+    if (!session || session.name !== sessionName) throw new Error('Session optionnelle invalide.');
+    this.optionalModsSaving = true;
+    try {
+      await sessionService.setSessionOptionalFiles(toPlainObject(session), enabledFiles, allOptionalFiles);
+      if (!state.currentSettings.sessions[sessionName]) {
+        state.currentSettings.sessions[sessionName] = { ...state.currentSettings.defaultSettings };
+      }
+      state.currentSettings.sessions[sessionName].enabledOptionalFiles = enabledFiles;
+      state.currentSettings.sessions[sessionName].optionalFilesConfigured = true;
+      // The backend already persisted this selection. Avoid overwriting it with stale settings.
+      state.optionalModsModalOpen = false;
+      state.optionalModsModalSession = null;
+      state.optionalModsHasUpdates = false;
+      this.currentOptionalModsResolve?.(true);
+    } finally {
+      this.optionalModsSaving = false;
+    }
+  }
+
+  private async markOptionalFilesConfigured(sessionName: string): Promise<void> {
+    if (!state.currentSettings.sessions[sessionName]) {
+      state.currentSettings.sessions[sessionName] = { ...state.currentSettings.defaultSettings };
+    }
+    state.currentSettings.sessions[sessionName].enabledOptionalFiles = [];
+    state.currentSettings.sessions[sessionName].optionalFilesConfigured = true;
+    await settingsService.saveSettingsInternal(toPlainObject(state.currentSettings));
+  }
+
   private async syncAndLoad(): Promise<void> {
-    if ((!state.discordUser && !state.discordSkipped) || state.isSyncing || state.globalSessions.length === 0) {
+    if ((!state.discordUser && !state.discordSkipped) || state.isSyncing || this.launchPending || state.optionalModsModalOpen || state.globalSessions.length === 0) {
       return;
     }
 
     const session = state.globalSessions[state.activeSessionIndex];
-    state.isSyncing = true;
+    if (!session) return;
+    this.launchPending = true;
+    const accessRevision = this.discordAccessRevision;
 
     try {
       let crackPseudo: string | undefined;
@@ -244,8 +327,7 @@ export class LauncherController {
       if (session.crack) {
         const defaultPseudo = state.currentSettings.lastCrackPseudo || state.authCache?.name || state.allAccounts[0]?.name || 'Player';
         const result = await this.promptCrackPseudo(defaultPseudo);
-        if (!result) {
-          state.isSyncing = false;
+        if (!result || accessRevision !== this.discordAccessRevision) {
           return;
         }
         crackPseudo = result;
@@ -254,6 +336,30 @@ export class LauncherController {
       } else {
         await this.ensureAuthenticated();
       }
+      if (accessRevision !== this.discordAccessRevision) return;
+
+      // Check if optional files exist: prompt if first sync OR if updates are available for enabled files
+      const configuredSessionSettings = state.currentSettings.sessions[session.name];
+      const isConfigured = configuredSessionSettings?.optionalFilesConfigured === true;
+
+      {
+        const optionalFiles = await sessionService.getSessionOptionalFiles(toPlainObject(session));
+        if (accessRevision !== this.discordAccessRevision) return;
+        if (optionalFiles && optionalFiles.length > 0) {
+          const hasUpdates = optionalFiles.some((f) => f.hasUpdate && f.isEnabled);
+          if (!isConfigured || hasUpdates) {
+            const confirmed = await this.promptOptionalMods(session, !isConfigured, hasUpdates);
+            if (!confirmed || accessRevision !== this.discordAccessRevision) {
+              return;
+            }
+          }
+        } else if (!isConfigured) {
+          await this.markOptionalFilesConfigured(session.name);
+        }
+      }
+      if (accessRevision !== this.discordAccessRevision) return;
+
+      state.isSyncing = true;
 
       state.syncProgress = {
         current_file: 'Starting synchronization...',
@@ -267,9 +373,14 @@ export class LauncherController {
       });
 
       try {
+        if (accessRevision !== this.discordAccessRevision) return;
         await sessionService.syncSession(session);
       } finally {
         unlistenSyncProgress();
+      }
+      if (accessRevision !== this.discordAccessRevision) {
+        state.isSyncing = false;
+        return;
       }
 
       const sessionSettings = state.currentSettings.sessions[session.name] ?? state.currentSettings.defaultSettings;
@@ -279,8 +390,11 @@ export class LauncherController {
         state.isSyncing = false;
       }, 3000);
     } catch (error) {
-      await this.handleLaunchError(error);
+      if (accessRevision === this.discordAccessRevision) await this.handleLaunchError(error);
       state.isSyncing = false;
+    } finally {
+      this.launchPending = false;
+      if (accessRevision !== this.discordAccessRevision) state.isSyncing = false;
     }
   }
 
@@ -402,6 +516,11 @@ export class LauncherController {
   }
 
   private clearDiscordState(): void {
+    // Resolve any suspended launch before hiding the session that owns its modal.
+    this.currentOptionalModsResolve?.(false);
+    state.optionalModsModalOpen = false;
+    state.optionalModsModalSession = null;
+    state.optionalModsHasUpdates = false;
     this.discordAccessRevision++;
     state.discordUser = null;
     state.discordSkipped = false;
@@ -473,7 +592,7 @@ export class LauncherController {
   }
 
   private async handleContinueWithoutDiscord(): Promise<void> {
-    if (state.discordBusy || state.isSyncing) return;
+    if (state.discordBusy || state.isSyncing || this.launchPending || this.optionalModsSaving) return;
     this.discordAccessRevision++;
     state.discordBusy = true;
     state.discordError = null;
@@ -488,7 +607,7 @@ export class LauncherController {
   }
 
   private async handleDiscordLogin(): Promise<void> {
-    if (state.discordBusy || state.isSyncing) return;
+    if (state.discordBusy || state.isSyncing || this.launchPending || this.optionalModsSaving) return;
     state.discordBusy = true;
     state.discordError = null;
     try {
@@ -505,7 +624,7 @@ export class LauncherController {
   }
 
   private async handleDiscordLogout(): Promise<void> {
-    if (state.discordBusy || state.isSyncing) return;
+    if (state.discordBusy || state.isSyncing || this.launchPending || this.optionalModsSaving) return;
     state.discordBusy = true;
     state.discordError = null;
     try {

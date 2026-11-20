@@ -11,6 +11,10 @@ pub struct SessionSettings {
     pub jvm_args: String,
     pub wrapper_command: String,
     pub show_logs: bool,
+    #[serde(default)]
+    pub enabled_optional_files: Option<Vec<String>>,
+    #[serde(default)]
+    pub optional_files_configured: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -50,6 +54,8 @@ impl Default for SessionSettings {
             jvm_args: "".to_string(),
             wrapper_command: "".to_string(),
             show_logs: false,
+            enabled_optional_files: None,
+            optional_files_configured: None,
         }
     }
 }
@@ -121,6 +127,8 @@ impl SettingsManager {
                         jvm_args: old.jvm_args,
                         wrapper_command: old.wrapper_command,
                         show_logs: old.show_logs,
+                        enabled_optional_files: None,
+                        optional_files_configured: None,
                     },
                 };
             }

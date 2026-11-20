@@ -54,7 +54,11 @@ const rawState: LauncherStateModel = {
   dismissedUpdateVersion: null,
   serverStatusInterval: null,
   crackModalOpen: false,
-  crackModalDefaultPseudo: ''
+  crackModalDefaultPseudo: '',
+  optionalModsModalOpen: false,
+  optionalModsModalSession: null,
+  optionalModsIsFirstSync: false,
+  optionalModsHasUpdates: false
 };
 
 function createSnapshot(source: LauncherStateModel): LauncherStateModel {
