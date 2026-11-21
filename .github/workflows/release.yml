@@ -91,6 +91,12 @@ jobs:
           ref: gh-pages
           fetch-depth: 0
 
+      - name: Publish the complete signed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest
+
       - name: Download latest.json from GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
