@@ -1,11 +1,13 @@
 use crate::core::session::Session;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use std::{collections::HashMap, path::PathBuf};
 use tauri::Manager;
 
 #[derive(Default)]
 pub struct AppState {
     pub active_session: Mutex<Option<Session>>,
+    pub running_sessions: Mutex<HashMap<PathBuf, usize>>,
 }
 
 #[derive(Default)]

@@ -11,7 +11,7 @@ use crate::core::skin::{
 /// Mirrors the same validate → refresh → remove flow used in `launch_game`.
 pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, String> {
     let mut settings = SettingsManager::load(app_handle);
-    let accounts = SecretManager::get_all_accounts(app_handle).unwrap_or_default();
+    let accounts = SecretManager::get_all_accounts(app_handle)?;
 
     let auth = settings
         .active_account_uuid
@@ -35,7 +35,7 @@ pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, St
         match MicrosoftAuth.refresh_auth(&refresh_token).await {
             Ok(refreshed) => {
                 log::info!("Silently refreshed Minecraft token for {}", refreshed.name);
-                let _ = SecretManager::add_account(app_handle, refreshed.clone());
+                SecretManager::add_account(app_handle, refreshed.clone())?;
                 settings.active_account_uuid = Some(refreshed.uuid.clone());
                 let _ = SettingsManager::save(app_handle, &settings);
                 return Ok(refreshed.access_token);
@@ -224,7 +224,7 @@ pub async fn refresh_active_token(app_handle: tauri::AppHandle) -> Result<AuthRe
     let token = get_valid_token(&app_handle).await?;
 
     // Return the full account matching this fresh token
-    let accounts = SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
+    let accounts = SecretManager::get_all_accounts(&app_handle)?;
     accounts
         .into_iter()
         .find(|a| a.access_token == token)

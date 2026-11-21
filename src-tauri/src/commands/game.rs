@@ -98,9 +98,11 @@ pub async fn launch_game(
         }
     } else {
         let mut settings = SettingsManager::load(&app_handle);
-        let mut auth =
-            SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref())
-                .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
+        let mut auth = SecretManager::get_active_account(
+            &app_handle,
+            settings.active_account_uuid.as_deref(),
+        )?
+        .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
 
         // Validate token before launch; if expired, try refresh_token once.
         if !MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {

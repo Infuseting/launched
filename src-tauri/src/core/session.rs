@@ -127,6 +127,27 @@ impl Session {
 pub struct SessionManager;
 
 impl SessionManager {
+    pub(crate) async fn local_directory(
+        sessions_root: &std::path::Path,
+        name: &str,
+    ) -> Result<std::path::PathBuf, String> {
+        crate::core::sync::validate_relative_path(name)?;
+        if name.contains(['/', '\\']) {
+            return Err("Nom de session invalide".into());
+        }
+        crate::core::sync::local_path(sessions_root, name).await
+    }
+
+    pub(crate) fn remove_local_files(directory: &std::path::Path) -> Result<(), String> {
+        match std::fs::remove_dir_all(directory) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!(
+                "Impossible de supprimer les fichiers locaux : {error}"
+            )),
+        }
+    }
+
     /**
      * Fetches sessions from the remote servers.json URL.
      */
@@ -142,6 +163,68 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn local_deletion_removes_only_the_selected_session_and_can_be_repeated() {
+        let root = std::env::temp_dir().join(format!("launched-delete-{}", uuid::Uuid::new_v4()));
+        let sessions = root.join("sessions");
+        let selected = sessions.join("Selected");
+        let other = sessions.join("Other");
+        std::fs::create_dir_all(selected.join("saves/world")).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(selected.join("saves/world/level.dat"), b"save").unwrap();
+        std::fs::write(other.join("options.txt"), b"keep").unwrap();
+        std::fs::write(root.join("settings.json"), b"keep").unwrap();
+
+        let directory = SessionManager::local_directory(&sessions, "Selected")
+            .await
+            .unwrap();
+        SessionManager::remove_local_files(&directory).unwrap();
+        SessionManager::remove_local_files(&directory).unwrap();
+        assert!(!selected.exists());
+        assert_eq!(std::fs::read(other.join("options.txt")).unwrap(), b"keep");
+        assert!(root.join("settings.json").is_file());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn local_deletion_rejects_names_outside_a_single_session_directory() {
+        let root = std::env::temp_dir().join("launched-delete-validation/sessions");
+        for name in [
+            "",
+            ".",
+            "..",
+            "../other",
+            "nested/session",
+            "nested\\session",
+            "C:\\",
+            "/root",
+            "CON",
+            "name.",
+        ] {
+            assert!(
+                SessionManager::local_directory(&root, name).await.is_err(),
+                "{name}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn local_deletion_rejects_session_symlinks() {
+        let root =
+            std::env::temp_dir().join(format!("launched-delete-link-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("sessions")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        std::os::unix::fs::symlink(root.join("outside"), root.join("sessions/Linked")).unwrap();
+        assert!(
+            SessionManager::local_directory(&root.join("sessions"), "Linked")
+                .await
+                .is_err()
+        );
+        assert!(root.join("outside").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     fn session() -> Session {
         serde_json::from_value(serde_json::json!({

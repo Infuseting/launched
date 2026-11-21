@@ -323,6 +323,9 @@ pub(crate) fn notify_account_change(app: &tauri::AppHandle) {
 fn active_account_uuid(app: &tauri::AppHandle) -> Option<String> {
     let settings = SettingsManager::load(app);
     SecretManager::get_active_account(app, settings.active_account_uuid.as_deref())
+        .map_err(|error| log::error!("Could not read account for Discord presence: {error}"))
+        .ok()
+        .flatten()
         .map(|account| account.uuid)
 }
 

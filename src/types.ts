@@ -137,6 +137,8 @@ export interface LauncherStateModel {
   activeSettingsTab: string;
   maxSystemRam: number;
   isSyncing: boolean;
+  isPreparingLaunch: boolean;
+  deletingSessionName: string | null;
   syncProgress: SyncProgress;
   appVersion: string;
   mojangStatus: MojangServiceStatus;
@@ -177,6 +179,7 @@ export interface AppHandlers {
   handleServerSelectToggle: (show: boolean) => void;
   handleDeviceCodeModalToggle: (show: boolean) => void;
   handleSessionSelect: (index: number) => Promise<void>;
+  handleDeleteSession: (session: Session) => Promise<void>;
   handleCrackModalResolve: (pseudo: string | null) => void;
   handleOpenOptionalMods: (session: Session, isFirstSync?: boolean) => void;
   handleCloseOptionalMods: () => void;

@@ -78,6 +78,8 @@ export class LauncherController {
   private launchPending = false;
   private discordAccessRevision = 0;
   private playerCountRevision = 0;
+  private deepLinkRequested = false;
+  private pendingDeepLinkSlug: string | null = null;
   private readonly assetRequests = new Map<string, Promise<void>>();
 
   constructor() {
@@ -104,6 +106,7 @@ export class LauncherController {
         state.isSettingsOpen = show;
       },
       handleServerSelectToggle: (show: boolean) => {
+        if (state.deletingSessionName) return;
         state.isServerSelectOpen = show;
         if (show) {
           void Promise.all(
@@ -123,13 +126,20 @@ export class LauncherController {
         }
       },
       handleSessionSelect: (index: number) => this.handleSessionSelect(index),
+      handleDeleteSession: (session: Session) =>
+        this.handleDeleteSession(session),
       handleCrackModalResolve: (pseudo: string | null) => {
         if (this.currentCrackModalResolve) {
           this.currentCrackModalResolve(pseudo);
         }
       },
       handleOpenOptionalMods: (session, isFirstSync) => {
-        if (state.isSyncing || this.launchPending || this.optionalModsSaving)
+        if (
+          state.isSyncing ||
+          this.launchPending ||
+          this.optionalModsSaving ||
+          state.deletingSessionName
+        )
           return;
         state.optionalModsModalSession = session;
         state.optionalModsIsFirstSync = !!isFirstSync;
@@ -158,6 +168,7 @@ export class LauncherController {
    */
   public async initialize(): Promise<void> {
     this.registerExternalLinksHandler();
+    await this.registerDeepLinkHandler();
     await listen('discord-auth-required', () => {
       void this.handleDiscordAuthRequired();
     });
@@ -176,6 +187,13 @@ export class LauncherController {
 
     await this.refreshStatuses();
     this.startStatusPolling();
+  }
+
+  private async registerDeepLinkHandler(): Promise<void> {
+    await listen('deep-link-received', () => {
+      this.deepLinkRequested = true;
+      return this.loadSessions();
+    });
   }
 
   private scheduleStartupUpdateRetries(): void {
@@ -334,6 +352,7 @@ export class LauncherController {
       this.currentOptionalModsResolve?.(true);
     } finally {
       this.optionalModsSaving = false;
+      if (this.deepLinkRequested) void this.loadSessions();
     }
   }
 
@@ -356,6 +375,7 @@ export class LauncherController {
     if (
       (!state.discordUser && !state.discordSkipped) ||
       state.isSyncing ||
+      state.deletingSessionName ||
       this.launchPending ||
       state.optionalModsModalOpen ||
       state.globalSessions.length === 0
@@ -366,6 +386,13 @@ export class LauncherController {
     const session = state.globalSessions[state.activeSessionIndex];
     if (!session) return;
     this.launchPending = true;
+    state.isPreparingLaunch = true;
+    state.syncProgress = {
+      current_file: 'Préparation du lancement...',
+      files_done: 0,
+      total_files: 0,
+      percentage: 0,
+    };
     const accessRevision = this.discordAccessRevision;
 
     try {
@@ -396,6 +423,8 @@ export class LauncherController {
         configuredSessionSettings?.optionalFilesConfigured === true;
 
       {
+        state.syncProgress.current_file =
+          'Vérification des fichiers optionnels...';
         const optionalFiles = await sessionService.getSessionOptionalFiles(
           toPlainObject(session),
         );
@@ -458,6 +487,7 @@ export class LauncherController {
 
       setTimeout(() => {
         state.isSyncing = false;
+        if (this.deepLinkRequested) void this.loadSessions();
       }, 3000);
     } catch (error) {
       if (accessRevision === this.discordAccessRevision)
@@ -465,8 +495,10 @@ export class LauncherController {
       state.isSyncing = false;
     } finally {
       this.launchPending = false;
+      state.isPreparingLaunch = false;
       if (accessRevision !== this.discordAccessRevision)
         state.isSyncing = false;
+      if (this.deepLinkRequested) void this.loadSessions();
     }
   }
 
@@ -759,8 +791,16 @@ export class LauncherController {
   }
 
   private async loadSessions(): Promise<void> {
-    if ((!state.discordUser && !state.discordSkipped) || state.sessionsLoading)
+    if (
+      (!state.discordUser && !state.discordSkipped) ||
+      state.sessionsLoading ||
+      state.isSyncing ||
+      this.launchPending ||
+      this.optionalModsSaving ||
+      state.deletingSessionName
+    )
       return;
+    this.deepLinkRequested = false;
     const revision = this.discordAccessRevision;
     const selectedUrl = state.globalSessions[state.activeSessionIndex]?.syncUrl;
     state.sessionsLoading = true;
@@ -787,7 +827,12 @@ export class LauncherController {
       const deepLink = await sessionService.getDeepLinkUrl();
       if (revision !== this.discordAccessRevision) return;
       if (deepLink) {
-        const slug = sessionService.extractSessionSlugFromDeepLink(deepLink);
+        this.pendingDeepLinkSlug =
+          sessionService.extractSessionSlugFromDeepLink(deepLink);
+      }
+      // A private session may only become available after Discord sign-in.
+      if (!state.isSyncing && !this.launchPending) {
+        const slug = this.pendingDeepLinkSlug;
         if (slug) {
           const matchIndex = state.globalSessions.findIndex((s) => {
             if (s.slug && s.slug.toLowerCase() === slug.toLowerCase())
@@ -803,6 +848,7 @@ export class LauncherController {
             return false;
           });
           if (matchIndex >= 0) {
+            this.pendingDeepLinkSlug = null;
             state.activeSessionIndex = matchIndex;
             state.isServerSelectOpen = false;
             void sessionService
@@ -822,6 +868,10 @@ export class LauncherController {
     } finally {
       if (revision === this.discordAccessRevision)
         state.sessionsLoading = false;
+      // A link may arrive after getDeepLinkUrl while metadata is still loading.
+      if (this.deepLinkRequested && !state.sessionsLoading) {
+        void this.loadSessions();
+      }
     }
   }
 
@@ -983,11 +1033,37 @@ export class LauncherController {
     }
   }
 
+  private async handleDeleteSession(session: Session): Promise<void> {
+    if (
+      state.isSyncing ||
+      this.launchPending ||
+      this.optionalModsSaving ||
+      state.optionalModsModalOpen ||
+      state.deletingSessionName
+    ) {
+      throw new Error('Une opération est déjà en cours. Réessayez ensuite.');
+    }
+    const current = state.globalSessions.find(
+      (item) => item.name === session.name && item.syncUrl === session.syncUrl,
+    );
+    if (!current) throw new Error('Cette session n’est plus disponible.');
+
+    state.deletingSessionName = current.name;
+    try {
+      await sessionService.deleteSession(toPlainObject(current));
+      delete state.currentSettings.sessions[current.name];
+    } finally {
+      state.deletingSessionName = null;
+      if (this.deepLinkRequested) void this.loadSessions();
+    }
+  }
+
   private async handleSessionSelect(index: number): Promise<void> {
     if (
       !Number.isInteger(index) ||
       !state.globalSessions[index] ||
       state.isSyncing ||
+      state.deletingSessionName ||
       this.launchPending
     )
       return;

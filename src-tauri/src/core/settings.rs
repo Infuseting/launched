@@ -35,7 +35,8 @@ pub struct AppSettings {
 }
 
 fn get_system_ram_mb() -> u32 {
-    let mut sys = System::new_all();
+    // Memory detection must not scan every running process during startup.
+    let mut sys = System::new();
     sys.refresh_memory();
     (sys.total_memory() / 1024 / 1024) as u32
 }

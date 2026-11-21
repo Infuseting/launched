@@ -3,7 +3,7 @@ use crate::core::settings::{AppSettings, SettingsManager};
 #[tauri::command]
 pub async fn get_system_ram() -> Result<u32, String> {
     use sysinfo::System;
-    let mut sys = System::new_all();
+    let mut sys = System::new();
     sys.refresh_memory();
     Ok((sys.total_memory() / 1024 / 1024) as u32)
 }
@@ -11,7 +11,7 @@ pub async fn get_system_ram() -> Result<u32, String> {
 #[tauri::command]
 pub async fn get_available_ram() -> Result<u32, String> {
     use sysinfo::System;
-    let mut sys = System::new_all();
+    let mut sys = System::new();
     sys.refresh_memory();
     Ok((sys.available_memory() / 1024 / 1024) as u32)
 }

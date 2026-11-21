@@ -1,12 +1,8 @@
 use crate::auth::AuthResponse;
-use std::io::ErrorKind;
 use std::path::PathBuf;
 use tauri::Manager;
 
-/// Stores accounts in the application's local data directory.
-///
-/// Tokens are plaintext: the OS user's file permissions protect this file.
-/// Keyring storage was explicitly removed by request.
+/// Stores accounts using OS protection, migrating legacy plaintext on first read.
 pub struct SecretManager;
 
 impl SecretManager {
@@ -23,25 +19,18 @@ impl SecretManager {
      */
     pub fn get_all_accounts(app_handle: &tauri::AppHandle) -> Result<Vec<AuthResponse>, String> {
         let path = Self::local_path(app_handle)?;
-        let content = match std::fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(vec![]),
-            Err(error) => return Err(format!("Failed to read local accounts: {}", error)),
-        };
-        parse_accounts(&content)
+        super::secure_storage::load(&path, parse_accounts).map(Option::unwrap_or_default)
     }
 
     pub fn get_active_account(
         app_handle: &tauri::AppHandle,
         active_uuid: Option<&str>,
-    ) -> Option<AuthResponse> {
-        let accounts = Self::get_all_accounts(app_handle)
-            .map_err(|error| log::error!("{}", error))
-            .unwrap_or_default();
+    ) -> Result<Option<AuthResponse>, String> {
+        let accounts = Self::get_all_accounts(app_handle)?;
         let index = active_uuid
             .and_then(|uuid| accounts.iter().position(|account| account.uuid == uuid))
             .unwrap_or(0);
-        accounts.into_iter().nth(index)
+        Ok(accounts.into_iter().nth(index))
     }
 
     /**
@@ -51,17 +40,8 @@ impl SecretManager {
         app_handle: &tauri::AppHandle,
         accounts: &[AuthResponse],
     ) -> Result<(), String> {
-        let json = serde_json::to_string(accounts)
-            .map_err(|e| format!("Failed to serialize accounts: {}", e))?;
-
         let path = Self::local_path(app_handle)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|error| {
-                format!("Failed to create account storage directory: {}", error)
-            })?;
-        }
-        std::fs::write(&path, &json)
-            .map_err(|e| format!("Failed to save local accounts: {}", e))?;
+        super::secure_storage::save(&path, &accounts)?;
         crate::core::discord_presence::notify_account_change(app_handle);
         Ok(())
     }
@@ -90,11 +70,7 @@ impl SecretManager {
      */
     pub fn clear_all(app_handle: &tauri::AppHandle) -> Result<(), String> {
         let path = Self::local_path(app_handle)?;
-        match std::fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => return Err(format!("Failed to remove local accounts: {}", error)),
-        }
+        super::secure_storage::clear(&path)?;
         crate::core::discord_presence::notify_account_change(app_handle);
         Ok(())
     }
@@ -135,5 +111,45 @@ mod tests {
             assert!(parse_accounts(content).is_err());
         }
         assert!(parse_accounts("[]").unwrap().is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn migrates_both_account_formats_and_preserves_all_tokens() {
+        use crate::auth::secure_storage;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("accounts.json");
+        let multiple_accounts: Vec<_> = (0..20)
+            .map(|id| {
+                serde_json::json!({
+                    "uuid": id.to_string(),
+                    "name": "Player",
+                    "access_token": "minecraft-access",
+                    "refresh_token": "microsoft-refresh".repeat(200),
+                })
+            })
+            .collect();
+        for content in [
+            r#"{"uuid":"id","name":"Player","access_token":"legacy-access"}"#.to_string(),
+            serde_json::to_string(&multiple_accounts).unwrap(),
+        ] {
+            std::fs::write(&path, &content).unwrap();
+            let expected = parse_accounts(&content).unwrap();
+            for _ in 0..2 {
+                let accounts = secure_storage::load(&path, parse_accounts)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    serde_json::to_value(&accounts).unwrap(),
+                    serde_json::to_value(&expected).unwrap()
+                );
+                let bytes = std::fs::read(&path).unwrap();
+                for secret in ["legacy-access", "minecraft-access", "microsoft-refresh"] {
+                    assert!(!bytes
+                        .windows(secret.len())
+                        .any(|part| part == secret.as_bytes()));
+                }
+            }
+        }
     }
 }

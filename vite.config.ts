@@ -21,6 +21,10 @@ export default defineConfig({
     },
   },
   server: {
+    // Match Tauri's URL and fail clearly if another process owns this port.
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
     watch: {
       ignored: ['**/src-tauri/**'],
     },

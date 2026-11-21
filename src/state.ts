@@ -33,6 +33,8 @@ const rawState: LauncherStateModel = {
   activeSettingsTab: 'account',
   maxSystemRam: 8192,
   isSyncing: false,
+  isPreparingLaunch: false,
+  deletingSessionName: null,
   syncProgress: {
     current_file: '',
     files_done: 0,

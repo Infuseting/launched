@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod microsoft;
 pub mod secrets;
+mod secure_storage;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AuthResponse {

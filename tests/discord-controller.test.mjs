@@ -44,7 +44,9 @@ let restoreCalls = 0;
 let fetchedAssetsUrls = [];
 let mockDeepLink = null;
 let activeSessionSaved = null;
+const eventListeners = new Map();
 globalThis.__discordControllerTest = {
+  eventListeners,
   state,
   auth: {
     getDiscordAuth: async () => {
@@ -88,7 +90,11 @@ globalThis.__discordControllerTest = {
         links: [],
       };
     },
-    getDeepLinkUrl: async () => mockDeepLink,
+    getDeepLinkUrl: async () => {
+      const url = mockDeepLink;
+      mockDeepLink = null;
+      return url;
+    },
     setActiveSession: async (name) => {
       activeSessionSaved = name;
     },
@@ -122,7 +128,8 @@ let code = ts.transpileModule(
   },
 ).outputText;
 const mocks = {
-  '@tauri-apps/api/event': 'export const listen=async()=>()=>{};',
+  '@tauri-apps/api/event':
+    'export const listen=async(name, callback)=>{globalThis.__discordControllerTest.eventListeners.set(name, callback);return ()=>{};};',
   '@tauri-apps/plugin-shell': 'export const open=async()=>{};',
   '../state': 'export const state=globalThis.__discordControllerTest.state;',
   '../services/auth':
@@ -139,7 +146,8 @@ for (const [specifier, source] of Object.entries(mocks))
     .replaceAll(`from '${specifier}'`, `from '${virtual(source)}'`)
     .replaceAll(`from "${specifier}"`, `from '${virtual(source)}'`);
 const { LauncherController } = await import(virtual(code));
-const handlers = new LauncherController().getHandlers();
+const controller = new LauncherController();
+const handlers = controller.getHandlers();
 
 test('startup restores a verified Discord identity before fetching any sessions', async () => {
   await handlers.handleDiscordRestore();
@@ -402,4 +410,72 @@ test('deep link URL on startup automatically selects matching session and closes
   assert.equal(state.isServerSelectOpen, false);
   assert.equal(activeSessionSaved, 'PvP Faction');
   mockDeepLink = null;
+});
+
+test('a protocol activation selects a session in an already running launcher', async () => {
+  await controller.registerDeepLinkHandler();
+  guest = false;
+  state.discordUser = user;
+  state.globalSessions = structuredClone(rows);
+  state.activeSessionIndex = 0;
+  mockDeepLink = 'launched://session/private';
+  await eventListeners.get('deep-link-received')();
+  assert.equal(state.activeSessionIndex, 1);
+  assert.equal(activeSessionSaved, 'Private');
+});
+
+test('a private deep link survives public-only loading until Discord sign-in', async () => {
+  await handlers.handleContinueWithoutDiscord();
+  mockDeepLink = 'launched://session/private';
+  await eventListeners.get('deep-link-received')();
+  assert.deepEqual(state.globalSessions, rows.slice(0, 1));
+  assert.equal(state.activeSessionIndex, 0);
+  await handlers.handleDiscordLogin();
+  assert.equal(state.activeSessionIndex, 1);
+  assert.equal(activeSessionSaved, 'Private');
+});
+
+test('a protocol activation waits until an in-flight session request finishes', async () => {
+  let releaseSessions;
+  pendingSessions = new Promise((resolve) => {
+    releaseSessions = resolve;
+  });
+  const loading = handlers.handleRefreshSessions();
+  mockDeepLink = 'launched://session/public';
+  await eventListeners.get('deep-link-received')();
+  releaseSessions(rows);
+  await loading;
+  assert.equal(state.activeSessionIndex, 0);
+  assert.equal(activeSessionSaved, 'Public');
+});
+
+test('a link arriving during metadata loading is consumed by the next refresh', async () => {
+  const sessionRows = rows.map((row) => ({
+    ...row,
+    assetsPath: `${row.syncUrl}/assets.json`,
+  }));
+  const originalFetchMetadata = controller.fetchAssetMetadata;
+  let received = false;
+  let applied;
+  const selected = new Promise((resolve) => {
+    applied = resolve;
+  });
+  controller.fetchAssetMetadata = async () => {
+    if (!received) {
+      received = true;
+      mockDeepLink = 'launched://session/private';
+      await eventListeners.get('deep-link-received')();
+    }
+    if (state.activeSessionIndex === 1) applied();
+  };
+  try {
+    state.activeSessionIndex = 0;
+    pendingSessions = sessionRows;
+    await handlers.handleRefreshSessions();
+    await selected;
+    assert.equal(state.activeSessionIndex, 1);
+    assert.equal(activeSessionSaved, 'Private');
+  } finally {
+    controller.fetchAssetMetadata = originalFetchMetadata;
+  }
 });

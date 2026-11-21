@@ -205,16 +205,12 @@ impl OptionalFilesManager {
         app: &tauri::AppHandle,
         name: &str,
     ) -> Result<std::path::PathBuf, String> {
-        validate_relative_path(name)?;
-        if name.contains(['/', '\\']) {
-            return Err("Nom de session invalide".into());
-        }
         let root = app
             .path()
             .app_data_dir()
             .map_err(|e| e.to_string())?
             .join("sessions");
-        local_path(&root, name).await
+        crate::core::session::SessionManager::local_directory(&root, name).await
     }
 
     pub(crate) async fn inspect_files(

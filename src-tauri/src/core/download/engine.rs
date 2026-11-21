@@ -93,9 +93,9 @@ impl DownloadEngine {
                 Ok(file) => file,
                 Err(_) => return false,
             };
-            // Modpacks contain large archives; bounded buffers prevent each
-            // concurrent verification from holding a whole archive in memory.
-            let mut buffer = [0_u8; 64 * 1024];
+            // Keep the bounded buffer on the heap: this future is nested in
+            // installation/download futures and must fit on native worker stacks.
+            let mut buffer = vec![0_u8; 64 * 1024];
             let mut sha1_hasher = sha1::Sha1::new();
             let mut md5_context = md5::Context::new();
             loop {
@@ -420,8 +420,22 @@ impl DownloadEngine {
 mod tests {
     use super::{Checksum, DownloadEngine, DownloadTask};
     use sha1::Digest;
+    use std::path::Path;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    #[test]
+    fn file_verification_future_fits_in_download_worker_stack() {
+        // This future is nested in asset installation and concurrent downloads.
+        // Large inline buffers can overflow the native worker's stack.
+        let checksum = Some(Checksum::Sha1(String::new()));
+        let verification = DownloadEngine::is_file_valid(Path::new("asset"), None, &checksum);
+        assert!(
+            std::mem::size_of_val(&verification) < 16 * 1024,
+            "file verification future occupies {} bytes",
+            std::mem::size_of_val(&verification)
+        );
+    }
 
     #[tokio::test]
     async fn directories_are_not_valid_downloaded_files() {

@@ -86,6 +86,7 @@ beforeEach(() => {
     discordUser: { id: 'user' },
     discordSkipped: false,
     isSyncing: false,
+    isPreparingLaunch: false,
     globalSessions: [session],
     activeSessionIndex: 0,
     authCache: { name: 'Player' },
@@ -192,6 +193,7 @@ test('manifest lookup errors abort launch and report the actual error', async ()
   await handlers.syncAndLoad();
   assert.equal(calls('sync').length, 0);
   assert.equal(calls('launch').length, 0);
+  assert.equal(fixture.state.isPreparingLaunch, false);
   assert.match(calls('alert')[0][1], /Manifeste indisponible/);
   fixture.loadError = null;
   configured();
@@ -207,11 +209,14 @@ test('repeated launch clicks during preflight issue a single manifest request', 
   });
   const first = handlers.syncAndLoad();
   await setImmediate();
+  assert.equal(fixture.state.isPreparingLaunch, true);
+  assert.match(fixture.state.syncProgress.current_file, /Vérification/);
   await handlers.syncAndLoad();
   assert.equal(calls('inspect').length, 1);
   release();
   await first;
   assert.equal(calls('launch').length, 1);
+  assert.equal(fixture.state.isPreparingLaunch, false);
 });
 
 test('failed save keeps the modal open, preserves settings, and can be canceled', async () => {

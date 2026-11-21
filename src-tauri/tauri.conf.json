@@ -1,11 +1,11 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Launched",
-  "version": "26.0.2",
+  "version": "26.1.0",
   "identifier": "com.infuseting.launched",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://127.0.0.1:5173",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
@@ -26,6 +26,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["launched"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://github.com/Infuseting/launched/releases/latest/download/latest.json"

@@ -23,6 +23,10 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (launcherState.deletingSessionName) {
+          e.preventDefault();
+          return;
+        }
         // Installation owns the overlay until completion; Escape must not close a page underneath it.
         if (launcherState.isInstallingUpdate) {
           e.preventDefault();
@@ -125,6 +129,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
             }}
             onClose={() => handlers.handleServerSelectToggle(false)}
             onRefresh={handlers.handleRefreshSessions}
+            onDelete={handlers.handleDeleteSession}
             onFetchAssets={handlers.fetchAssetMetadata}
             onOpenOptionalMods={(session) =>
               handlers.handleOpenOptionalMods(session)

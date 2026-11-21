@@ -1,6 +1,31 @@
 use crate::auth::discord;
 use crate::core::session::{Session, SessionManager};
 use crate::state::{load_prefs, save_prefs, AppState, DeepLinkState};
+use tauri::Manager;
+
+/// Uninstall only this session's local data; remote access and shared runtimes remain available.
+#[tauri::command]
+pub async fn delete_session(app_handle: tauri::AppHandle, session: Session) -> Result<(), String> {
+    let directory =
+        crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name)
+            .await?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        // Serialize with game spawning so files cannot disappear underneath a running game.
+        let running = state.running_sessions.lock().unwrap();
+        if running.contains_key(&directory) {
+            return Err(
+                "Fermez Minecraft pour cette session avant de supprimer ses fichiers.".into(),
+            );
+        }
+        SessionManager::remove_local_files(&directory)?;
+        let mut settings = crate::core::settings::SettingsManager::load(&app_handle);
+        settings.sessions.remove(&session.name);
+        crate::core::settings::SettingsManager::save(&app_handle, &settings)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
 
 #[tauri::command]
 pub fn get_deep_link_url(state: tauri::State<'_, DeepLinkState>) -> Option<String> {

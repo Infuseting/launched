@@ -7,7 +7,7 @@ use crate::core::settings::SettingsManager;
 pub async fn get_auth(app_handle: tauri::AppHandle) -> Result<Option<AuthResponse>, String> {
     let mut settings = SettingsManager::load(&app_handle);
     let account =
-        SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref());
+        SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref())?;
     if let Some(account) = account
         .as_ref()
         .filter(|account| settings.active_account_uuid.as_deref() != Some(account.uuid.as_str()))
@@ -37,7 +37,7 @@ pub async fn remove_account(app_handle: tauri::AppHandle, uuid: String) -> Resul
 
 #[tauri::command]
 pub async fn has_auth(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    let accounts = SecretManager::get_all_accounts(&app_handle).unwrap_or_default();
+    let accounts = SecretManager::get_all_accounts(&app_handle)?;
     Ok(!accounts.is_empty())
 }
 
@@ -49,7 +49,7 @@ pub async fn login_microsoft(
     let auth_strategy = MicrosoftAuth;
     let response = auth_strategy.authenticate(&window).await?;
 
-    let _ = SecretManager::add_account(&app_handle, response.clone());
+    SecretManager::add_account(&app_handle, response.clone())?;
 
     let mut settings = SettingsManager::load(&app_handle);
     settings.active_account_uuid = Some(response.uuid.clone());
@@ -62,7 +62,7 @@ pub async fn login_microsoft(
 pub async fn logout(app_handle: tauri::AppHandle) -> Result<(), String> {
     let settings = SettingsManager::load(&app_handle);
     if let Some(active) = &settings.active_account_uuid {
-        let _ = SecretManager::remove_account(&app_handle, active);
+        SecretManager::remove_account(&app_handle, active)?;
     }
     let mut new_settings = settings.clone();
     new_settings.active_account_uuid = None;

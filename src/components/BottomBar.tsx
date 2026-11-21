@@ -23,10 +23,12 @@ interface BottomBarProps {
 export const BottomBar: React.FC<BottomBarProps> = ({
   onPlayClick,
   onServerSelectClick,
-  isSyncing,
+  isSyncing: isSynchronizing,
 }) => {
   const { activeSession: session, sessionsLoading } = useSessions();
   const { syncProgress } = useSyncProgress();
+  const isPreparingLaunch = useLauncherSelector((s) => s.isPreparingLaunch);
+  const isSyncing = isSynchronizing || isPreparingLaunch;
   const serverStatus = useLauncherSelector((s) => s.serverStatus);
   const mojangStatus = useLauncherSelector((s) => s.mojangStatus);
   const [showStatusPopover, setShowStatusPopover] = useState(false);

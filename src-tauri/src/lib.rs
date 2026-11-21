@@ -10,31 +10,24 @@ use crate::auth::discord::{
 use crate::commands::*;
 use crate::core::discord_presence::{self, LauncherPresenceState};
 use crate::state::{AppState, DeepLinkState};
-use tauri::Manager;
-
-#[cfg(target_os = "windows")]
-fn register_windows_scheme() {
-    use std::os::windows::process::CommandExt;
-    if let Ok(exe_path) = std::env::current_exe() {
-        let exe_str = exe_path.to_string_lossy().replace('/', "\\");
-        let reg_cmd = format!(
-            "reg add \"HKCU\\Software\\Classes\\launched\" /ve /d \"URL:Launched Protocol\" /f >nul 2>&1 & \
-             reg add \"HKCU\\Software\\Classes\\launched\" /v \"URL Protocol\" /d \"\" /f >nul 2>&1 & \
-             reg add \"HKCU\\Software\\Classes\\launched\\shell\\open\\command\" /ve /d \"\\\"{}\\\" \\\"%1\\\"\" /f >nul 2>&1",
-            exe_str
-        );
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", &reg_cmd])
-            .creation_flags(0x08000000)
-            .output();
-    }
-}
+use tauri::{Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let pending_deep_link = std::env::args().find(|arg| arg.starts_with("launched://"));
+    let builder = tauri::Builder::default();
+    // Forward subsequent protocol activations to the running launcher.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
 
-    tauri::Builder::default()
+    builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
@@ -42,12 +35,11 @@ pub fn run() {
         .manage(AppState::default())
         .manage(crate::auth::discord::DiscordState::default())
         .manage(LauncherPresenceState::default())
-        .manage(DeepLinkState {
-            pending_url: std::sync::Mutex::new(pending_deep_link),
-        })
+        .manage(DeepLinkState::default())
         .invoke_handler(tauri::generate_handler![
             // Sessions
             get_sessions,
+            delete_session,
             get_active_session_name,
             set_active_session,
             fetch_json,
@@ -97,8 +89,32 @@ pub fn run() {
             window_is_maximized
         ])
         .setup(|app| {
-            #[cfg(target_os = "windows")]
-            register_windows_scheme();
+            // Also repair the association for portable/development builds.
+            #[cfg(any(windows, target_os = "linux"))]
+            if let Err(error) = app.deep_link().register_all() {
+                log::warn!("Could not register launched://: {error}");
+            }
+
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                if let Some(url) = event
+                    .urls()
+                    .iter()
+                    .rev()
+                    .find(|url| url.scheme() == "launched")
+                {
+                    if let Ok(mut pending) = handle.state::<DeepLinkState>().pending_url.lock() {
+                        *pending = Some(url.to_string());
+                    }
+                    let _ = handle.emit("deep-link-received", ());
+                }
+            });
+            if let Some(urls) = app.deep_link().get_current()? {
+                if let Some(url) = urls.iter().rev().find(|url| url.scheme() == "launched") {
+                    *app.state::<DeepLinkState>().pending_url.lock().unwrap() =
+                        Some(url.to_string());
+                }
+            }
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -106,6 +122,13 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+            // Protect both legacy stores even when the user skips Discord.
+            if let Err(error) = auth::secrets::SecretManager::get_all_accounts(app.handle()) {
+                log::error!("Minecraft credential migration failed: {error}");
+            }
+            if let Err(error) = auth::discord::migrate_storage(app.handle()) {
+                log::error!("Discord credential migration failed: {error}");
             }
             if let Ok(app_dir) = app.path().app_data_dir() {
                 let handle = app.handle().clone();

@@ -101,8 +101,12 @@ impl LaunchService {
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
+        let game_dir = args.game_dir.clone();
+        let state = app_handle.state::<crate::state::AppState>();
+        let mut running = state.running_sessions.lock().unwrap();
         match cmd.spawn() {
             Ok(mut child) => {
+                *running.entry(game_dir.clone()).or_default() += 1;
                 log::info!(
                     "Game process spawned successfully with PID: {:?}",
                     child.id()
@@ -172,6 +176,14 @@ impl LaunchService {
                             );
                         }
                         Err(e) => log::error!("Error waiting for game process: {}", e),
+                    }
+                    let state = app_handle_wait.state::<crate::state::AppState>();
+                    let mut running = state.running_sessions.lock().unwrap();
+                    if let Some(count) = running.get_mut(&game_dir) {
+                        *count -= 1;
+                        if *count == 0 {
+                            running.remove(&game_dir);
+                        }
                     }
                 });
 

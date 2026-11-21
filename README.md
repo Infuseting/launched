@@ -14,11 +14,14 @@ leur plateforme (voir `.github/workflows/release.yml` pour Linux).
 
 ```powershell
 npm ci
-npm run tauri dev
+npm run dev:app
 ```
 
 `npm run dev` lance seulement Vite. Les commandes natives ne fonctionnent que dans
 la fenêtre Tauri ; un navigateur sert à examiner le rendu et les composants.
+`npm run dev:app` (ou `npm run tauri dev`) ouvre le launcher complet. Le serveur
+utilise `127.0.0.1:5173` ; si ce port est occupé, arrêter l'autre instance avant
+de relancer la commande.
 
 Pour construire l'interface : `npm run build`. Pour créer les paquets natifs :
 `npm run tauri build` (la signature de publication demande les secrets configurés
@@ -38,9 +41,15 @@ dans le workflow de release).
 | `src-tauri/java`                 | Agent de présence Discord chargé dans Minecraft                    |
 | `tests`, `src-tauri/tests`       | Régressions du contrôleur et intégration native                    |
 
-Les comptes et réglages sont stockés dans le répertoire de données de
-`com.infuseting.launched` résolu par Tauri. Les comptes contiennent des jetons :
-ne jamais joindre ces fichiers à un rapport de bug. Les ressources Minecraft
+Les réglages sont stockés dans le répertoire de données de
+`com.infuseting.launched` résolu par Tauri. Les sessions Discord et Minecraft
+(jetons d'accès et de renouvellement Microsoft inclus) sont chiffrées par DPAPI
+sous Windows, avec une protection liée au compte Windows. Sous macOS et Linux,
+elles sont stockées dans le trousseau système (Keychain / Secret Service).
+Les anciens fichiers en clair sont migrés automatiquement au démarrage ; si le
+stockage sécurisé échoue, aucune nouvelle session n'est écrite en clair et
+l'erreur est remontée. Ne jamais joindre les fichiers de connexion à un rapport
+de bug. Les ressources Minecraft
 partagées se trouvent dans `.minecraft` ; chaque session a ses fichiers propres.
 
 Le backend accepte `LAUNCHED_SITE_URL` pour l'origine du site d'authentification

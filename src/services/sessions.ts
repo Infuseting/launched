@@ -9,6 +9,10 @@ export async function syncSession(session: Session): Promise<void> {
   await invoke('sync_session', { session });
 }
 
+export async function deleteSession(session: Session): Promise<void> {
+  await invoke('delete_session', { session });
+}
+
 export async function launchGame(
   session: Session,
   showLogs: boolean,

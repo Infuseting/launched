@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "26.0.2"
+version = "26.1.0"
 description = "A Tauri App"
 authors = ["Infuseting"]
 license = "MIT"
@@ -45,3 +45,17 @@ futures = "0.3"
 sha1 = "0.10"
 sha2 = "0.10"
 fs2 = "0.4.3"
+tauri-plugin-deep-link = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+tempfile = "3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust", "vendored"] }
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

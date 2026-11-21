@@ -91,21 +91,19 @@ fn path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 fn load(app: &tauri::AppHandle) -> Result<Option<Credentials>, String> {
-    match std::fs::read_to_string(path(app)?) {
-        Ok(value) => serde_json::from_str(&value).map(Some).map_err(|_| {
+    super::secure_storage::load(&path(app)?, |value| {
+        serde_json::from_str(value).map_err(|_| {
             "Connexion Discord enregistrée illisible. Déconnectez ce compte pour réessayer.".into()
-        }),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
+        })
+    })
+}
+
+pub(crate) fn migrate_storage(app: &tauri::AppHandle) -> Result<(), String> {
+    load(app).map(|_| ())
 }
 
 fn clear(app: &tauri::AppHandle) -> Result<(), String> {
-    match std::fs::remove_file(path(app)?) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    super::secure_storage::clear(&path(app)?)
 }
 
 async fn checked(
@@ -281,16 +279,7 @@ async fn login(app: &tauri::AppHandle) -> Result<DiscordUser, String> {
         .json()
         .await
         .map_err(|_| "La réponse du site est invalide. Réessayez.")?;
-    let local_path = path(app)?;
-    if let Some(parent) = local_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|_| "Impossible d’enregistrer la connexion sur cet ordinateur.")?;
-    }
-    std::fs::write(
-        local_path,
-        serde_json::to_vec(&credentials).map_err(|e| e.to_string())?,
-    )
-    .map_err(|_| "Impossible d’enregistrer la connexion sur cet ordinateur.")?;
+    super::secure_storage::save(&path(app)?, &credentials)?;
     app.state::<DiscordState>()
         .guest
         .store(false, Ordering::SeqCst);
@@ -475,6 +464,36 @@ pub async fn fetch_session_image(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn discord_credentials_survive_protected_storage_and_migration() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("discord-auth.json");
+        let credentials = Credentials {
+            token: "discord-session-secret".into(),
+            user: DiscordUser {
+                discord_id: "123".into(),
+                username: "Player".into(),
+                avatar: None,
+            },
+        };
+        std::fs::write(&path, serde_json::to_vec(&credentials).unwrap()).unwrap();
+        for _ in 0..2 {
+            let loaded: Credentials = crate::auth::secure_storage::load(&path, |content| {
+                serde_json::from_str(content).map_err(|_| "Invalid credentials".into())
+            })
+            .unwrap()
+            .unwrap();
+            assert_eq!(loaded.token, credentials.token);
+            assert_eq!(loaded.user.discord_id, credentials.user.discord_id);
+            assert_eq!(loaded.user.username, credentials.user.username);
+            let bytes = std::fs::read(&path).unwrap();
+            assert!(!bytes
+                .windows(credentials.token.len())
+                .any(|part| part == credentials.token.as_bytes()));
+        }
+    }
 
     #[test]
     fn callback_errors_are_safe_and_specific_to_the_failure() {

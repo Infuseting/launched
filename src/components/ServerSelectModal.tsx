@@ -11,6 +11,8 @@ import {
   Search,
   Box,
   Settings,
+  Trash2,
+  LoaderCircle,
 } from 'lucide-react';
 import defaultBackground from '../assets/default-bg.jpg';
 
@@ -20,6 +22,7 @@ interface ServerSelectModalProps {
   onSelect: (index: number) => void;
   onClose: () => void;
   onRefresh: () => Promise<void>;
+  onDelete: (session: Session) => Promise<void>;
   onFetchAssets?: (index: number) => Promise<void>;
   onOpenOptionalMods?: (session: Session) => void;
 }
@@ -30,11 +33,32 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   onSelect,
   onClose,
   onRefresh,
+  onDelete,
   onFetchAssets,
   onOpenOptionalMods,
 }) => {
   const dialogRef = useModalFocus(isOpen, 20);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sessionToDelete, setSessionToDelete] = useState<Session | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const confirmationRef = useModalFocus(isOpen && !!sessionToDelete, 25);
+  const isDeleting = !!state.deletingSessionName;
+  const isBusy = state.isSyncing || state.isPreparingLaunch || isDeleting;
+
+  const confirmDelete = async () => {
+    if (!sessionToDelete || isBusy) return;
+    setDeleteError(null);
+    try {
+      await onDelete(sessionToDelete);
+      setDeleteMessage(
+        `Les fichiers locaux de « ${sessionToDelete.name} » ont été supprimés. Vous pourrez réinstaller cette session au prochain lancement.`,
+      );
+      setSessionToDelete(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   React.useEffect(() => {
     if (isOpen && onFetchAssets) {
@@ -73,6 +97,8 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
           <header className="h-16 px-8 border-b border-white/10 flex items-center justify-between bg-black/40 flex-shrink-0">
             <div className="flex items-center gap-4">
               <button
+                type="button"
+                disabled={isDeleting}
                 onClick={onClose}
                 className="group flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
               >
@@ -126,13 +152,22 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                 </div>
                 <button
                   type="button"
-                  disabled={state.sessionsLoading || state.isSyncing}
+                  disabled={state.sessionsLoading || isBusy}
                   onClick={() => void onRefresh()}
                   className="min-h-11 shrink-0 rounded-xl border border-white/10 px-4 text-xs font-semibold text-white/80 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50"
                 >
                   {state.sessionsLoading ? 'Actualisation…' : 'Actualiser'}
                 </button>
               </div>
+
+              {deleteMessage && (
+                <p
+                  role="status"
+                  className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200"
+                >
+                  {deleteMessage}
+                </p>
+              )}
 
               {filteredSessions.length === 0 ? (
                 <div className="text-center py-20 text-white/30 text-xs rounded-3xl border border-dashed border-white/10 p-10 space-y-2">
@@ -173,7 +208,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                           type="button"
                           aria-label={`Sélectionner ${s.name}`}
                           aria-pressed={isActive}
-                          disabled={state.isSyncing}
+                          disabled={isBusy}
                           onClick={() => {
                             onSelect(s.originalIndex);
                             onClose();
@@ -271,7 +306,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                         </div>
 
                         {/* Bottom Card Action Footer */}
-                        <div className="relative z-30 pointer-events-none p-4 px-5 bg-black/40 border-t border-white/5 flex items-center justify-between text-xs">
+                        <div className="relative z-30 pointer-events-none p-4 px-5 bg-black/40 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span className="text-white/40 text-[11px]">
                             {isActive
                               ? 'Session prête au lancement'
@@ -282,16 +317,38 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                               <button
                                 type="button"
                                 title="Configurer les mods & fichiers optionnels"
-                                disabled={state.isSyncing}
+                                aria-label={`Configurer ${s.name}`}
+                                disabled={isBusy}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onOpenOptionalMods(s);
                                 }}
                                 className="pointer-events-auto relative z-30 p-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/25 text-white/60 hover:text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                               >
-                                <Settings className="w-3.5 h-3.5" />
+                                <Settings
+                                  aria-hidden="true"
+                                  className="w-3.5 h-3.5"
+                                />
                               </button>
                             )}
+                            <button
+                              type="button"
+                              title="Supprimer les fichiers locaux"
+                              aria-label={`Supprimer les fichiers locaux de ${s.name}`}
+                              disabled={isBusy}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteError(null);
+                                setDeleteMessage(null);
+                                setSessionToDelete(s);
+                              }}
+                              className="pointer-events-auto relative z-30 p-1.5 rounded-xl bg-white/5 hover:bg-red-500/15 border border-white/10 hover:border-red-400/40 text-white/60 hover:text-red-300 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Trash2
+                                aria-hidden="true"
+                                className="w-3.5 h-3.5"
+                              />
+                            </button>
                             <span
                               className={`px-3.5 py-1 rounded-xl text-xs font-bold transition-all ${
                                 isActive
@@ -310,6 +367,72 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
               )}
             </div>
           </main>
+          {sessionToDelete && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm">
+              <div
+                ref={confirmationRef}
+                tabIndex={-1}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="delete-session-title"
+                aria-describedby="delete-session-description"
+                aria-busy={isDeleting}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!isDeleting) setSessionToDelete(null);
+                  }
+                }}
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-neutral-900 p-6 shadow-2xl"
+              >
+                <h2 id="delete-session-title" className="text-lg font-bold">
+                  Supprimer les fichiers locaux ?
+                </h2>
+                <p
+                  id="delete-session-description"
+                  className="mt-3 text-sm leading-relaxed text-white/70"
+                >
+                  Tous les fichiers de « {sessionToDelete.name} », y compris les
+                  mondes sauvegardés, les mods et les réglages locaux, seront
+                  définitivement supprimés. La session restera disponible et
+                  pourra être réinstallée au prochain lancement.
+                </p>
+                {deleteError && (
+                  <p role="alert" className="mt-4 text-sm text-red-300">
+                    {deleteError}
+                  </p>
+                )}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    data-initial-focus
+                    disabled={isDeleting}
+                    onClick={() => setSessionToDelete(null)}
+                    className="min-h-11 rounded-xl border border-white/10 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-40"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void confirmDelete()}
+                    className="flex min-h-11 items-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:opacity-50"
+                  >
+                    {isDeleting ? (
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="h-4 w-4 motion-safe:animate-spin"
+                      />
+                    ) : (
+                      <Trash2 aria-hidden="true" className="h-4 w-4" />
+                    )}
+                    {isDeleting ? 'Suppression…' : 'Supprimer'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
