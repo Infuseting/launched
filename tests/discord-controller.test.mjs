@@ -13,6 +13,7 @@ const state = {
   activeSessionIndex: 0,
   sessionsLoading: false,
   sessionsError: null,
+  sessionLinkError: null,
   isSyncing: false,
   isSettingsOpen: false,
   isServerSelectOpen: false,
@@ -337,7 +338,7 @@ test('a restart after logout stays public and never requests a saved identity', 
   assert.deepEqual(state.globalSessions, rows.slice(0, 1));
 });
 
-test('loading sessions fetches asset metadata and images for all sessions directly without clicking', async () => {
+test('other sessions eventually preload their visuals without clicking', async () => {
   fetchedAssetsUrls = [];
   const testSessions = [
     {
@@ -358,6 +359,7 @@ test('loading sessions fetches asset metadata and images for all sessions direct
   ];
   pendingSessions = testSessions;
   await handlers.handleRefreshSessions();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(state.globalSessions.length, 3);
   assert.equal(fetchedAssetsUrls.length, 3);
   assert.ok(state.globalSessions[0].assetsData);
@@ -430,9 +432,12 @@ test('a private deep link survives public-only loading until Discord sign-in', a
   await eventListeners.get('deep-link-received')();
   assert.deepEqual(state.globalSessions, rows.slice(0, 1));
   assert.equal(state.activeSessionIndex, 0);
+  assert.match(state.sessionLinkError, /compte Discord autorisé/);
+  assert.equal(state.sessionsError, null);
   await handlers.handleDiscordLogin();
   assert.equal(state.activeSessionIndex, 1);
   assert.equal(activeSessionSaved, 'Private');
+  assert.equal(state.sessionLinkError, null);
 });
 
 test('a protocol activation waits until an in-flight session request finishes', async () => {
@@ -478,4 +483,65 @@ test('a link arriving during metadata loading is consumed by the next refresh', 
   } finally {
     controller.fetchAssetMetadata = originalFetchMetadata;
   }
+});
+
+test('an inaccessible session link stays pending and never launches another accessible session', async () => {
+  pendingSessions = null;
+  sessionError = null;
+  guest = false;
+  state.discordUser = user;
+  state.discordSkipped = false;
+  state.isSyncing = false;
+  state.sessionsLoading = false;
+  state.optionalModsModalOpen = false;
+  state.deletingSessionName = null;
+  state.globalSessions = [rows[0]];
+  state.activeSessionIndex = 0;
+  mockDeepLink = 'launched://session/private';
+  pendingSessions = [rows[0]];
+  await eventListeners.get('deep-link-received')();
+  assert.match(state.sessionLinkError, /accès refusé pour ce compte Discord/);
+  assert.deepEqual(state.globalSessions, [rows[0]]);
+  let preflightCalls = 0;
+  const ensureAuthenticated = controller.ensureAuthenticated;
+  controller.ensureAuthenticated = async () => {
+    preflightCalls++;
+  };
+  try {
+    await handlers.syncAndLoad();
+    assert.equal(preflightCalls, 0);
+  } finally {
+    controller.ensureAuthenticated = ensureAuthenticated;
+  }
+
+  // Grant access and refresh: the original link is retried without another click.
+  await handlers.handleRefreshSessions();
+  assert.equal(state.sessionLinkError, null);
+  assert.equal(state.activeSessionIndex, 1);
+  assert.equal(activeSessionSaved, 'Private');
+});
+
+test('a missing canonical slug never falls back to another session with the same display name', async () => {
+  mockDeepLink = 'launched://session/private';
+  const other = { ...rows[0], name: 'Private', slug: 'different-session' };
+  pendingSessions = [other];
+  activeSessionSaved = null;
+  await eventListeners.get('deep-link-received')();
+  assert.match(state.sessionLinkError, /introuvable ou accès refusé/);
+  assert.equal(activeSessionSaved, null);
+  handlers.handleDismissSessionLink();
+  assert.equal(state.sessionLinkError, null);
+  await handlers.handleRefreshSessions();
+  assert.equal(state.sessionLinkError, null);
+});
+
+test('choosing an accessible session explicitly dismisses an unavailable link', async () => {
+  mockDeepLink = 'launched://session/missing';
+  await eventListeners.get('deep-link-received')();
+  assert.match(state.sessionLinkError, /introuvable ou accès refusé/);
+  await handlers.handleSessionSelect(0);
+  assert.equal(state.sessionLinkError, null);
+  assert.equal(activeSessionSaved, 'Public');
+  await handlers.handleRefreshSessions();
+  assert.equal(state.sessionLinkError, null);
 });

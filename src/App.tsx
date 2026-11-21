@@ -83,7 +83,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
       ) : (
         <div className="relative w-full h-full">
           <MainScreen handlers={handlers} />
-          {launcherState.sessionsLoading && (
+          {launcherState.sessionsLoading && !launcherState.sessionLinkError && (
             <p
               role="status"
               className="absolute inset-x-8 top-24 z-40 rounded-2xl bg-neutral-900/95 p-4 text-center text-sm text-white/80"
@@ -92,26 +92,65 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
             </p>
           )}
           {(launcherState.sessionsError ||
+            launcherState.sessionLinkError ||
             (!launcherState.sessionsLoading &&
               launcherState.globalSessions.length === 0)) && (
             <div className="absolute inset-x-8 top-24 z-40 rounded-2xl border border-white/10 bg-neutral-900/95 p-5 text-center text-white">
               <p
-                role={launcherState.sessionsError ? 'alert' : 'status'}
+                role={
+                  launcherState.sessionsError || launcherState.sessionLinkError
+                    ? 'alert'
+                    : 'status'
+                }
                 className="text-sm"
               >
                 {launcherState.sessionsError ||
+                  launcherState.sessionLinkError ||
                   (launcherState.discordSkipped
                     ? 'Aucune session publique disponible.'
                     : 'Aucune session accessible pour ce compte Discord. Demandez un accès au créateur de votre session.')}
               </p>
+              {launcherState.sessionLinkError && launcherState.discordError && (
+                <p role="alert" className="mt-2 text-sm text-red-300">
+                  {launcherState.discordError}
+                </p>
+              )}
+              {launcherState.sessionLinkError &&
+                launcherState.discordSkipped && (
+                  <button
+                    type="button"
+                    disabled={launcherState.sessionsLoading}
+                    onClick={() =>
+                      void (launcherState.discordBusy
+                        ? handlers.handleDiscordCancel()
+                        : handlers.handleDiscordLogin())
+                    }
+                    className="mt-3 mr-2 min-h-11 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-neutral-950 hover:bg-emerald-400 disabled:opacity-50"
+                  >
+                    {launcherState.discordBusy
+                      ? 'Annuler la connexion'
+                      : 'Se connecter avec Discord'}
+                  </button>
+                )}
               <button
                 type="button"
                 disabled={launcherState.sessionsLoading}
                 onClick={() => void handlers.handleRefreshSessions()}
                 className="mt-3 min-h-11 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20 disabled:opacity-50"
               >
-                Actualiser les sessions
+                {launcherState.sessionsLoading
+                  ? 'Actualisation…'
+                  : 'Actualiser les sessions'}
               </button>
+              {launcherState.sessionLinkError && (
+                <button
+                  type="button"
+                  onClick={handlers.handleDismissSessionLink}
+                  className="mt-3 ml-2 min-h-11 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20"
+                >
+                  Ignorer ce lien
+                </button>
+              )}
             </div>
           )}
 

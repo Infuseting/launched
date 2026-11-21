@@ -19,6 +19,7 @@ use tauri::Manager;
 use tokio::{io::AsyncReadExt, sync::Notify, time::sleep};
 
 const LAUNCHED_APPLICATION_ID: &str = "1552256142317453423";
+const LAUNCHED_LOGO_URL: &str = "https://launched.infuseting.fr/branding/launched-presence-v2.png";
 const LAUNCHED_DISCORD_INVITE: &str = "https://discord.gg/BWaj9JzsX6";
 const AGENT_JAR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/discord-presence.jar"));
 const WORKER_ENV: &str = "LAUNCHED_DISCORD_WORKER";
@@ -89,6 +90,46 @@ fn valid_url(url: &str) -> bool {
 }
 
 impl DiscordPresence {
+    /// Add a public launch link without replacing explicitly configured buttons.
+    /// The URL identifies the session; the receiver must still pass access checks.
+    pub(crate) fn with_session_button(mut self, slug: Option<&str>, site: &reqwest::Url) -> Self {
+        let Some(slug) = slug.filter(|slug| {
+            !slug.is_empty()
+                && slug.split('-').all(|part| {
+                    !part.is_empty()
+                        && part
+                            .bytes()
+                            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit())
+                })
+        }) else {
+            return self;
+        };
+        let mut target = site.clone();
+        target.set_query(None);
+        target.set_fragment(None);
+        if let Ok(mut path) = target.path_segments_mut() {
+            path.clear().push("launch").push(slug);
+        } else {
+            return self;
+        }
+        if !valid_url(target.as_str()) {
+            return self;
+        }
+        let buttons = self.activity.buttons.get_or_insert_with(Vec::new);
+        let already_present = buttons.iter().any(|button| {
+            reqwest::Url::parse(&button.url).is_ok_and(|url| {
+                url.origin() == target.origin() && url.path().trim_end_matches('/') == target.path()
+            })
+        });
+        if buttons.len() < 2 && !already_present {
+            buttons.push(Button {
+                label: "Rejoindre sur Launched".into(),
+                url: target.into(),
+            });
+        }
+        self
+    }
+
     pub(crate) fn launched(session_name: Option<&str>, account_uuid: Option<&str>) -> Self {
         Self {
             application_id: LAUNCHED_APPLICATION_ID.into(),
@@ -104,7 +145,7 @@ impl DiscordPresence {
                 state: None,
                 state_url: None,
                 assets: Some(Assets {
-                    large_image: Some("icon".into()),
+                    large_image: Some(LAUNCHED_LOGO_URL.into()),
                     small_image: account_uuid.and_then(minecraft_avatar),
                     ..Assets::default()
                 }),
@@ -392,6 +433,95 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_game_presence_adds_a_public_session_link_without_credentials() {
+        let site =
+            reqwest::Url::parse("https://launched.example/?token=must-not-be-shared#private")
+                .unwrap();
+        let presence = DiscordPresence::launched(Some("MineRP"), None)
+            .with_session_button(Some("mine-rp"), &site);
+        assert!(presence.is_valid());
+        assert_eq!(
+            presence.payload(123)["buttons"],
+            json!([
+                {"label": "Discord", "url": LAUNCHED_DISCORD_INVITE},
+                {"label": "Rejoindre sur Launched", "url": "https://launched.example/launch/mine-rp"},
+            ])
+        );
+    }
+
+    #[test]
+    fn session_button_preserves_custom_buttons_and_never_exceeds_two() {
+        let site = reqwest::Url::parse("https://launched.example/").unwrap();
+        let mut without_buttons = DiscordPresence::launched(Some("MineRP"), None);
+        without_buttons.activity.buttons = None;
+        assert_eq!(
+            without_buttons
+                .with_session_button(Some("mine-rp"), &site)
+                .payload(0)["buttons"],
+            json!([
+                {"label": "Rejoindre sur Launched", "url": "https://launched.example/launch/mine-rp"}
+            ])
+        );
+        let mut custom = DiscordPresence::launched(Some("MineRP"), None);
+        custom.activity.buttons = Some(vec![Button {
+            label: "Site".into(),
+            url: "https://example.com/".into(),
+        }]);
+        let linked = custom.with_session_button(Some("mine-rp"), &site);
+        assert_eq!(linked.payload(0)["buttons"][0]["label"], "Site");
+        assert_eq!(linked.payload(0)["buttons"].as_array().unwrap().len(), 2);
+        let before = linked.payload(0);
+        let full = linked.with_session_button(Some("another-session"), &site);
+        assert_eq!(full.payload(0), before);
+
+        let mut configured = DiscordPresence::launched(Some("MineRP"), None);
+        configured.activity.buttons.as_mut().unwrap().push(Button {
+            label: "Site".into(),
+            url: "https://example.com/".into(),
+        });
+        let before = configured.payload(0);
+        assert_eq!(
+            configured
+                .with_session_button(Some("mine-rp"), &site)
+                .payload(0),
+            before
+        );
+
+        let mut duplicate = DiscordPresence::launched(Some("MineRP"), None);
+        duplicate.activity.buttons = Some(vec![Button {
+            label: "Rejoindre".into(),
+            url: "https://launched.example/launch/mine-rp/?from=discord".into(),
+        }]);
+        assert_eq!(
+            duplicate
+                .with_session_button(Some("mine-rp"), &site)
+                .payload(0)["buttons"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn missing_or_invalid_session_identifiers_do_not_publish_broken_links() {
+        let site = reqwest::Url::parse("https://launched.example/").unwrap();
+        for slug in [
+            None,
+            Some(""),
+            Some("../private"),
+            Some("private?token=secret"),
+            Some("UPPER"),
+            Some("two--words"),
+        ] {
+            let presence =
+                DiscordPresence::launched(Some("MineRP"), None).with_session_button(slug, &site);
+            assert!(presence.is_valid());
+            assert_eq!(presence.payload(0)["buttons"].as_array().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
     fn agent_keeps_the_default_package_free_for_signed_minecraft_classes() {
         let jar = zip::ZipArchive::new(io::Cursor::new(AGENT_JAR)).unwrap();
         let classes: Vec<_> = jar
@@ -414,7 +544,7 @@ mod tests {
                 "type": 0,
                 "details": "Dans le launcher",
                 "assets": {
-                    "large_image": "icon",
+                    "large_image": "https://launched.infuseting.fr/branding/launched-presence-v2.png",
                     "small_image": "https://mc-heads.net/avatar/c5ef334745934f398bb12eaa40dd986e/64.png",
                 },
                 "buttons": [{"label": "Discord", "url": "https://discord.gg/BWaj9JzsX6"}],
@@ -440,7 +570,10 @@ mod tests {
         let offline =
             DiscordPresence::launched(Some(&name), Some("00000000-0000-0000-0000-000000000000"));
         let activity = offline.payload(123);
-        assert_eq!(activity["assets"], json!({"large_image": "icon"}));
+        assert_eq!(
+            activity["assets"],
+            json!({"large_image": LAUNCHED_LOGO_URL})
+        );
         assert_eq!(
             activity["details"].as_str().unwrap().encode_utf16().count(),
             128

@@ -113,12 +113,10 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       >
         <img
           src="/icon.png"
-          alt="Launched"
-          className="w-3.5 h-3.5 object-contain pointer-events-none drop-shadow-sm"
-          onError={(e) => {
-            // Fallback to 128x128.png if icon.png fails
-            (e.target as HTMLImageElement).src = '/128x128.png';
-          }}
+          alt=""
+          width={20}
+          height={20}
+          className="size-5 object-contain pointer-events-none"
         />
         <span
           data-tauri-drag-region

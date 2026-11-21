@@ -90,12 +90,6 @@ pub fn run() {
             window_is_maximized
         ])
         .setup(|app| {
-            // Also repair the association for portable/development builds.
-            #[cfg(any(windows, target_os = "linux"))]
-            if let Err(error) = app.deep_link().register_all() {
-                log::warn!("Could not register launched://: {error}");
-            }
-
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 if let Some(url) = event
@@ -124,13 +118,22 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            // Protect both legacy stores even when the user skips Discord.
-            if let Err(error) = auth::secrets::SecretManager::get_all_accounts(app.handle()) {
-                log::error!("Minecraft credential migration failed: {error}");
-            }
-            if let Err(error) = auth::discord::migrate_storage(app.handle()) {
-                log::error!("Discord credential migration failed: {error}");
-            }
+            let startup_handle = app.handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                // Registry and protected-storage I/O must not hold up the window's event loop.
+                #[cfg(any(windows, target_os = "linux"))]
+                if let Err(error) = startup_handle.deep_link().register_all() {
+                    log::warn!("Could not register launched://: {error}");
+                }
+                // Commands also migrate on read, serialized by the protected-storage lock.
+                if let Err(error) = auth::secrets::SecretManager::get_all_accounts(&startup_handle)
+                {
+                    log::error!("Minecraft credential migration failed: {error}");
+                }
+                if let Err(error) = auth::discord::migrate_storage(&startup_handle) {
+                    log::error!("Discord credential migration failed: {error}");
+                }
+            });
             if let Ok(app_dir) = app.path().app_data_dir() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {

@@ -82,6 +82,7 @@ export interface Session {
   isDefault: boolean;
   links?: SessionLink[];
   assetsData?: AssetMetadata;
+  assetsLoadFailed?: boolean;
   crack?: boolean;
 }
 
@@ -124,6 +125,7 @@ export interface LauncherStateModel {
   discordError: string | null;
   sessionsLoading: boolean;
   sessionsError: string | null;
+  sessionLinkError: string | null;
   activeSessionIndex: number;
   globalSessions: Session[];
   currentSettings: AppSettings;
@@ -165,6 +167,7 @@ export interface AppHandlers {
   handleDiscordCancel: () => Promise<void>;
   handleDiscordRestore: () => Promise<void>;
   handleRefreshSessions: () => Promise<void>;
+  handleDismissSessionLink: () => void;
   syncAndLoad: () => Promise<void>;
   fetchAssetMetadata: (index: number) => Promise<void>;
   handleAccountSwap: (uuid: string) => Promise<void>;

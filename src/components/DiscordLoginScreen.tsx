@@ -14,9 +14,13 @@ export default function DiscordLoginScreen({
   return (
     <div className="flex h-full min-h-0 items-center justify-center overflow-hidden bg-neutral-950 px-6 py-4 text-white">
       <div className="w-full max-w-sm text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-indigo-300/10 bg-indigo-400/10 text-indigo-300 [@media(max-height:480px)]:mb-4">
-          <DiscordIcon className="h-7 w-9" />
-        </div>
+        <img
+          src="/icon.png"
+          alt=""
+          width={64}
+          height={64}
+          className="mx-auto mb-6 size-16 [@media(max-height:480px)]:mb-4"
+        />
         <h1 className="text-2xl font-bold tracking-tight">
           Bienvenue sur Launched
         </h1>

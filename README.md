@@ -23,6 +23,14 @@ la fenêtre Tauri ; un navigateur sert à examiner le rendu et les composants.
 utilise `127.0.0.1:5173` ; si ce port est occupé, arrêter l'autre instance avant
 de relancer la commande.
 
+Au démarrage, la session du lien `launched://` est prioritaire, puis la dernière
+session utilisée. L'interface n'attend pas les visuels : un loader remplace le fond
+pendant le chargement du premier visuel, qui s'affiche dès qu'il est disponible.
+Les autres images et
+sessions sont préchargées en arrière-plan. Les opérations locales de démarrage
+sont parallélisées et la police Inter est embarquée pour éviter une dépendance
+à Google Fonts lors du premier affichage.
+
 Pour construire l'interface : `npm run build`. Pour créer les paquets natifs :
 `npm run tauri build` (la signature de publication demande les secrets configurés
 dans le workflow de release).
@@ -76,5 +84,7 @@ les exécuter. Un build réussi ne remplace pas un essai en jeu.
 
 Lire [CONTRIBUTING.md](CONTRIBUTING.md) pour les conventions et
 [DESIGN.md](DESIGN.md) pour la direction visuelle existante.
+Le [kit de marque](branding/README.md) contient le logo source et la commande pour
+régénérer les icônes du launcher, du site et de la présence Discord.
 Le [rapport de nettoyage](docs/QUALITY.md) détaille les corrections, les
 vérifications et les limites constatées sur les deux dépôts.

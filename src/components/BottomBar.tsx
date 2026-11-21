@@ -28,7 +28,10 @@ export const BottomBar: React.FC<BottomBarProps> = ({
   const { activeSession: session, sessionsLoading } = useSessions();
   const { syncProgress } = useSyncProgress();
   const isPreparingLaunch = useLauncherSelector((s) => s.isPreparingLaunch);
+  const sessionLinkError = useLauncherSelector((s) => s.sessionLinkError);
   const isSyncing = isSynchronizing || isPreparingLaunch;
+  const canPlay =
+    !isSyncing && !!session && !sessionsLoading && !sessionLinkError;
   const serverStatus = useLauncherSelector((s) => s.serverStatus);
   const mojangStatus = useLauncherSelector((s) => s.mojangStatus);
   const [showStatusPopover, setShowStatusPopover] = useState(false);
@@ -207,16 +210,16 @@ export const BottomBar: React.FC<BottomBarProps> = ({
 
         <motion.button
           initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          whileHover={!isSyncing ? { scale: 1.03, y: -2 } : {}}
-          whileTap={!isSyncing ? { scale: 0.97 } : {}}
+          animate={{ opacity: isSyncing || canPlay ? 1 : 0.5, scale: 1 }}
+          whileHover={canPlay ? { scale: 1.03, y: -2 } : {}}
+          whileTap={canPlay ? { scale: 0.97 } : {}}
           onClick={onPlayClick}
-          disabled={isSyncing || !session || sessionsLoading}
+          disabled={!canPlay}
           className={`
             relative overflow-hidden
             w-full h-[60px] rounded-2xl
             flex items-center justify-center
-            transition-all duration-300 cursor-pointer
+            transition-all duration-300 cursor-pointer disabled:cursor-not-allowed
             ${
               isSyncing
                 ? 'bg-neutral-900/90 border border-white/10 shadow-2xl cursor-pointer'

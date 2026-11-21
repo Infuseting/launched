@@ -9,6 +9,7 @@ const rawState: LauncherStateModel = {
   discordError: null,
   sessionsLoading: false,
   sessionsError: null,
+  sessionLinkError: null,
   activeSessionIndex: 0,
   globalSessions: [],
   currentSettings: {

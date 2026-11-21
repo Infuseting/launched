@@ -27,7 +27,10 @@ export async function launchGame(
   await invoke('launch_game', { session, showLogs, crackPseudo });
 }
 
-export async function fetchJson(url: string): Promise<AssetMetadata> {
+export async function fetchJson(
+  url: string,
+  onPreview?: (assets: AssetMetadata) => void,
+): Promise<AssetMetadata> {
   const metadata = await invoke<AssetMetadata>('fetch_json', { url });
   const protectedImage = async (source?: string): Promise<string> => {
     if (!source) return '';
@@ -46,12 +49,22 @@ export async function fetchJson(url: string): Promise<AssetMetadata> {
       return source;
     }
   };
+  // Publish the first background before downloading alternate backgrounds or icons.
+  const sources = Array.isArray(metadata.background)
+    ? metadata.background
+    : [metadata.background];
+  const firstBackground = await protectedImage(sources[0]);
+  onPreview?.({
+    background: firstBackground,
+    links: [],
+  });
   const [background, logo, icon, links] = await Promise.all([
     Array.isArray(metadata.background)
-      ? Promise.all(metadata.background.map((img) => protectedImage(img)))
-      : metadata.background
-        ? protectedImage(metadata.background)
-        : Promise.resolve(''),
+      ? Promise.all([
+          ...(sources.length ? [Promise.resolve(firstBackground)] : []),
+          ...sources.slice(1).map((img) => protectedImage(img)),
+        ])
+      : Promise.resolve(firstBackground),
     metadata.logo ? protectedImage(metadata.logo) : undefined,
     metadata.icon ? protectedImage(metadata.icon) : undefined,
     Promise.all(

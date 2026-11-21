@@ -193,7 +193,8 @@ pub async fn launch_game(
 
     let presence = session
         .discord_presence
-        .unwrap_or_else(|| DiscordPresence::launched(Some(&session.name), Some(&auth.uuid)));
+        .unwrap_or_else(|| DiscordPresence::launched(Some(&session.name), Some(&auth.uuid)))
+        .with_session_button(session.slug.as_deref(), &crate::auth::discord::site_url()?);
     launch_service.launch(args, show_logs, &app_handle, &presence)
 }
 

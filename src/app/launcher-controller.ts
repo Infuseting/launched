@@ -81,6 +81,7 @@ export class LauncherController {
   private deepLinkRequested = false;
   private pendingDeepLinkSlug: string | null = null;
   private readonly assetRequests = new Map<string, Promise<void>>();
+  private assetPreloadRevision = 0;
 
   constructor() {
     this.handlers = {
@@ -90,6 +91,10 @@ export class LauncherController {
       handleDiscordCancel: () => authService.cancelDiscordLogin(),
       handleDiscordRestore: () => this.restoreDiscord(),
       handleRefreshSessions: () => this.loadSessions(),
+      handleDismissSessionLink: () => {
+        this.pendingDeepLinkSlug = null;
+        state.sessionLinkError = null;
+      },
       syncAndLoad: () => this.syncAndLoad(),
       fetchAssetMetadata: (index: number) => this.fetchAssetMetadata(index),
       handleAccountSwap: (uuid: string) => this.handleAccountSwap(uuid),
@@ -109,13 +114,7 @@ export class LauncherController {
         if (state.deletingSessionName) return;
         state.isServerSelectOpen = show;
         if (show) {
-          void Promise.all(
-            state.globalSessions.map((s, index) => {
-              if (!s.assetsData && s.assetsPath) {
-                return this.fetchAssetMetadata(index);
-              }
-            }),
-          );
+          void this.preloadSessionAssets();
         }
       },
       handleDeviceCodeModalToggle: (show: boolean) => {
@@ -174,18 +173,19 @@ export class LauncherController {
     });
     await this.loadInitialData();
 
-    await this.checkForUpdates(true);
-    this.scheduleStartupUpdateRetries();
+    void this.checkForUpdates(true).then(() => {
+      this.scheduleStartupUpdateRetries();
 
-    setTimeout(() => {
-      void this.checkForUpdates();
-    }, UPDATE_RETRY_DELAY_MS);
+      setTimeout(() => {
+        void this.checkForUpdates();
+      }, UPDATE_RETRY_DELAY_MS);
 
-    setInterval(() => {
-      void this.checkForUpdates();
-    }, UPDATE_POLLING_INTERVAL_MS);
+      setInterval(() => {
+        void this.checkForUpdates();
+      }, UPDATE_POLLING_INTERVAL_MS);
+    });
 
-    await this.refreshStatuses();
+    void this.refreshStatuses();
     this.startStatusPolling();
   }
 
@@ -375,6 +375,9 @@ export class LauncherController {
     if (
       (!state.discordUser && !state.discordSkipped) ||
       state.isSyncing ||
+      state.sessionsLoading ||
+      !!this.pendingDeepLinkSlug ||
+      !!state.sessionLinkError ||
       state.deletingSessionName ||
       this.launchPending ||
       state.optionalModsModalOpen ||
@@ -590,7 +593,7 @@ export class LauncherController {
   private async fetchAssetMetadata(index: number): Promise<void> {
     const revision = this.discordAccessRevision;
     const session = state.globalSessions[index];
-    if (!session || !session.assetsPath || session.assetsData) {
+    if (!session || !session.assetsPath) {
       return;
     }
 
@@ -598,23 +601,30 @@ export class LauncherController {
     const assetsPath = session.assetsPath;
     const existing = this.assetRequests.get(requestKey);
     if (existing) return existing;
+    if (session.assetsData) return;
+    session.assetsLoadFailed = false;
     const request = (async () => {
+      const currentSession = () =>
+        revision === this.discordAccessRevision &&
+        (state.discordUser || state.discordSkipped)
+          ? state.globalSessions.find(
+              (current) =>
+                current.syncUrl === session.syncUrl &&
+                current.assetsPath === assetsPath,
+            )
+          : undefined;
+      const applyAssets = (
+        assets: Awaited<ReturnType<typeof sessionService.fetchJson>>,
+      ) => {
+        const target = currentSession();
+        if (target) target.assetsData = assets;
+      };
       try {
-        const assets = await sessionService.fetchJson(assetsPath);
-        if (
-          revision === this.discordAccessRevision &&
-          (state.discordUser || state.discordSkipped)
-        ) {
-          const currentSession = state.globalSessions[index];
-          if (
-            currentSession &&
-            (currentSession === session ||
-              currentSession.syncUrl === session.syncUrl)
-          ) {
-            currentSession.assetsData = assets;
-          }
-        }
+        const assets = await sessionService.fetchJson(assetsPath, applyAssets);
+        applyAssets(assets);
       } catch (error) {
+        const target = currentSession();
+        if (target) target.assetsLoadFailed = true;
         console.error(`Failed to fetch assets for ${session.name}:`, error);
       }
     })();
@@ -625,26 +635,59 @@ export class LauncherController {
       this.assetRequests.delete(requestKey);
     }
   }
-  private async loadInitialData(): Promise<void> {
-    state.currentSettings = await settingsService.getSettings();
-    state.allAccounts = await authService.getAllAccounts();
 
-    try {
-      state.maxSystemRam = await settingsService.getSystemRam();
-    } catch {
-      state.maxSystemRam = DEFAULT_SYSTEM_RAM_MB;
+  /** The visible session gets the connection first; other sessions use one background lane. */
+  private async preloadSessionAssets(): Promise<void> {
+    const revision = this.discordAccessRevision;
+    const preloadRevision = ++this.assetPreloadRevision;
+    const selected = state.activeSessionIndex;
+    const indices = [selected, ...state.globalSessions.keys()].filter(
+      (index, position) => position === 0 || index !== selected,
+    );
+    for (const index of indices) {
+      if (
+        revision !== this.discordAccessRevision ||
+        preloadRevision !== this.assetPreloadRevision
+      )
+        return;
+      await this.fetchAssetMetadata(index);
     }
-    try {
-      state.appVersion = await updaterService.appVersion();
-    } catch {
-      state.appVersion = DEFAULT_APP_VERSION;
-    }
-    try {
-      state.authCache = await authService.getAuth();
-    } catch (error) {
-      console.error('Failed to get auth:', error);
-    }
-    await this.restoreDiscord();
+  }
+
+  private async loadInitialData(): Promise<void> {
+    await Promise.all([
+      settingsService.getSettings().then(async (settings) => {
+        state.currentSettings = settings;
+        await this.restoreDiscord();
+      }),
+      authService.getAllAccounts().then((accounts) => {
+        state.allAccounts = accounts;
+      }),
+      authService
+        .getAuth()
+        .then((auth) => {
+          state.authCache = auth;
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to get auth:', error);
+        }),
+      settingsService
+        .getSystemRam()
+        .then((ram) => {
+          state.maxSystemRam = ram;
+        })
+        .catch(() => {
+          state.maxSystemRam = DEFAULT_SYSTEM_RAM_MB;
+        }),
+      updaterService
+        .appVersion()
+        .then((version) => {
+          state.appVersion = version;
+        })
+        .catch(() => {
+          state.appVersion = DEFAULT_APP_VERSION;
+        }),
+    ]);
     this.silentlyRefreshToken();
   }
 
@@ -655,11 +698,13 @@ export class LauncherController {
     state.optionalModsModalSession = null;
     state.optionalModsHasUpdates = false;
     this.discordAccessRevision++;
+    this.assetPreloadRevision++;
     state.discordUser = null;
     state.discordSkipped = false;
     state.discordChecking = false;
     state.sessionsLoading = false;
     state.sessionsError = null;
+    state.sessionLinkError = null;
     state.globalSessions = [];
     state.activeSessionIndex = 0;
     state.serverStatus = null;
@@ -682,8 +727,11 @@ export class LauncherController {
       if (revision !== this.discordAccessRevision) return;
       state.discordUser = user;
       if (user) {
-        await this.rememberDiscordChoice(false);
-        await this.loadSessions();
+        state.discordChecking = false;
+        await Promise.all([
+          this.rememberDiscordChoice(false),
+          this.loadSessions(),
+        ]);
       } else if (state.currentSettings.discordLoginSkipped === false) {
         await this.activatePublicAccess();
       }
@@ -710,8 +758,10 @@ export class LauncherController {
     await authService.continueWithoutDiscord();
     this.clearDiscordState();
     state.discordSkipped = true;
-    if (remember) await this.rememberDiscordChoice(true);
-    await this.loadSessions();
+    await Promise.all([
+      remember ? this.rememberDiscordChoice(true) : Promise.resolve(),
+      this.loadSessions(),
+    ]);
   }
 
   private async handleDiscordAuthRequired(): Promise<void> {
@@ -806,21 +856,21 @@ export class LauncherController {
     state.sessionsLoading = true;
     state.sessionsError = null;
     try {
-      const sessions = await sessionService.getSessions();
+      const [sessions, lastSessionName] = await Promise.all([
+        sessionService.getSessions(),
+        sessionService.getActiveSessionName(),
+      ]);
       if (revision !== this.discordAccessRevision) return;
-      state.globalSessions = sessions;
-      state.activeSessionIndex = Math.max(
+      let activeSessionIndex = Math.max(
         0,
         sessions.findIndex((session) => session.syncUrl === selectedUrl),
       );
-      const lastSessionName = await sessionService.getActiveSessionName();
-      if (revision !== this.discordAccessRevision) return;
       if (!selectedUrl && lastSessionName) {
-        const index = state.globalSessions.findIndex(
+        const index = sessions.findIndex(
           (session) => session.name === lastSessionName,
         );
         if (index >= 0) {
-          state.activeSessionIndex = index;
+          activeSessionIndex = index;
         }
       }
 
@@ -829,14 +879,16 @@ export class LauncherController {
       if (deepLink) {
         this.pendingDeepLinkSlug =
           sessionService.extractSessionSlugFromDeepLink(deepLink);
+        state.sessionLinkError = this.pendingDeepLinkSlug
+          ? null
+          : 'Le lien vers cette session est invalide.';
       }
       // A private session may only become available after Discord sign-in.
       if (!state.isSyncing && !this.launchPending) {
         const slug = this.pendingDeepLinkSlug;
         if (slug) {
-          const matchIndex = state.globalSessions.findIndex((s) => {
-            if (s.slug && s.slug.toLowerCase() === slug.toLowerCase())
-              return true;
+          const matchIndex = sessions.findIndex((s) => {
+            if (s.slug) return s.slug.toLowerCase() === slug.toLowerCase();
             if (s.name.toLowerCase() === slug.toLowerCase()) return true;
             if (
               s.syncUrl &&
@@ -849,18 +901,25 @@ export class LauncherController {
           });
           if (matchIndex >= 0) {
             this.pendingDeepLinkSlug = null;
-            state.activeSessionIndex = matchIndex;
+            state.sessionLinkError = null;
+            activeSessionIndex = matchIndex;
             state.isServerSelectOpen = false;
             void sessionService
-              .setActiveSession(state.globalSessions[matchIndex].name)
+              .setActiveSession(sessions[matchIndex].name)
               .catch(() => {});
+          } else {
+            // Keep the requested session through sign-in or a later access grant.
+            // Never substitute another accessible session for this link.
+            state.sessionLinkError = state.discordSkipped
+              ? 'Session introuvable ou accès refusé. Si elle est privée, connectez-vous avec un compte Discord autorisé.'
+              : 'Session introuvable ou accès refusé pour ce compte Discord. Demandez un accès au créateur de la session, puis actualisez.';
           }
         }
       }
 
-      await Promise.all(
-        state.globalSessions.map((_, index) => this.fetchAssetMetadata(index)),
-      );
+      state.activeSessionIndex = activeSessionIndex;
+      state.globalSessions = sessions;
+      void this.preloadSessionAssets();
     } catch (error) {
       if (revision !== this.discordAccessRevision) return;
       state.globalSessions = [];
@@ -1068,14 +1127,17 @@ export class LauncherController {
     )
       return;
     state.activeSessionIndex = index;
+    this.pendingDeepLinkSlug = null;
+    state.sessionLinkError = null;
     state.serverStatus = null;
     const session = state.globalSessions[index];
+
+    // A slow preference write must not delay the session the user just selected.
+    void this.preloadSessionAssets();
+    void this.fetchPlayerCount();
 
     if (session) {
       await sessionService.setActiveSession(session.name);
     }
-
-    await this.fetchAssetMetadata(index);
-    await this.fetchPlayerCount();
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "launched",
   "private": true,
-  "version": "26.1.1",
+  "version": "26.1.2",
   "description": "Launcher Minecraft personnalisé",
   "author": "Infuseting",
   "license": "MIT",
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "dev:app": "tauri dev",
+    "branding:generate": "node scripts/generate-branding.mjs",
     "build": "tsc && vite build",
     "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
