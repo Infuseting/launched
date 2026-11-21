@@ -3,6 +3,20 @@ use crate::core::session::{Session, SessionManager};
 use crate::state::{load_prefs, save_prefs, AppState, DeepLinkState};
 use tauri::Manager;
 
+/// Check local data in one batch, independently of the remote server listing.
+#[tauri::command]
+pub async fn get_local_session_names(
+    app_handle: tauri::AppHandle,
+    session_names: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let root = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?
+        .join("sessions");
+    SessionManager::local_session_names(&root, &session_names).await
+}
+
 /// Uninstall only this session's local data; remote access and shared runtimes remain available.
 #[tauri::command]
 pub async fn delete_session(app_handle: tauri::AppHandle, session: Session) -> Result<(), String> {

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
 import type { Session } from '../types';
+import { getLocalSessionNames } from '../services/sessions';
 import {
   ArrowLeft,
   Server,
@@ -39,18 +40,45 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
 }) => {
   const dialogRef = useModalFocus(isOpen, 20);
   const [searchQuery, setSearchQuery] = useState('');
+  const [localSessionNames, setLocalSessionNames] = useState<string[]>([]);
   const [sessionToDelete, setSessionToDelete] = useState<Session | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const confirmationRef = useModalFocus(isOpen && !!sessionToDelete, 25);
   const isDeleting = !!state.deletingSessionName;
   const isBusy = state.isSyncing || state.isPreparingLaunch || isDeleting;
+  // Image/asset updates must not restart the local-files check.
+  const sessionNamesKey = JSON.stringify(
+    state.globalSessions.map((session) => session.name),
+  );
+
+  React.useEffect(() => {
+    if (!isOpen || isBusy || state.sessionsLoading) return;
+    let cancelled = false;
+    const sessionNames: string[] = JSON.parse(sessionNamesKey);
+    void getLocalSessionNames(sessionNames)
+      .then((names) => {
+        if (!cancelled) setLocalSessionNames(names);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLocalSessionNames([]);
+          console.error('Failed to check local session files:', error);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isBusy, state.sessionsLoading, sessionNamesKey]);
 
   const confirmDelete = async () => {
     if (!sessionToDelete || isBusy) return;
     setDeleteError(null);
     try {
       await onDelete(sessionToDelete);
+      setLocalSessionNames((names) =>
+        names.filter((name) => name !== sessionToDelete.name),
+      );
       setDeleteMessage(
         `Les fichiers locaux de « ${sessionToDelete.name} » ont été supprimés. Vous pourrez réinstaller cette session au prochain lancement.`,
       );
@@ -331,24 +359,26 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                                 />
                               </button>
                             )}
-                            <button
-                              type="button"
-                              title="Supprimer les fichiers locaux"
-                              aria-label={`Supprimer les fichiers locaux de ${s.name}`}
-                              disabled={isBusy}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteError(null);
-                                setDeleteMessage(null);
-                                setSessionToDelete(s);
-                              }}
-                              className="pointer-events-auto relative z-30 p-1.5 rounded-xl bg-white/5 hover:bg-red-500/15 border border-white/10 hover:border-red-400/40 text-white/60 hover:text-red-300 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              <Trash2
-                                aria-hidden="true"
-                                className="w-3.5 h-3.5"
-                              />
-                            </button>
+                            {localSessionNames.includes(s.name) && (
+                              <button
+                                type="button"
+                                title="Supprimer les fichiers locaux"
+                                aria-label={`Supprimer les fichiers locaux de ${s.name}`}
+                                disabled={isBusy}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteError(null);
+                                  setDeleteMessage(null);
+                                  setSessionToDelete(s);
+                                }}
+                                className="pointer-events-auto relative z-30 p-1.5 rounded-xl bg-white/5 hover:bg-red-500/15 border border-white/10 hover:border-red-400/40 text-white/60 hover:text-red-300 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-red-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <Trash2
+                                  aria-hidden="true"
+                                  className="w-3.5 h-3.5"
+                                />
+                              </button>
+                            )}
                             <span
                               className={`px-3.5 py-1 rounded-xl text-xs font-bold transition-all ${
                                 isActive

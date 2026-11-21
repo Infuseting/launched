@@ -127,6 +127,78 @@ impl Session {
 pub struct SessionManager;
 
 impl SessionManager {
+    /// Report only sessions containing local files, including partial downloads.
+    /// Merely choosing optional files can create metadata and empty directories.
+    pub(crate) async fn local_session_names(
+        sessions_root: &std::path::Path,
+        session_names: &[String],
+    ) -> Result<Vec<String>, String> {
+        match tokio::fs::symlink_metadata(sessions_root).await {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err("Le dossier des sessions ne peut pas être un lien symbolique.".into());
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(error) => return Err(error.to_string()),
+        }
+        let mut names = Vec::new();
+        // Resolve the requested spelling through the filesystem itself. This
+        // respects case-insensitive volumes without conflating distinct Linux
+        // directories or case-sensitive Windows/macOS volumes.
+        for name in session_names {
+            let Ok(directory) = Self::local_directory(sessions_root, name).await else {
+                continue;
+            };
+            if !matches!(
+                tokio::fs::symlink_metadata(&directory).await,
+                Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink()
+            ) {
+                continue;
+            }
+            if Self::contains_local_files(&directory).await? {
+                names.push(name.clone());
+            }
+        }
+        names.sort();
+        Ok(names)
+    }
+
+    async fn contains_local_files(base: &std::path::Path) -> Result<bool, String> {
+        let mut pending = vec![base.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            let mut entries = match tokio::fs::read_dir(&directory).await {
+                Ok(entries) => entries,
+                // A session may be removed while the hub refreshes its status.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.to_string()),
+            };
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|error| error.to_string())?
+            {
+                let kind = entry.file_type().await.map_err(|error| error.to_string())?;
+                if kind.is_file() {
+                    if directory == base
+                        && entry.file_name().to_str().is_some_and(|name| {
+                            name.eq_ignore_ascii_case(
+                                crate::core::optional_files::MANAGED_FILES_NAME,
+                            )
+                        })
+                    {
+                        continue;
+                    }
+                    return Ok(true);
+                }
+                if kind.is_dir() {
+                    pending.push(entry.path());
+                }
+                // Do not follow symlinks or junctions outside the session.
+            }
+        }
+        Ok(false)
+    }
+
     pub(crate) async fn local_directory(
         sessions_root: &std::path::Path,
         name: &str,
@@ -163,6 +235,135 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn local_presence_does_not_create_a_missing_sessions_directory() {
+        let root = std::env::temp_dir().join(format!("launched-presence-{}", uuid::Uuid::new_v4()));
+        assert!(
+            SessionManager::local_session_names(&root, &["Missing".into()])
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(!root.exists());
+    }
+
+    #[tokio::test]
+    async fn local_presence_requires_files_and_updates_after_deletion() {
+        let root = std::env::temp_dir().join(format!("launched-presence-{}", uuid::Uuid::new_v4()));
+        for directory in [
+            "Empty",
+            "MetadataOnly/mods",
+            "Downloaded/mods",
+            "Partial",
+            "DisabledOnly/mods",
+        ] {
+            std::fs::create_dir_all(root.join(directory)).unwrap();
+        }
+        std::fs::write(
+            root.join("MetadataOnly")
+                .join(crate::core::optional_files::MANAGED_FILES_NAME),
+            b"[]",
+        )
+        .unwrap();
+        std::fs::write(root.join("Downloaded/mods/mod.jar"), b"downloaded").unwrap();
+        std::fs::write(root.join("Partial/mod.jar.tmp"), b"partial").unwrap();
+        std::fs::write(root.join("DisabledOnly/mods/mod.jar.disabled"), b"disabled").unwrap();
+        std::fs::write(root.join("not-a-session.json"), b"{}").unwrap();
+        let names = [
+            "Empty",
+            "MetadataOnly",
+            "Downloaded",
+            "Partial",
+            "DisabledOnly",
+            "Missing",
+            "not-a-session.json",
+        ]
+        .map(str::to_owned);
+        assert_eq!(
+            SessionManager::local_session_names(&root, &names)
+                .await
+                .unwrap(),
+            ["DisabledOnly", "Downloaded", "Partial"]
+        );
+
+        SessionManager::remove_local_files(&root.join("Downloaded")).unwrap();
+        assert_eq!(
+            SessionManager::local_session_names(&root, &names)
+                .await
+                .unwrap(),
+            ["DisabledOnly", "Partial"]
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn local_presence_does_not_follow_symbolic_links() {
+        let root = std::env::temp_dir().join(format!("launched-presence-{}", uuid::Uuid::new_v4()));
+        let sessions = root.join("sessions");
+        std::fs::create_dir_all(sessions.join("Empty")).unwrap();
+        std::fs::create_dir_all(root.join("outside")).unwrap();
+        std::fs::write(root.join("outside/mod.jar"), b"outside").unwrap();
+        let links = [sessions.join("Linked"), sessions.join("Empty").join("mods")];
+        for link in &links {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(root.join("outside"), link).unwrap();
+            #[cfg(windows)]
+            {
+                let result = std::process::Command::new("cmd")
+                    .args(["/C", "mklink", "/J"])
+                    .arg(link)
+                    .arg(root.join("outside"))
+                    .output()
+                    .unwrap();
+                assert!(
+                    result.status.success(),
+                    "Failed to create test junction: {}",
+                    String::from_utf8_lossy(&result.stderr)
+                );
+            }
+        }
+        let names = ["Linked".into(), "Empty".into()];
+        assert!(SessionManager::local_session_names(&sessions, &names)
+            .await
+            .unwrap()
+            .is_empty());
+        assert!(
+            SessionManager::local_session_names(&sessions.join("Linked"), &names)
+                .await
+                .is_err()
+        );
+        // Remove each link itself before cleaning up the temporary fixture.
+        for link in links {
+            #[cfg(unix)]
+            std::fs::remove_file(link).unwrap();
+            #[cfg(windows)]
+            std::fs::remove_dir(link).unwrap();
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn local_presence_preserves_requested_spelling_using_filesystem_case_rules() {
+        let root = std::env::temp_dir().join(format!("launched-presence-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("Survival")).unwrap();
+        std::fs::write(root.join("Survival/mod.jar"), b"downloaded").unwrap();
+        let names =
+            ["survival", "SURVIVAL", "Survival", "Missing", "../outside"].map(str::to_owned);
+        let expected = if root.join("survival").is_dir() {
+            vec!["SURVIVAL", "Survival", "survival"]
+        } else {
+            vec!["Survival"]
+        };
+        assert_eq!(
+            SessionManager::local_session_names(&root, &names)
+                .await
+                .unwrap(),
+            expected
+        );
+        assert!(root.join("Survival/mod.jar").is_file());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[tokio::test]
     async fn local_deletion_removes_only_the_selected_session_and_can_be_repeated() {

@@ -39,6 +39,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Sessions
             get_sessions,
+            get_local_session_names,
             delete_session,
             get_active_session_name,
             set_active_session,

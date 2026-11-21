@@ -5,6 +5,12 @@ export async function getSessions(): Promise<Session[]> {
   return await invoke<Session[]>('get_sessions');
 }
 
+export async function getLocalSessionNames(
+  sessionNames: string[],
+): Promise<string[]> {
+  return await invoke<string[]>('get_local_session_names', { sessionNames });
+}
+
 export async function syncSession(session: Session): Promise<void> {
   await invoke('sync_session', { session });
 }
