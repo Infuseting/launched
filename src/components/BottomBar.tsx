@@ -3,7 +3,16 @@ import { useLauncherSelector } from '../state';
 import { useSessions } from '../hooks/useSessions';
 import { useSyncProgress } from '../hooks/useSyncProgress';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, ChevronUp, Users, Server, Shield, Layers, Download, FileText } from 'lucide-react';
+import {
+  Play,
+  ChevronUp,
+  Users,
+  Server,
+  Shield,
+  Layers,
+  Download,
+  FileText,
+} from 'lucide-react';
 
 interface BottomBarProps {
   onPlayClick: () => void;
@@ -11,11 +20,15 @@ interface BottomBarProps {
   isSyncing: boolean;
 }
 
-export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelectClick, isSyncing }) => {
+export const BottomBar: React.FC<BottomBarProps> = ({
+  onPlayClick,
+  onServerSelectClick,
+  isSyncing,
+}) => {
   const { activeSession: session, sessionsLoading } = useSessions();
   const { syncProgress } = useSyncProgress();
-  const serverStatus = useLauncherSelector(s => s.serverStatus);
-  const mojangStatus = useLauncherSelector(s => s.mojangStatus);
+  const serverStatus = useLauncherSelector((s) => s.serverStatus);
+  const mojangStatus = useLauncherSelector((s) => s.mojangStatus);
   const [showStatusPopover, setShowStatusPopover] = useState(false);
   const [showSyncTooltip, setShowSyncTooltip] = useState(false);
 
@@ -29,7 +42,9 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
   const percentage = Math.round(syncProgress.percentage || 0);
 
   // Short display label for the button face
-  const fileNameOnly = currentFile ? currentFile.split(/[/\\]/).pop() || currentFile : 'Synchronisation...';
+  const fileNameOnly = currentFile
+    ? currentFile.split(/[/\\]/).pop() || currentFile
+    : 'Synchronisation...';
 
   return (
     <footer className="fixed bottom-0 left-0 right-0 p-8 pb-10 flex flex-col items-center gap-4 z-40">
@@ -52,12 +67,18 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
                 </div>
                 <div className="flex justify-between items-center text-xs bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/5">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-red-400'}`} />
-                    <span className="font-semibold">{isOnline ? 'En ligne' : 'Hors ligne'}</span>
+                    <div
+                      className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-red-400'}`}
+                    />
+                    <span className="font-semibold">
+                      {isOnline ? 'En ligne' : 'Hors ligne'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 font-mono text-white/60 text-[11px]">
                     <Users className="w-3 h-3 opacity-60" />
-                    <span>{isOnline ? `${playersOnline}/${playersMax}` : '--'}</span>
+                    <span>
+                      {isOnline ? `${playersOnline}/${playersMax}` : '--'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -69,13 +90,30 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
                   <span>Services Mojang</span>
                 </div>
                 {[
-                  { id: 'auth', label: 'Authentification', ok: mojangStatus?.auth ?? true },
-                  { id: 'session', label: 'Sessions multijoueur', ok: mojangStatus?.session ?? true },
-                  { id: 'api', label: 'API & Skins', ok: mojangStatus?.api ?? true },
+                  {
+                    id: 'auth',
+                    label: 'Authentification',
+                    ok: mojangStatus?.auth ?? true,
+                  },
+                  {
+                    id: 'session',
+                    label: 'Sessions multijoueur',
+                    ok: mojangStatus?.session ?? true,
+                  },
+                  {
+                    id: 'api',
+                    label: 'API & Skins',
+                    ok: mojangStatus?.api ?? true,
+                  },
                 ].map((svc) => (
-                  <div key={svc.id} className="flex justify-between items-center text-[11px] text-white/75 px-1">
+                  <div
+                    key={svc.id}
+                    className="flex justify-between items-center text-[11px] text-white/75 px-1"
+                  >
                     <span>{svc.label}</span>
-                    <div className={`w-1.5 h-1.5 rounded-full ${svc.ok ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${svc.ok ? 'bg-emerald-400' : 'bg-red-400'}`}
+                    />
                   </div>
                 ))}
               </div>
@@ -89,11 +127,15 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
           animate={{ opacity: 1, y: 0 }}
           onMouseEnter={() => setShowStatusPopover(true)}
           onMouseLeave={() => setShowStatusPopover(false)}
+          onFocus={() => setShowStatusPopover(true)}
+          onBlur={() => setShowStatusPopover(false)}
           onClick={onServerSelectClick}
           className="group flex items-center gap-3 px-5 py-2 rounded-2xl bg-neutral-900/60 hover:bg-neutral-800/80 border border-white/10 hover:border-white/20 backdrop-blur-2xl transition-all duration-200 cursor-pointer shadow-lg"
         >
           <div className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-red-400'}`} />
+            <div
+              className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-red-400'}`}
+            />
             <span className="text-white font-black text-sm tracking-tight group-hover:text-emerald-300 transition-colors">
               {session?.name || 'Launched'}
             </span>
@@ -150,8 +192,12 @@ export const BottomBar: React.FC<BottomBarProps> = ({ onPlayClick, onServerSelec
 
               {/* Progress and percentage */}
               <div className="flex justify-between items-center text-xs pt-0.5">
-                <span className="text-white/50 text-[11px]">Progression totale</span>
-                <span className="font-mono font-bold text-emerald-400 tabular-nums">{percentage}%</span>
+                <span className="text-white/50 text-[11px]">
+                  Progression totale
+                </span>
+                <span className="font-mono font-bold text-emerald-400 tabular-nums">
+                  {percentage}%
+                </span>
               </div>
             </motion.div>
           )}

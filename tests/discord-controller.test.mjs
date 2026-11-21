@@ -4,14 +4,31 @@ import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
 const state = {
-  discordUser: null, discordSkipped: false, discordChecking: false, discordBusy: false, discordError: null,
-  globalSessions: [], activeSessionIndex: 0, sessionsLoading: false, sessionsError: null,
-  isSyncing: false, isSettingsOpen: false, isServerSelectOpen: false,
-  allAccounts: [{ uuid: 'minecraft', name: 'Player' }], authCache: { uuid: 'minecraft' },
+  discordUser: null,
+  discordSkipped: false,
+  discordChecking: false,
+  discordBusy: false,
+  discordError: null,
+  globalSessions: [],
+  activeSessionIndex: 0,
+  sessionsLoading: false,
+  sessionsError: null,
+  isSyncing: false,
+  isSettingsOpen: false,
+  isServerSelectOpen: false,
+  allAccounts: [{ uuid: 'minecraft', name: 'Player' }],
+  authCache: { uuid: 'minecraft' },
   currentSettings: {},
 };
-const user = { discordId: '123456789012345678', username: 'test.user', avatar: null };
-const rows = [{ name: 'Public', syncUrl: 'https://launcher.test/public' }, { name: 'Private', syncUrl: 'https://launcher.test/private' }];
+const user = {
+  discordId: '123456789012345678',
+  username: 'test.user',
+  avatar: null,
+};
+const rows = [
+  { name: 'Public', syncUrl: 'https://launcher.test/public' },
+  { name: 'Private', syncUrl: 'https://launcher.test/private' },
+];
 let storedUser = null;
 let restoreError = null;
 let loginError = null;
@@ -30,17 +47,51 @@ let activeSessionSaved = null;
 globalThis.__discordControllerTest = {
   state,
   auth: {
-    getDiscordAuth: async () => { restoreCalls++; if (pendingRestore) return pendingRestore; if (restoreError) throw restoreError; return guest ? null : storedUser; },
-    loginDiscord: async () => { if (loginError) throw loginError; guest = false; return user; },
-    logoutDiscord: async () => { if (logoutError) throw logoutError; revoked = true; guest = false; },
-    continueWithoutDiscord: async () => { guest = true; },
+    getDiscordAuth: async () => {
+      restoreCalls++;
+      if (pendingRestore) return pendingRestore;
+      if (restoreError) throw restoreError;
+      return guest ? null : storedUser;
+    },
+    loginDiscord: async () => {
+      if (loginError) throw loginError;
+      guest = false;
+      return user;
+    },
+    logoutDiscord: async () => {
+      if (logoutError) throw logoutError;
+      revoked = true;
+      guest = false;
+    },
+    continueWithoutDiscord: async () => {
+      guest = true;
+    },
   },
   sessions: {
-    getSessions: async () => { sessionCalls++; if (pendingSessions) { const response = pendingSessions; pendingSessions = null; return response; } if (sessionError) throw sessionError; return guest ? rows.slice(0, 1) : rows; },
+    getSessions: async () => {
+      sessionCalls++;
+      if (pendingSessions) {
+        const response = pendingSessions;
+        pendingSessions = null;
+        return response;
+      }
+      if (sessionError) throw sessionError;
+      return guest ? rows.slice(0, 1) : rows;
+    },
     getActiveSessionName: async () => 'Private',
-    fetchJson: async (url) => { fetchedAssetsUrls.push(url); return { background: '/bg.png', icon: '/icon.png', logo: '/logo.png', links: [] }; },
+    fetchJson: async (url) => {
+      fetchedAssetsUrls.push(url);
+      return {
+        background: '/bg.png',
+        icon: '/icon.png',
+        logo: '/logo.png',
+        links: [],
+      };
+    },
     getDeepLinkUrl: async () => mockDeepLink,
-    setActiveSession: async (name) => { activeSessionSaved = name; },
+    setActiveSession: async (name) => {
+      activeSessionSaved = name;
+    },
     extractSessionSlugFromDeepLink: (url) => {
       if (!url || !url.startsWith('launched://')) return null;
       let path = url.slice('launched://'.length);
@@ -51,24 +102,42 @@ globalThis.__discordControllerTest = {
     },
   },
   settings: {
-    saveSettingsInternal: async settings => { savedSettings = structuredClone(settings); },
+    saveSettingsInternal: async (settings) => {
+      savedSettings = structuredClone(settings);
+    },
   },
 };
-const virtual = source => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
-let code = ts.transpileModule(await readFile(new URL('../src/app/launcher-controller.ts', import.meta.url), 'utf8'), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-}).outputText;
+const virtual = (source) =>
+  `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
+let code = ts.transpileModule(
+  await readFile(
+    new URL('../src/app/launcher-controller.ts', import.meta.url),
+    'utf8',
+  ),
+  {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  },
+).outputText;
 const mocks = {
   '@tauri-apps/api/event': 'export const listen=async()=>()=>{};',
   '@tauri-apps/plugin-shell': 'export const open=async()=>{};',
   '../state': 'export const state=globalThis.__discordControllerTest.state;',
-  '../services/auth': 'export const { getDiscordAuth, loginDiscord, logoutDiscord, continueWithoutDiscord }=globalThis.__discordControllerTest.auth;',
-  '../services/sessions': 'export const { getSessions, getActiveSessionName, fetchJson, getDeepLinkUrl, extractSessionSlugFromDeepLink, setActiveSession }=globalThis.__discordControllerTest.sessions;',
-  '../services/settings': 'export const { saveSettingsInternal }=globalThis.__discordControllerTest.settings;',
+  '../services/auth':
+    'export const { getDiscordAuth, loginDiscord, logoutDiscord, continueWithoutDiscord }=globalThis.__discordControllerTest.auth;',
+  '../services/sessions':
+    'export const { getSessions, getActiveSessionName, fetchJson, getDeepLinkUrl, extractSessionSlugFromDeepLink, setActiveSession }=globalThis.__discordControllerTest.sessions;',
+  '../services/settings':
+    'export const { saveSettingsInternal }=globalThis.__discordControllerTest.settings;',
   '../services/status': 'export const unused=true;',
   '../services/updater': 'export const unused=true;',
 };
-for (const [specifier, source] of Object.entries(mocks)) code = code.replaceAll(`from '${specifier}'`, `from '${virtual(source)}'`).replaceAll(`from "${specifier}"`, `from '${virtual(source)}'`);
+for (const [specifier, source] of Object.entries(mocks))
+  code = code
+    .replaceAll(`from '${specifier}'`, `from '${virtual(source)}'`)
+    .replaceAll(`from "${specifier}"`, `from '${virtual(source)}'`);
 const { LauncherController } = await import(virtual(code));
 const handlers = new LauncherController().getHandlers();
 
@@ -136,7 +205,10 @@ test('failed restoration and session requests remain retryable without exposing 
 test('native OAuth failures are shown in the launcher and allow another login attempt', async () => {
   state.discordUser = null;
   state.globalSessions = [];
-  for (const message of ['Vous avez annulé l’autorisation Discord.', 'Le site n’a pas pu terminer la connexion. Réessayez dans un instant.']) {
+  for (const message of [
+    'Vous avez annulé l’autorisation Discord.',
+    'Le site n’a pas pu terminer la connexion. Réessayez dans un instant.',
+  ]) {
     loginError = message;
     await handlers.handleDiscordLogin();
     assert.equal(state.discordError, message);
@@ -172,7 +244,9 @@ test('continuing without Discord loads public sessions and permits a later sign-
 
 test('a late saved-account restoration cannot replace the explicit public-only choice', async () => {
   let finishRestore;
-  pendingRestore = new Promise(resolve => { finishRestore = resolve; });
+  pendingRestore = new Promise((resolve) => {
+    finishRestore = resolve;
+  });
   const restoration = handlers.handleDiscordRestore();
   assert.equal(state.discordChecking, true);
   await handlers.handleContinueWithoutDiscord();
@@ -188,7 +262,9 @@ test('a late saved-account restoration cannot replace the explicit public-only c
 test('late authenticated session requests cannot restore private sessions after continuing without Discord', async () => {
   await handlers.handleDiscordLogin();
   let finishSessions;
-  pendingSessions = new Promise(resolve => { finishSessions = resolve; });
+  pendingSessions = new Promise((resolve) => {
+    finishSessions = resolve;
+  });
   const oldRequest = handlers.handleRefreshSessions();
   assert.equal(state.sessionsLoading, true);
   await handlers.handleContinueWithoutDiscord();
@@ -256,9 +332,21 @@ test('a restart after logout stays public and never requests a saved identity', 
 test('loading sessions fetches asset metadata and images for all sessions directly without clicking', async () => {
   fetchedAssetsUrls = [];
   const testSessions = [
-    { name: 'Server 1', syncUrl: 'https://launcher.test/s1', assetsPath: 'https://launcher.test/s1/assets.json' },
-    { name: 'Server 2', syncUrl: 'https://launcher.test/s2', assetsPath: 'https://launcher.test/s2/assets.json' },
-    { name: 'Server 3', syncUrl: 'https://launcher.test/s3', assetsPath: 'https://launcher.test/s3/assets.json' },
+    {
+      name: 'Server 1',
+      syncUrl: 'https://launcher.test/s1',
+      assetsPath: 'https://launcher.test/s1/assets.json',
+    },
+    {
+      name: 'Server 2',
+      syncUrl: 'https://launcher.test/s2',
+      assetsPath: 'https://launcher.test/s2/assets.json',
+    },
+    {
+      name: 'Server 3',
+      syncUrl: 'https://launcher.test/s3',
+      assetsPath: 'https://launcher.test/s3/assets.json',
+    },
   ];
   pendingSessions = testSessions;
   await handlers.handleRefreshSessions();
@@ -271,11 +359,24 @@ test('loading sessions fetches asset metadata and images for all sessions direct
 });
 
 test('extractSessionSlugFromDeepLink parses various deep link URL formats', () => {
-  const { extractSessionSlugFromDeepLink } = globalThis.__discordControllerTest.sessions;
-  assert.equal(extractSessionSlugFromDeepLink('launched://session/survie-rp'), 'survie-rp');
-  assert.equal(extractSessionSlugFromDeepLink('launched://session/survie-rp/'), 'survie-rp');
-  assert.equal(extractSessionSlugFromDeepLink('launched://survie-rp'), 'survie-rp');
-  assert.equal(extractSessionSlugFromDeepLink('launched://session/mon%20serveur?ref=web'), 'mon serveur');
+  const { extractSessionSlugFromDeepLink } =
+    globalThis.__discordControllerTest.sessions;
+  assert.equal(
+    extractSessionSlugFromDeepLink('launched://session/survie-rp'),
+    'survie-rp',
+  );
+  assert.equal(
+    extractSessionSlugFromDeepLink('launched://session/survie-rp/'),
+    'survie-rp',
+  );
+  assert.equal(
+    extractSessionSlugFromDeepLink('launched://survie-rp'),
+    'survie-rp',
+  );
+  assert.equal(
+    extractSessionSlugFromDeepLink('launched://session/mon%20serveur?ref=web'),
+    'mon serveur',
+  );
   assert.equal(extractSessionSlugFromDeepLink('https://example.com'), null);
   assert.equal(extractSessionSlugFromDeepLink(''), null);
 });
@@ -283,8 +384,16 @@ test('extractSessionSlugFromDeepLink parses various deep link URL formats', () =
 test('deep link URL on startup automatically selects matching session and closes select modal', async () => {
   mockDeepLink = 'launched://session/pvp-faction';
   const testSessions = [
-    { name: 'Survie RP', slug: 'survie-rp', syncUrl: 'https://launcher.test/api/sessions/survie-rp/sync' },
-    { name: 'PvP Faction', slug: 'pvp-faction', syncUrl: 'https://launcher.test/api/sessions/pvp-faction/sync' },
+    {
+      name: 'Survie RP',
+      slug: 'survie-rp',
+      syncUrl: 'https://launcher.test/api/sessions/survie-rp/sync',
+    },
+    {
+      name: 'PvP Faction',
+      slug: 'pvp-faction',
+      syncUrl: 'https://launcher.test/api/sessions/pvp-faction/sync',
+    },
   ];
   pendingSessions = testSessions;
   state.isServerSelectOpen = true;

@@ -6,7 +6,8 @@ use crate::core::settings::SettingsManager;
 #[tauri::command]
 pub async fn get_auth(app_handle: tauri::AppHandle) -> Result<Option<AuthResponse>, String> {
     let mut settings = SettingsManager::load(&app_handle);
-    let account = SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref());
+    let account =
+        SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref());
     if let Some(account) = account
         .as_ref()
         .filter(|account| settings.active_account_uuid.as_deref() != Some(account.uuid.as_str()))

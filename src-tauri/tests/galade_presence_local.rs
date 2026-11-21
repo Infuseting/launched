@@ -31,7 +31,8 @@ fn galade_launch_with_the_production_presence_agent() {
         "name": "Galade", "minecraft": "1.12.2", "forge": "14.23.5.2847",
         "syncDir": "mods", "syncUrl": "https://example.invalid", "welcome": "",
         "jvmArg": "", "credits": ""
-    })).unwrap();
+    }))
+    .unwrap();
     let auth = AuthResponse {
         uuid: "00000000-0000-0000-0000-000000000000".into(),
         name: "LauncherSmoke".into(),
@@ -43,15 +44,24 @@ fn galade_launch_with_the_production_presence_agent() {
 
     let agent = if mode == "fixed" {
         let path = root.join("fixed-agent.jar");
-        fs::write(&path, include_bytes!(concat!(env!("OUT_DIR"), "/discord-presence.jar"))).unwrap();
+        fs::write(
+            &path,
+            include_bytes!(concat!(env!("OUT_DIR"), "/discord-presence.jar")),
+        )
+        .unwrap();
         path
     } else {
         root.join("released-agent.jar")
     };
     let locks = game_dir.join("presence");
     fs::create_dir(&locks).unwrap();
-    let launcher_lock = fs::OpenOptions::new().create(true).truncate(false).read(true).write(true)
-        .open(locks.join("launcher.lock")).unwrap();
+    let launcher_lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(locks.join("launcher.lock"))
+        .unwrap();
     FileExt::lock_exclusive(&launcher_lock).unwrap();
 
     let stdout = game_dir.join("stdout.log");
@@ -75,15 +85,31 @@ fn galade_launch_with_the_production_presence_agent() {
             return;
         }
         if mode == "fixed" {
-            assert!(!output.contains("signer information does not match"), "original crash still present");
-            if output.contains("Sound engine started") || output.contains("Forge Mod Loader has successfully loaded") {
-                assert!(locks.join("game.lock").exists(), "Discord worker didn't start");
+            assert!(
+                !output.contains("signer information does not match"),
+                "original crash still present"
+            );
+            if output.contains("Sound engine started")
+                || output.contains("Forge Mod Loader has successfully loaded")
+            {
+                assert!(
+                    locks.join("game.lock").exists(),
+                    "Discord worker didn't start"
+                );
                 eprintln!("Galade finished loading mods with the corrected agent and the Discord worker started");
                 return;
             }
         }
-        assert!(game.0.try_wait().unwrap().is_none(), "Minecraft exited, see logs in {}", game_dir.display());
-        assert!(Instant::now() < stop_at, "Loading timed out, see logs in {}", game_dir.display());
+        assert!(
+            game.0.try_wait().unwrap().is_none(),
+            "Minecraft exited, see logs in {}",
+            game_dir.display()
+        );
+        assert!(
+            Instant::now() < stop_at,
+            "Loading timed out, see logs in {}",
+            game_dir.display()
+        );
         thread::sleep(Duration::from_millis(300));
     }
 }

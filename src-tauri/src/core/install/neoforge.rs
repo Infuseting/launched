@@ -118,15 +118,17 @@ pub async fn install_neoforge(mc_version: &str, version: &str) -> Result<(), Str
             "bin/java"
         }),
         Err(runtime_error) => {
-            let fallback = crate::core::launch::args::find_java(
-                java.map(|j| j.major_version),
-                &mc_path,
-            )
-            .map_err(|e| format!("Failed to prepare Java: {}. Fallback: {}", runtime_error, e))?
-            .1;
+            let fallback =
+                crate::core::launch::args::find_java(java.map(|j| j.major_version), &mc_path)
+                    .map_err(|e| {
+                        format!("Failed to prepare Java: {}. Fallback: {}", runtime_error, e)
+                    })?
+                    .1;
             crate::core::install::runtime::validate_java(&fallback)
                 .await
-                .map_err(|e| format!("Failed to prepare Java: {}. Fallback: {}", runtime_error, e))?;
+                .map_err(|e| {
+                    format!("Failed to prepare Java: {}. Fallback: {}", runtime_error, e)
+                })?;
             fallback
         }
     };

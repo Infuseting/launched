@@ -3,19 +3,14 @@ use crate::core::download::{Checksum, DownloadEngine, DownloadTask};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncFileType {
+    #[default]
     Mandatory,
     Optional,
-}
-
-impl Default for SyncFileType {
-    fn default() -> Self {
-        SyncFileType::Mandatory
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -253,7 +248,6 @@ impl SyncService {
         .await?;
         let result = self
             .sync_manifest(
-                app,
                 window,
                 base_dir,
                 manifest_url,
@@ -273,7 +267,6 @@ impl SyncService {
 
     async fn sync_manifest(
         &self,
-        app: &tauri::AppHandle,
         window: &tauri::Window,
         base_dir: &Path,
         manifest_url: &str,
@@ -289,7 +282,7 @@ impl SyncService {
         .await?;
 
         let enabled_set = crate::core::optional_files::OptionalFilesManager::resolve_selection(
-            &manifest,
+            manifest,
             enabled_optional_files,
         );
 
@@ -360,7 +353,7 @@ impl SyncService {
                 },
             );
         } else {
-            let auth_token = crate::auth::discord::current_auth_token(app)?;
+            let auth_token = crate::auth::discord::current_auth_token(window.app_handle())?;
             let engine = DownloadEngine::new(16).with_auth_token(auth_token);
             engine
                 .download_all(Some(window), tasks, "Synchronisation")
@@ -371,12 +364,12 @@ impl SyncService {
         for dir_name in sync_dir_list {
             let path = local_path(base_dir, dir_name).await?;
             if path.exists() {
-                self.cleanup_local_files(&path, &manifest, base_dir).await?;
+                self.cleanup_local_files(&path, manifest, base_dir).await?;
             }
         }
         crate::core::optional_files::OptionalFilesManager::cleanup_replaced_files(
             base_dir,
-            &manifest,
+            manifest,
             enabled_optional_files.unwrap_or(&[]),
         )
         .await?;

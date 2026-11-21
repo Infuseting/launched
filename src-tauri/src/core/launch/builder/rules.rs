@@ -77,28 +77,29 @@ pub fn argument_rules_allow(arg: &Value) -> bool {
         };
 
         // 2. Check Features conditions (Mojang argument flags)
-        let matches_features = if let Some(features) = rule.get("features").and_then(|f| f.as_object()) {
-            let mut ok = true;
-            for (key, val) in features {
-                let required = val.as_bool().unwrap_or(false);
-                let our_value = match key.as_str() {
-                    "is_demo_user" => false, // Launcher never runs demo user
-                    "has_custom_resolution" => true,
-                    "has_quick_plays_support"
-                    | "is_quick_play_singleplayer"
-                    | "is_quick_play_multiplayer"
-                    | "is_quick_play_realms" => false, // Quick play is not used
-                    _ => false,
-                };
-                if required != our_value {
-                    ok = false;
-                    break;
+        let matches_features =
+            if let Some(features) = rule.get("features").and_then(|f| f.as_object()) {
+                let mut ok = true;
+                for (key, val) in features {
+                    let required = val.as_bool().unwrap_or(false);
+                    let our_value = match key.as_str() {
+                        "is_demo_user" => false, // Launcher never runs demo user
+                        "has_custom_resolution" => true,
+                        "has_quick_plays_support"
+                        | "is_quick_play_singleplayer"
+                        | "is_quick_play_multiplayer"
+                        | "is_quick_play_realms" => false, // Quick play is not used
+                        _ => false,
+                    };
+                    if required != our_value {
+                        ok = false;
+                        break;
+                    }
                 }
-            }
-            ok
-        } else {
-            true
-        };
+                ok
+            } else {
+                true
+            };
 
         if matches_os && matches_features {
             allowed = action == "allow";

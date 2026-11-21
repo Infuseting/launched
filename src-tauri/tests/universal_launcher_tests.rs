@@ -8,7 +8,6 @@ use app_lib::core::meta::prism::PrismMetaClient;
 use app_lib::core::session::{ComponentSpec, Session};
 use std::path::PathBuf;
 
-
 #[test]
 fn test_maven_coordinate_resolution() {
     assert_eq!(
@@ -17,8 +16,12 @@ fn test_maven_coordinate_resolution() {
     );
 
     assert_eq!(
-        PrismMetaClient::maven_coordinate_to_path("net.minecraftforge:forge:1.20.1-47.2.0:universal"),
-        Some("net/minecraftforge/forge/1.20.1-47.2.0/forge-1.20.1-47.2.0-universal.jar".to_string())
+        PrismMetaClient::maven_coordinate_to_path(
+            "net.minecraftforge:forge:1.20.1-47.2.0:universal"
+        ),
+        Some(
+            "net/minecraftforge/forge/1.20.1-47.2.0/forge-1.20.1-47.2.0-universal.jar".to_string()
+        )
     );
 
     assert_eq!(
@@ -57,8 +60,20 @@ fn test_session_effective_components_legacy_fallback() {
 
     let comps = session_forge.effective_components();
     assert_eq!(comps.len(), 2);
-    assert_eq!(comps[0], ComponentSpec { uid: "net.minecraft".to_string(), version: "1.20.1".to_string() });
-    assert_eq!(comps[1], ComponentSpec { uid: "net.minecraftforge".to_string(), version: "47.2.0".to_string() });
+    assert_eq!(
+        comps[0],
+        ComponentSpec {
+            uid: "net.minecraft".to_string(),
+            version: "1.20.1".to_string()
+        }
+    );
+    assert_eq!(
+        comps[1],
+        ComponentSpec {
+            uid: "net.minecraftforge".to_string(),
+            version: "47.2.0".to_string()
+        }
+    );
 
     let session_neoforge = Session {
         name: "NeoForge Session".to_string(),
@@ -83,15 +98,33 @@ fn test_session_effective_components_legacy_fallback() {
 
     let comps_neo = session_neoforge.effective_components();
     assert_eq!(comps_neo.len(), 2);
-    assert_eq!(comps_neo[0], ComponentSpec { uid: "net.minecraft".to_string(), version: "1.20.4".to_string() });
-    assert_eq!(comps_neo[1], ComponentSpec { uid: "net.neoforged".to_string(), version: "20.4.80".to_string() });
+    assert_eq!(
+        comps_neo[0],
+        ComponentSpec {
+            uid: "net.minecraft".to_string(),
+            version: "1.20.4".to_string()
+        }
+    );
+    assert_eq!(
+        comps_neo[1],
+        ComponentSpec {
+            uid: "net.neoforged".to_string(),
+            version: "20.4.80".to_string()
+        }
+    );
 }
 
 #[test]
 fn test_session_custom_components_priority() {
     let custom_comps = vec![
-        ComponentSpec { uid: "net.minecraft".to_string(), version: "1.20.1".to_string() },
-        ComponentSpec { uid: "net.fabricmc.fabric-loader".to_string(), version: "0.15.11".to_string() },
+        ComponentSpec {
+            uid: "net.minecraft".to_string(),
+            version: "1.20.1".to_string(),
+        },
+        ComponentSpec {
+            uid: "net.fabricmc.fabric-loader".to_string(),
+            version: "0.15.11".to_string(),
+        },
     ];
 
     let session = Session {
@@ -120,20 +153,56 @@ fn test_session_custom_components_priority() {
 
 #[test]
 fn test_jre_resolution() {
-    assert_eq!(JreManager::resolve_component_name(None, Some(21), None), "java-runtime-delta");
-    assert_eq!(JreManager::resolve_component_name(None, Some(17), None), "java-runtime-gamma");
-    assert_eq!(JreManager::resolve_component_name(None, Some(16), None), "java-runtime-alpha");
-    assert_eq!(JreManager::resolve_component_name(None, Some(8), None), "jre-legacy");
-    assert_eq!(JreManager::resolve_component_name(None, None, None), "jre-legacy");
-    assert_eq!(JreManager::resolve_component_name(None, None, Some("java-runtime-delta")), "java-runtime-delta");
+    assert_eq!(
+        JreManager::resolve_component_name(None, Some(21), None),
+        "java-runtime-delta"
+    );
+    assert_eq!(
+        JreManager::resolve_component_name(None, Some(17), None),
+        "java-runtime-gamma"
+    );
+    assert_eq!(
+        JreManager::resolve_component_name(None, Some(16), None),
+        "java-runtime-alpha"
+    );
+    assert_eq!(
+        JreManager::resolve_component_name(None, Some(8), None),
+        "jre-legacy"
+    );
+    assert_eq!(
+        JreManager::resolve_component_name(None, None, None),
+        "jre-legacy"
+    );
+    assert_eq!(
+        JreManager::resolve_component_name(None, None, Some("java-runtime-delta")),
+        "java-runtime-delta"
+    );
 
     // Version deductions
-    assert_eq!(JreManager::resolve_component_name(Some("1.20.1"), None, None), "java-runtime-gamma"); // Java 17
-    assert_eq!(JreManager::resolve_component_name(Some("1.20.6"), None, None), "java-runtime-delta"); // Java 21
-    assert_eq!(JreManager::resolve_component_name(Some("1.21.1"), None, None), "java-runtime-delta"); // Java 21
-    assert_eq!(JreManager::resolve_component_name(Some("1.17.1"), None, None), "java-runtime-alpha"); // Java 16
-    assert_eq!(JreManager::resolve_component_name(Some("1.12.2"), None, None), "jre-legacy");        // Java 8
-    assert_eq!(JreManager::resolve_component_name(Some("1.7.10"), None, None), "jre-legacy");        // Java 8
+    assert_eq!(
+        JreManager::resolve_component_name(Some("1.20.1"), None, None),
+        "java-runtime-gamma"
+    ); // Java 17
+    assert_eq!(
+        JreManager::resolve_component_name(Some("1.20.6"), None, None),
+        "java-runtime-delta"
+    ); // Java 21
+    assert_eq!(
+        JreManager::resolve_component_name(Some("1.21.1"), None, None),
+        "java-runtime-delta"
+    ); // Java 21
+    assert_eq!(
+        JreManager::resolve_component_name(Some("1.17.1"), None, None),
+        "java-runtime-alpha"
+    ); // Java 16
+    assert_eq!(
+        JreManager::resolve_component_name(Some("1.12.2"), None, None),
+        "jre-legacy"
+    ); // Java 8
+    assert_eq!(
+        JreManager::resolve_component_name(Some("1.7.10"), None, None),
+        "jre-legacy"
+    ); // Java 8
 }
 
 #[test]
@@ -179,39 +248,78 @@ fn test_library_rule_filtering() {
 }
 
 #[tokio::test]
+#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
 async fn test_fetch_real_component_manifest() {
     let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
     let manifest = client.get_component("net.minecraft", "1.12.2").await;
-    assert!(manifest.is_ok(), "Failed to fetch 1.12.2 manifest: {:?}", manifest.err());
+    assert!(
+        manifest.is_ok(),
+        "Failed to fetch 1.12.2 manifest: {:?}",
+        manifest.err()
+    );
     let _m = manifest.unwrap();
-    let m1201 = client.get_component("net.minecraft", "1.20.1").await.unwrap();
-    println!("1.20.1 jvm arguments: {:?}", m1201.arguments.as_ref().map(|a| &a.jvm));
+    let m1201 = client
+        .get_component("net.minecraft", "1.20.1")
+        .await
+        .unwrap();
+    println!(
+        "1.20.1 jvm arguments: {:?}",
+        m1201.arguments.as_ref().map(|a| &a.jvm)
+    );
     println!("1.20.1 plus_jvm_args: {:?}", m1201.plus_jvm_args);
-    let forge1201 = client.get_component("net.minecraftforge", "47.4.0").await.unwrap();
-    println!("Forge 47.4.0 jvm arguments: {:?}", forge1201.arguments.as_ref().map(|a| &a.jvm));
+    let forge1201 = client
+        .get_component("net.minecraftforge", "47.4.0")
+        .await
+        .unwrap();
+    println!(
+        "Forge 47.4.0 jvm arguments: {:?}",
+        forge1201.arguments.as_ref().map(|a| &a.jvm)
+    );
     println!("Forge 47.4.0 plus_jvm_args: {:?}", forge1201.plus_jvm_args);
 }
 
 #[tokio::test]
+#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
 async fn test_fetch_all_servers_json_versions() {
     let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
 
     // 1.12.2 Forge 14.23.5.2847
-    let v2847 = client.get_component("net.minecraftforge", "14.23.5.2847").await;
-    println!("Forge 14.23.5.2847 result: {:?}", v2847.as_ref().map(|m| &m.main_class));
+    let v2847 = client
+        .get_component("net.minecraftforge", "14.23.5.2847")
+        .await;
+    println!(
+        "Forge 14.23.5.2847 result: {:?}",
+        v2847.as_ref().map(|m| &m.main_class)
+    );
     assert!(v2847.is_ok(), "Failed 14.23.5.2847: {:?}", v2847.err());
 
     // 1.12.2 Forge 14.23.5.2859
-    let v2859 = client.get_component("net.minecraftforge", "14.23.5.2859").await;
-    println!("Forge 14.23.5.2859 result: {:?}", v2859.as_ref().map(|m| &m.main_class));
+    let v2859 = client
+        .get_component("net.minecraftforge", "14.23.5.2859")
+        .await;
+    println!(
+        "Forge 14.23.5.2859 result: {:?}",
+        v2859.as_ref().map(|m| &m.main_class)
+    );
     assert!(v2859.is_ok(), "Failed 14.23.5.2859: {:?}", v2859.err());
 
     // 1.20.1 Forge 47.4.0
     let v4740 = client.get_component("net.minecraftforge", "47.4.0").await;
     assert!(v4740.is_ok(), "Failed 47.4.0: {:?}", v4740.err());
     let m4740 = v4740.unwrap();
-    assert_eq!(m4740.main_class.as_deref(), Some("io.github.zekerzhayard.forgewrapper.installer.Main"));
-    assert!(m4740.maven_files.as_ref().unwrap().iter().any(|f| f.name.contains(":installer")), "Installer jar must be in mavenFiles");
+    assert_eq!(
+        m4740.main_class.as_deref(),
+        Some("io.github.zekerzhayard.forgewrapper.installer.Main")
+    );
+    assert!(
+        m4740
+            .maven_files
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|f| f.name.contains(":installer")),
+        "Installer jar must be in mavenFiles"
+    );
 
     if let Some(libs) = &m4740.libraries {
         for l in libs {
@@ -219,16 +327,26 @@ async fn test_fetch_all_servers_json_versions() {
         }
     }
 
-    let fab = client.get_component("net.fabricmc.fabric-loader", "0.15.11").await.unwrap();
+    let fab = client
+        .get_component("net.fabricmc.fabric-loader", "0.15.11")
+        .await
+        .unwrap();
     println!("Fabric Loader 0.15.11 requires: {:?}", fab.requires);
 }
 
 #[tokio::test]
+#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
 async fn test_resolve_fabric_components() {
     let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
     let initial = vec![
-        ComponentSpec { uid: "net.minecraft".to_string(), version: "1.20.1".to_string() },
-        ComponentSpec { uid: "net.fabricmc.fabric-loader".to_string(), version: "0.15.11".to_string() },
+        ComponentSpec {
+            uid: "net.minecraft".to_string(),
+            version: "1.20.1".to_string(),
+        },
+        ComponentSpec {
+            uid: "net.fabricmc.fabric-loader".to_string(),
+            version: "0.15.11".to_string(),
+        },
     ];
 
     let manifests = client.resolve_all_components(&initial).await.unwrap();
@@ -237,17 +355,36 @@ async fn test_resolve_fabric_components() {
         println!(" - Component: {:?}", m.uid);
     }
 
-    assert!(manifests.iter().any(|m| m.uid.as_deref() == Some("net.fabricmc.intermediary")), "net.fabricmc.intermediary must be resolved");
-    let intermediary = manifests.iter().find(|m| m.uid.as_deref() == Some("net.fabricmc.intermediary")).unwrap();
-    assert_eq!(intermediary.version.as_deref(), Some("1.20.1"), "Intermediary must use Minecraft version 1.20.1");
+    assert!(
+        manifests
+            .iter()
+            .any(|m| m.uid.as_deref() == Some("net.fabricmc.intermediary")),
+        "net.fabricmc.intermediary must be resolved"
+    );
+    let intermediary = manifests
+        .iter()
+        .find(|m| m.uid.as_deref() == Some("net.fabricmc.intermediary"))
+        .unwrap();
+    assert_eq!(
+        intermediary.version.as_deref(),
+        Some("1.20.1"),
+        "Intermediary must use Minecraft version 1.20.1"
+    );
 }
 
 #[tokio::test]
+#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
 async fn test_resolve_all_components_includes_lwjgl() {
     let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
     let initial = vec![
-        ComponentSpec { uid: "net.minecraft".to_string(), version: "1.12.2".to_string() },
-        ComponentSpec { uid: "net.minecraftforge".to_string(), version: "14.23.5.2847".to_string() },
+        ComponentSpec {
+            uid: "net.minecraft".to_string(),
+            version: "1.12.2".to_string(),
+        },
+        ComponentSpec {
+            uid: "net.minecraftforge".to_string(),
+            version: "14.23.5.2847".to_string(),
+        },
     ];
 
     let manifests = client.resolve_all_components(&initial).await.unwrap();
@@ -256,14 +393,40 @@ async fn test_resolve_all_components_includes_lwjgl() {
         println!(" - Component: {:?}", m.uid);
     }
 
-    assert!(manifests.iter().any(|m| m.uid.as_deref() == Some("org.lwjgl")), "org.lwjgl must be resolved for 1.12.2");
-    assert!(manifests.iter().any(|m| m.uid.as_deref() == Some("net.minecraft")), "net.minecraft must be resolved");
-    assert!(manifests.iter().any(|m| m.uid.as_deref() == Some("net.minecraftforge")), "net.minecraftforge must be resolved");
+    assert!(
+        manifests
+            .iter()
+            .any(|m| m.uid.as_deref() == Some("org.lwjgl")),
+        "org.lwjgl must be resolved for 1.12.2"
+    );
+    assert!(
+        manifests
+            .iter()
+            .any(|m| m.uid.as_deref() == Some("net.minecraft")),
+        "net.minecraft must be resolved"
+    );
+    assert!(
+        manifests
+            .iter()
+            .any(|m| m.uid.as_deref() == Some("net.minecraftforge")),
+        "net.minecraftforge must be resolved"
+    );
 
-    let lwjgl_m = manifests.iter().find(|m| m.uid.as_deref() == Some("org.lwjgl")).unwrap();
-    println!("org.lwjgl libraries count: {:?}", lwjgl_m.libraries.as_ref().map(|l| l.len()));
+    let lwjgl_m = manifests
+        .iter()
+        .find(|m| m.uid.as_deref() == Some("org.lwjgl"))
+        .unwrap();
+    println!(
+        "org.lwjgl libraries count: {:?}",
+        lwjgl_m.libraries.as_ref().map(|l| l.len())
+    );
     for lib in lwjgl_m.libraries.as_ref().unwrap() {
-        println!(" - lib: {} natives: {:?} downloads: {:?}", lib.name, lib.natives, lib.downloads.is_some());
+        println!(
+            " - lib: {} natives: {:?} downloads: {:?}",
+            lib.name,
+            lib.natives,
+            lib.downloads.is_some()
+        );
         let urls = PrismMetaClient::resolve_library_urls(lib);
         println!("   resolved urls: {:?}", urls);
     }
@@ -276,7 +439,9 @@ fn test_crack_pseudo_validation() {
         !trimmed.is_empty()
             && trimmed.len() <= 16
             && trimmed == pseudo
-            && trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && trimmed
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
 
     assert!(validate_pseudo("Infuseting"));
@@ -317,7 +482,8 @@ fn test_sync_path_traversal_sanitization() {
 
 #[test]
 fn test_minecraft_arguments_spaces_preservation() {
-    let raw_args = "--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory}";
+    let raw_args =
+        "--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory}";
     let game_placeholders = [
         ("${auth_player_name}", "Infuseting".to_string()),
         ("${version_name}", "1.20.1".to_string()),
@@ -340,19 +506,35 @@ fn test_minecraft_arguments_spaces_preservation() {
 
 #[test]
 fn test_assets_directory_pre_launch_guarantee() {
-    let test_dir = std::env::temp_dir().join(format!("test_assets_guarantee_{}", uuid::Uuid::new_v4().simple()));
+    let test_dir = std::env::temp_dir().join(format!(
+        "test_assets_guarantee_{}",
+        uuid::Uuid::new_v4().simple()
+    ));
     let nonexistent_assets = test_dir.join("missing_parent").join("assets");
 
-    assert!(!nonexistent_assets.exists(), "Target assets dir must not exist initially");
+    assert!(
+        !nonexistent_assets.exists(),
+        "Target assets dir must not exist initially"
+    );
 
     // Call ensure_assets_dir_exists
     let res = LaunchArguments::ensure_assets_dir_exists(&nonexistent_assets);
-    assert!(res.is_ok(), "ensure_assets_dir_exists should succeed: {:?}", res.err());
-    assert!(nonexistent_assets.exists(), "Target assets dir must exist on disk after guarantee call");
+    assert!(
+        res.is_ok(),
+        "ensure_assets_dir_exists should succeed: {:?}",
+        res.err()
+    );
+    assert!(
+        nonexistent_assets.exists(),
+        "Target assets dir must exist on disk after guarantee call"
+    );
 
     // Call again on already-existing directory
     let res_again = LaunchArguments::ensure_assets_dir_exists(&nonexistent_assets);
-    assert!(res_again.is_ok(), "ensure_assets_dir_exists on existing dir should succeed");
+    assert!(
+        res_again.is_ok(),
+        "ensure_assets_dir_exists on existing dir should succeed"
+    );
 
     // Clean up
     let _ = std::fs::remove_dir_all(&test_dir);
@@ -542,12 +724,19 @@ fn test_mojang_version_detail_deserializes_asset_index() {
     }"#;
 
     let detail: Result<VersionDetail, _> = serde_json::from_str(raw_json);
-    assert!(detail.is_ok(), "Failed to parse VersionDetail: {:?}", detail.err());
+    assert!(
+        detail.is_ok(),
+        "Failed to parse VersionDetail: {:?}",
+        detail.err()
+    );
     let detail = detail.unwrap();
     assert!(detail.asset_index.is_some(), "assetIndex must be parsed");
     let asset_index = detail.asset_index.unwrap();
     assert_eq!(asset_index.id, "1.20");
-    assert_eq!(asset_index.sha1.as_deref(), Some("0123456789abcdef0123456789abcdef01234567"));
+    assert_eq!(
+        asset_index.sha1.as_deref(),
+        Some("0123456789abcdef0123456789abcdef01234567")
+    );
     assert_eq!(asset_index.size, Some(398284));
     assert_eq!(asset_index.total_size, Some(673238472));
     assert_eq!(
@@ -568,7 +757,11 @@ fn test_version_manifest_deserializes_asset_index_without_url() {
     }"#;
 
     let manifest: Result<VersionManifest, _> = serde_json::from_str(raw_json);
-    assert!(manifest.is_ok(), "Manifest with assetIndex lacking url must parse: {:?}", manifest.err());
+    assert!(
+        manifest.is_ok(),
+        "Manifest with assetIndex lacking url must parse: {:?}",
+        manifest.err()
+    );
     let manifest = manifest.unwrap();
     assert!(manifest.asset_index.is_some());
     let ai = manifest.asset_index.unwrap();
@@ -578,7 +771,8 @@ fn test_version_manifest_deserializes_asset_index_without_url() {
 
 #[tokio::test]
 async fn test_asset_manager_directories_and_index_file_placement() {
-    let test_root = std::env::temp_dir().join(format!("test_assets_mgr_{}", uuid::Uuid::new_v4().simple()));
+    let test_root =
+        std::env::temp_dir().join(format!("test_assets_mgr_{}", uuid::Uuid::new_v4().simple()));
     let custom_assets = test_root.join("custom_assets");
 
     // Test AssetManager path resolution
@@ -604,7 +798,11 @@ async fn test_asset_manager_directories_and_index_file_placement() {
     };
 
     let res = mgr_custom.ensure_assets(None, &asset_ref).await;
-    assert!(res.is_ok(), "ensure_assets should succeed with existing index file: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "ensure_assets should succeed with existing index file: {:?}",
+        res.err()
+    );
 
     // Assert that indexes and objects directories exist
     assert!(custom_assets.join("indexes").exists());
@@ -616,7 +814,10 @@ async fn test_asset_manager_directories_and_index_file_placement() {
 
 #[tokio::test]
 async fn test_asset_manager_recovers_from_empty_corrupted_index_file() {
-    let test_root = std::env::temp_dir().join(format!("test_assets_recover_{}", uuid::Uuid::new_v4().simple()));
+    let test_root = std::env::temp_dir().join(format!(
+        "test_assets_recover_{}",
+        uuid::Uuid::new_v4().simple()
+    ));
     let custom_assets = test_root.join("custom_assets");
     let mgr = AssetManager::new_with_assets_dir(custom_assets.clone());
 
@@ -636,7 +837,11 @@ async fn test_asset_manager_recovers_from_empty_corrupted_index_file() {
 
     // ensure_assets should detect empty/missing and write a valid fallback without failing
     let res = mgr.ensure_assets(None, &asset_ref).await;
-    assert!(res.is_ok(), "ensure_assets should recover from empty index file: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "ensure_assets should recover from empty index file: {:?}",
+        res.err()
+    );
     assert!(index_file.exists());
     let content = std::fs::read_to_string(&index_file).unwrap();
     assert_eq!(content, r#"{"objects":{}}"#);
@@ -677,7 +882,10 @@ fn test_session_deserialization_assets_path_alias() {
 
 #[tokio::test]
 async fn test_asset_manager_replaces_dummy_index_when_checksum_provided() {
-    let test_root = std::env::temp_dir().join(format!("test_assets_dummy_{}", uuid::Uuid::new_v4().simple()));
+    let test_root = std::env::temp_dir().join(format!(
+        "test_assets_dummy_{}",
+        uuid::Uuid::new_v4().simple()
+    ));
     let custom_assets = test_root.join("custom_assets");
     let index_dir = custom_assets.join("indexes");
     std::fs::create_dir_all(&index_dir).unwrap();
@@ -698,7 +906,10 @@ async fn test_asset_manager_replaces_dummy_index_when_checksum_provided() {
     .await;
 
     // Dummy index of 14 bytes should NOT be considered valid when expected size is 12345
-    assert!(!is_valid, "Dummy fallback index must not pass validity check when real size/checksum expected");
+    assert!(
+        !is_valid,
+        "Dummy fallback index must not pass validity check when real size/checksum expected"
+    );
 
     let _ = std::fs::remove_dir_all(&test_root);
 }
@@ -726,25 +937,20 @@ fn test_launch_arguments_parses_asset_index_flag_variants() {
         Some("1.20.1".to_string())
     );
 
-    let args_quoted = vec![
-        "--assetIndex=\"1.20.1\"".to_string(),
-    ];
+    let args_quoted = vec!["--assetIndex=\"1.20.1\"".to_string()];
     assert_eq!(
         LaunchArguments::extract_asset_index_id(&args_quoted),
         Some("1.20.1".to_string())
     );
 
-    let args_missing = vec![
-        "--username".to_string(),
-        "Player".to_string(),
-    ];
+    let args_missing = vec!["--username".to_string(), "Player".to_string()];
     assert_eq!(LaunchArguments::extract_asset_index_id(&args_missing), None);
 
-    let args_next_flag = vec![
-        "--assetIndex".to_string(),
-        "--gameDir".to_string(),
-    ];
-    assert_eq!(LaunchArguments::extract_asset_index_id(&args_next_flag), None);
+    let args_next_flag = vec!["--assetIndex".to_string(), "--gameDir".to_string()];
+    assert_eq!(
+        LaunchArguments::extract_asset_index_id(&args_next_flag),
+        None
+    );
 
     // Sequential override: last valid flag wins, matching joptsimple OptionSet.valueOf semantics
     let args_sequential = vec![
@@ -784,17 +990,13 @@ fn test_launch_arguments_extracts_assets_dir_variants() {
         Some(PathBuf::from("/path/to/assets"))
     );
 
-    let args_equals = vec![
-        "--assetsDir=/path/to/assets".to_string(),
-    ];
+    let args_equals = vec!["--assetsDir=/path/to/assets".to_string()];
     assert_eq!(
         LaunchArguments::extract_assets_dir(&args_equals),
         Some(PathBuf::from("/path/to/assets"))
     );
 
-    let args_quoted = vec![
-        "--assetsDir=\"/path/to/assets\"".to_string(),
-    ];
+    let args_quoted = vec!["--assetsDir=\"/path/to/assets\"".to_string()];
     assert_eq!(
         LaunchArguments::extract_assets_dir(&args_quoted),
         Some(PathBuf::from("/path/to/assets"))
@@ -826,13 +1028,20 @@ fn test_launch_arguments_extracts_assets_dir_variants() {
 
 #[tokio::test]
 async fn test_asset_manager_recovers_from_corrupt_html_index_file() {
-    let test_dir = std::env::temp_dir().join(format!("test_corrupt_index_{}", uuid::Uuid::new_v4().simple()));
+    let test_dir = std::env::temp_dir().join(format!(
+        "test_corrupt_index_{}",
+        uuid::Uuid::new_v4().simple()
+    ));
     let index_dir = test_dir.join("indexes");
     std::fs::create_dir_all(&index_dir).unwrap();
     let index_file = index_dir.join("corrupt.json");
 
     // Write corrupt non-JSON (e.g. HTML error page)
-    std::fs::write(&index_file, "<!DOCTYPE html><html><body>502 Bad Gateway</body></html>").unwrap();
+    std::fs::write(
+        &index_file,
+        "<!DOCTYPE html><html><body>502 Bad Gateway</body></html>",
+    )
+    .unwrap();
 
     let mgr = AssetManager::new_with_assets_dir(test_dir.clone());
     let asset_ref = AssetIndexReference {
@@ -845,19 +1054,29 @@ async fn test_asset_manager_recovers_from_corrupt_html_index_file() {
 
     // AssetManager::ensure_assets must detect corrupt HTML and recover with valid JSON fallback
     let res = mgr.ensure_assets(None, &asset_ref).await;
-    assert!(res.is_ok(), "ensure_assets must succeed when recovering from corrupt HTML index: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "ensure_assets must succeed when recovering from corrupt HTML index: {:?}",
+        res.err()
+    );
 
     let recovered_content = std::fs::read_to_string(&index_file).unwrap();
     let parsed: Result<serde_json::Value, _> = serde_json::from_str(&recovered_content);
     assert!(parsed.is_ok(), "Recovered index must be valid JSON");
-    assert!(parsed.unwrap().get("objects").is_some(), "Recovered index must contain objects key");
+    assert!(
+        parsed.unwrap().get("objects").is_some(),
+        "Recovered index must contain objects key"
+    );
 
     let _ = std::fs::remove_dir_all(&test_dir);
 }
 
 #[test]
 fn test_launch_service_assets_dir_guarantee_creates_subdirectories() {
-    let test_dir = std::env::temp_dir().join(format!("test_launch_subdirs_{}", uuid::Uuid::new_v4().simple()));
+    let test_dir = std::env::temp_dir().join(format!(
+        "test_launch_subdirs_{}",
+        uuid::Uuid::new_v4().simple()
+    ));
     let assets_dir = test_dir.join("mc_assets");
 
     assert!(!assets_dir.exists());
@@ -876,15 +1095,24 @@ fn test_launch_service_assets_dir_guarantee_creates_subdirectories() {
     assert!(guarantee_res.is_ok());
 
     assert!(assets_dir.exists(), "Root assetsDir must exist");
-    assert!(assets_dir.join("indexes").exists(), "indexes directory must exist");
-    assert!(assets_dir.join("objects").exists(), "objects directory must exist");
+    assert!(
+        assets_dir.join("indexes").exists(),
+        "indexes directory must exist"
+    );
+    assert!(
+        assets_dir.join("objects").exists(),
+        "objects directory must exist"
+    );
 
     let _ = std::fs::remove_dir_all(&test_dir);
 }
 
 #[tokio::test]
 async fn test_asset_manager_handles_empty_placeholder_with_url() {
-    let test_dir = std::env::temp_dir().join(format!("test_placeholder_upgrade_{}", uuid::Uuid::new_v4().simple()));
+    let test_dir = std::env::temp_dir().join(format!(
+        "test_placeholder_upgrade_{}",
+        uuid::Uuid::new_v4().simple()
+    ));
     let index_dir = test_dir.join("indexes");
     std::fs::create_dir_all(&index_dir).unwrap();
     let index_file = index_dir.join("placeholder_test.json");
@@ -905,7 +1133,11 @@ async fn test_asset_manager_handles_empty_placeholder_with_url() {
     // ensure_assets should recognize the placeholder, attempt download, handle network failure cleanly,
     // and guarantee a valid fallback exists on disk
     let res = mgr.ensure_assets(None, &asset_ref).await;
-    assert!(res.is_ok(), "ensure_assets must succeed gracefully: {:?}", res.err());
+    assert!(
+        res.is_ok(),
+        "ensure_assets must succeed gracefully: {:?}",
+        res.err()
+    );
     assert!(index_file.exists(), "Index file must exist on disk");
 
     let content = std::fs::read_to_string(&index_file).unwrap();
@@ -927,7 +1159,3 @@ fn test_guarantee_assets_dir_and_subdirs_empty_path_errors() {
     let quotes_only = PathBuf::from("\"\"");
     assert!(LaunchArguments::guarantee_assets_dir_and_subdirs(&quotes_only).is_err());
 }
-
-
-
-

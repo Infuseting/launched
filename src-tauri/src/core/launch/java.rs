@@ -136,7 +136,11 @@ pub(crate) fn find_java(
             } else {
                 java_home.join("bin/java")
             };
-            log::info!("Selected JVM (Highest): {:?} (detected major: {})", java_home, v);
+            log::info!(
+                "Selected JVM (Highest): {:?} (detected major: {})",
+                java_home,
+                v
+            );
             return Ok((*v, java_bin, Some(java_home.clone())));
         }
     }

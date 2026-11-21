@@ -32,8 +32,12 @@ export const SkinUploadForm: React.FC<SkinUploadFormProps> = ({
           <Upload className="w-4 h-4" />
         </div>
         <div>
-          <h3 className="text-white font-black text-sm tracking-tight">Importer un Nouveau Skin</h3>
-          <p className="text-[11px] text-white/40">Fichier image PNG Minecraft officiel (64x64 ou 128x128)</p>
+          <h3 className="text-white font-black text-sm tracking-tight">
+            Importer un Nouveau Skin
+          </h3>
+          <p className="text-[11px] text-white/40">
+            Fichier image PNG Minecraft officiel (64x64 ou 128x128)
+          </p>
         </div>
       </div>
 
@@ -47,15 +51,19 @@ export const SkinUploadForm: React.FC<SkinUploadFormProps> = ({
           <div className="flex items-center gap-4">
             <SkinThumbnail textureB64={uploadB64} scale={3.5} />
             <div className="text-left">
-              <span className="text-xs font-bold text-emerald-300 block">Skin prêt pour import</span>
-              <span className="text-[10px] text-white/40">Cliquez pour choisir une autre image</span>
+              <span className="text-xs font-bold text-emerald-300 block">
+                Skin prêt pour import
+              </span>
+              <span className="text-[10px] text-white/40">
+                Cliquez pour choisir une autre image
+              </span>
             </div>
           </div>
         ) : (
           <>
             <ImageIcon className="w-7 h-7 text-white/30 group-hover:text-emerald-400/70 transition-colors" />
             <span className="text-xs font-bold text-white/40 group-hover:text-white/70 transition-colors uppercase tracking-wider">
-              Glissez ou sélectionnez un fichier PNG
+              Sélectionnez un fichier PNG
             </span>
           </>
         )}
@@ -70,10 +78,14 @@ export const SkinUploadForm: React.FC<SkinUploadFormProps> = ({
 
       {/* Name input */}
       <div className="space-y-1.5">
-        <label className="text-white/50 text-[10px] font-bold uppercase tracking-wider block">
+        <label
+          htmlFor="skin-library-name"
+          className="text-white/50 text-[10px] font-bold uppercase tracking-wider block"
+        >
           Nom du modèle dans votre bibliothèque
         </label>
         <input
+          id="skin-library-name"
           type="text"
           value={uploadName}
           onChange={(e) => onNameChange(e.target.value)}
@@ -84,14 +96,22 @@ export const SkinUploadForm: React.FC<SkinUploadFormProps> = ({
 
       {/* Arm Model Variant Selector */}
       <div className="space-y-1.5">
-        <label className="text-white/50 text-[10px] font-bold uppercase tracking-wider block">
+        <span
+          id="skin-arm-model-label"
+          className="text-white/50 text-[10px] font-bold uppercase tracking-wider block"
+        >
           Modèle de bras (Épaisseur)
-        </label>
-        <div className="flex gap-3">
+        </span>
+        <div
+          role="group"
+          aria-labelledby="skin-arm-model-label"
+          className="flex gap-3"
+        >
           {(['classic', 'slim'] as const).map((v) => (
             <button
               key={v}
               type="button"
+              aria-pressed={uploadVariant === v}
               onClick={() => onVariantChange(v)}
               className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 uploadVariant === v

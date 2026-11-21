@@ -8,10 +8,10 @@ pub mod models;
 
 use crate::core::discord_presence::{self, DiscordPresence};
 use crate::core::launch::args::LaunchArguments;
-use std::process::{Command, Stdio};
-use tauri::Manager;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::process::{Command, Stdio};
+use tauri::Manager;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -31,12 +31,17 @@ impl LaunchService {
     ) -> Result<(), String> {
         // Guarantee that the directory path passed to --assetsDir exists on disk prior to process execution
         if let Some(assets_dir) = LaunchArguments::extract_assets_dir(&args.minecraft_args) {
-            LaunchArguments::guarantee_assets_dir_and_subdirs(&assets_dir)
-                .map_err(|e| format!("Cannot launch: failed to guarantee assets directory {:?}: {}", assets_dir.display(), e))?;
+            LaunchArguments::guarantee_assets_dir_and_subdirs(&assets_dir).map_err(|e| {
+                format!(
+                    "Cannot launch: failed to guarantee assets directory {:?}: {}",
+                    assets_dir.display(),
+                    e
+                )
+            })?;
         }
 
         let jvm_args = args.build();
-        
+
         let log_file_path = args.game_dir.join("launcher_debug.log");
         log::info!("Game logs will be written to: {:?}", log_file_path);
 
@@ -53,7 +58,9 @@ impl LaunchService {
 
         match app_handle.path().app_data_dir() {
             Ok(app_dir) => {
-                if let Err(error) = discord_presence::configure_java(&mut cmd, &args.game_dir, &app_dir, presence) {
+                if let Err(error) =
+                    discord_presence::configure_java(&mut cmd, &args.game_dir, &app_dir, presence)
+                {
                     log::warn!("Discord Rich Presence unavailable: {error}");
                 }
             }
@@ -96,8 +103,11 @@ impl LaunchService {
 
         match cmd.spawn() {
             Ok(mut child) => {
-                log::info!("Game process spawned successfully with PID: {:?}", child.id());
-                
+                log::info!(
+                    "Game process spawned successfully with PID: {:?}",
+                    child.id()
+                );
+
                 let stdout = child.stdout.take().unwrap();
                 let stderr = child.stderr.take().unwrap();
                 let handle_out = app_handle.clone();
@@ -107,13 +117,19 @@ impl LaunchService {
 
                 // Thread for STDOUT
                 std::thread::spawn(move || {
-                    use std::io::{BufRead, BufReader, Write};
                     use std::fs::OpenOptions;
+                    use std::io::{BufRead, BufReader, Write};
                     use tauri::Emitter;
-                    let mut file: Option<std::fs::File> = OpenOptions::new().append(true).create(true).open(&log_file_path_out).ok();
+                    let mut file: Option<std::fs::File> = OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&log_file_path_out)
+                        .ok();
                     let reader = BufReader::new(stdout);
                     for l in reader.lines().map_while(Result::ok) {
-                        if show_logs { let _ = handle_out.emit("game-log", &l); }
+                        if show_logs {
+                            let _ = handle_out.emit("game-log", &l);
+                        }
                         if let Some(f) = file.as_mut() {
                             let _ = writeln!(f, "{}", l);
                             let _ = f.flush();
@@ -123,13 +139,19 @@ impl LaunchService {
 
                 // Thread for STDERR
                 std::thread::spawn(move || {
-                    use std::io::{BufRead, BufReader, Write};
                     use std::fs::OpenOptions;
+                    use std::io::{BufRead, BufReader, Write};
                     use tauri::Emitter;
-                    let mut file: Option<std::fs::File> = OpenOptions::new().append(true).create(true).open(&log_file_path_err).ok();
+                    let mut file: Option<std::fs::File> = OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&log_file_path_err)
+                        .ok();
                     let reader = BufReader::new(stderr);
                     for l in reader.lines().map_while(Result::ok) {
-                        if show_logs { let _ = handle_err.emit("game-log", format!("[ERROR] {}", l)); }
+                        if show_logs {
+                            let _ = handle_err.emit("game-log", format!("[ERROR] {}", l));
+                        }
                         if let Some(f) = file.as_mut() {
                             let _ = writeln!(f, "[ERROR] {}", l);
                             let _ = f.flush();
@@ -144,8 +166,11 @@ impl LaunchService {
                     match child.wait() {
                         Ok(status) => {
                             log::info!("Game process exited with status: {}", status);
-                            let _ = app_handle_wait.emit("game-log", format!("--- Process exited with status {} ---", status));
-                        },
+                            let _ = app_handle_wait.emit(
+                                "game-log",
+                                format!("--- Process exited with status {} ---", status),
+                            );
+                        }
                         Err(e) => log::error!("Error waiting for game process: {}", e),
                     }
                 });
@@ -153,7 +178,10 @@ impl LaunchService {
                 Ok(())
             }
             Err(e) => {
-                let err_msg = format!("Failed to spawn game process: {}. Java path: {:?}", e, args.java_path);
+                let err_msg = format!(
+                    "Failed to spawn game process: {}. Java path: {:?}",
+                    e, args.java_path
+                );
                 log::error!("{}", err_msg);
                 Err(err_msg)
             }

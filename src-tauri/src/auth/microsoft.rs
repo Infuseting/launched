@@ -37,10 +37,7 @@ impl AuthStrategy for MicrosoftAuth {
         // Copy to clipboard from Rust
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             let _ = clipboard.set_text(device_code_resp.user_code.clone());
-            log::info!(
-                "Device code copied to clipboard: {}",
-                device_code_resp.user_code
-            );
+            log::info!("Microsoft device code copied to clipboard");
         }
 
         // Emit event to frontend to show the code
@@ -48,10 +45,8 @@ impl AuthStrategy for MicrosoftAuth {
             .emit("ms-device-code", &device_code_resp)
             .map_err(|e: tauri::Error| format!("Failed to emit device code event: {}", e))?;
 
-        log::info!(
-            "Device code received: {}. Waiting for user...",
-            device_code_resp.user_code
-        );
+        // The code belongs in the login UI, never in persistent diagnostics.
+        log::info!("Microsoft device code received. Waiting for user...");
 
         // 2. Poll for Token
         let ms_token_resp = self.poll_for_token(&client, &device_code_resp).await?;
@@ -160,7 +155,10 @@ impl MicrosoftAuth {
             );
         }
 
-        format!("XSTS authorize endpoint failed (status {}): {}", status, body)
+        format!(
+            "XSTS authorize endpoint failed (status {}): {}",
+            status, body
+        )
     }
 
     pub async fn is_mc_token_valid(mc_token: &str) -> bool {
@@ -180,7 +178,8 @@ impl MicrosoftAuth {
                 let status = r.status();
                 // Only treat the token as invalid if we get an explicit auth error (401).
                 // 429 Too Many Requests or 5xx server errors or network errors mean the token might still be valid.
-                status != reqwest::StatusCode::UNAUTHORIZED && status != reqwest::StatusCode::FORBIDDEN
+                status != reqwest::StatusCode::UNAUTHORIZED
+                    && status != reqwest::StatusCode::FORBIDDEN
             }
             Err(e) => {
                 log::warn!("Network error checking if MC token is valid: {}. Assuming it is valid to prevent accidental logout.", e);

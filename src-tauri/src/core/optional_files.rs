@@ -409,7 +409,7 @@ impl OptionalFilesManager {
     ) -> Result<(), String> {
         let obsolete = Self::obsolete_files(base, manifest, saved).await?;
         Self::record_manifest(base, manifest, saved).await?;
-        for dest in Self::optional_paths(&manifest) {
+        for dest in Self::optional_paths(manifest) {
             Self::toggle_file(base, &dest, selected.contains(&dest)).await?;
         }
         // Preserve replacements until sync succeeds; disable old versions deselected now.

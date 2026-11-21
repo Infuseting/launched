@@ -8,7 +8,7 @@ interface SyncProgressState {
 
 export function useSyncProgress(): SyncProgressState {
   return useLauncherSelector(
-    state => ({
+    (state) => ({
       isSyncing: state.isSyncing,
       syncProgress: state.syncProgress,
     }),
@@ -17,6 +17,6 @@ export function useSyncProgress(): SyncProgressState {
       prev.syncProgress.percentage === next.syncProgress.percentage &&
       prev.syncProgress.files_done === next.syncProgress.files_done &&
       prev.syncProgress.total_files === next.syncProgress.total_files &&
-      prev.syncProgress.current_file === next.syncProgress.current_file
+      prev.syncProgress.current_file === next.syncProgress.current_file,
   );
 }

@@ -1,12 +1,22 @@
+import { useModalFocus } from '../hooks/useModalFocus';
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
 import type { AppHandlers } from '../types';
-import { ArrowUpCircle, ArrowRight, Download, X, AlertCircle } from 'lucide-react';
+import {
+  ArrowUpCircle,
+  ArrowRight,
+  Download,
+  X,
+  AlertCircle,
+} from 'lucide-react';
 
 interface UpdatePromptModalProps {
   state: LauncherState;
-  handlers: Pick<AppHandlers, 'handleInstallUpdate' | 'handleDismissUpdatePrompt'>;
+  handlers: Pick<
+    AppHandlers,
+    'handleInstallUpdate' | 'handleDismissUpdatePrompt'
+  >;
 }
 
 const renderReleaseNotes = (content: string) => {
@@ -21,7 +31,10 @@ const renderReleaseNotes = (content: string) => {
         if (trimmed.startsWith('#')) {
           const title = trimmed.replace(/^#+\s*/, '');
           return (
-            <h4 key={idx} className="text-white font-semibold text-xs tracking-tight pt-1.5 first:pt-0">
+            <h4
+              key={idx}
+              className="text-white font-semibold text-xs tracking-tight pt-1.5 first:pt-0"
+            >
               {title}
             </h4>
           );
@@ -29,7 +42,10 @@ const renderReleaseNotes = (content: string) => {
         if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
           const item = trimmed.substring(2);
           return (
-            <div key={idx} className="flex items-start gap-2.5 text-white/80 pl-1">
+            <div
+              key={idx}
+              className="flex items-start gap-2.5 text-white/80 pl-1"
+            >
               <span className="w-1.5 h-1.5 rounded-full bg-white/40 mt-1.5 flex-shrink-0" />
               <span>{item}</span>
             </div>
@@ -58,13 +74,15 @@ export const UpdatePromptModal: React.FC<UpdatePromptModalProps> = ({
     !isInstalling &&
     state.dismissedUpdateVersion !== manifest.version;
 
+  const dialogRef = useModalFocus(isOpen || isInstalling, 70);
+
   const onDismiss = () => handlers.handleDismissUpdatePrompt();
   const onInstall = () => void handlers.handleInstallUpdate();
 
   return (
     <AnimatePresence>
       {(isOpen || isInstalling) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 select-none">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 select-none">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -76,6 +94,11 @@ export const UpdatePromptModal: React.FC<UpdatePromptModalProps> = ({
 
           {/* Modal Card */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="update-title"
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
@@ -89,11 +112,16 @@ export const UpdatePromptModal: React.FC<UpdatePromptModalProps> = ({
                   <ArrowUpCircle className="w-5 h-5 text-white/90" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm tracking-tight text-white">
+                  <h3
+                    id="update-title"
+                    className="font-semibold text-sm tracking-tight text-white"
+                  >
                     Mise à jour disponible
                   </h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-white/50 text-xs font-mono">v{state.appVersion}</span>
+                    <span className="text-white/50 text-xs font-mono">
+                      v{state.appVersion}
+                    </span>
                     <ArrowRight className="w-3 h-3 text-white/30" />
                     <span className="text-white text-xs font-mono font-medium bg-white/10 px-1.5 py-0.5 rounded border border-white/10">
                       v{manifest?.version ?? 'Nouveau'}
@@ -134,14 +162,20 @@ export const UpdatePromptModal: React.FC<UpdatePromptModalProps> = ({
             {isInstalling && (
               <div className="space-y-2 pt-1">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-white/70 font-medium">Téléchargement et installation...</span>
-                  <span className="font-mono text-white font-semibold">{Math.round(progress)}%</span>
+                  <span className="text-white/70 font-medium">
+                    Téléchargement et installation...
+                  </span>
+                  <span className="font-mono text-white font-semibold">
+                    {Math.round(progress)}%
+                  </span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                   <motion.div
                     className="h-full bg-white rounded-full"
                     initial={false}
-                    animate={{ width: `${Math.max(3, Math.min(100, progress))}%` }}
+                    animate={{
+                      width: `${Math.max(3, Math.min(100, progress))}%`,
+                    }}
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                   />
                 </div>

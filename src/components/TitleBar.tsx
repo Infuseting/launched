@@ -7,7 +7,10 @@ interface TitleBarProps {
   onToggleMaximize?: () => void;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ isMaximized: propIsMaximized, onToggleMaximize }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({
+  isMaximized: propIsMaximized,
+  onToggleMaximize,
+}) => {
   const [isMaximized, setIsMaximized] = useState<boolean>(propIsMaximized);
 
   // Sync state with Tauri window
@@ -34,20 +37,26 @@ export const TitleBar: React.FC<TitleBarProps> = ({ isMaximized: propIsMaximized
     syncMaximizedState();
 
     let unlisten: (() => void) | undefined;
+    let disposed = false;
     try {
       const win = getCurrentWindow();
-      win.onResized(() => {
-        syncMaximizedState();
-      }).then(fn => {
-        unlisten = fn;
-      }).catch(() => {
-        // Ignore if unsupported
-      });
+      win
+        .onResized(() => {
+          syncMaximizedState();
+        })
+        .then((fn) => {
+          if (disposed) fn();
+          else unlisten = fn;
+        })
+        .catch(() => {
+          // Ignore if unsupported
+        });
     } catch {
       // Ignore
     }
 
     return () => {
+      disposed = true;
       if (unlisten) unlisten();
     };
   }, [syncMaximizedState]);
@@ -120,10 +129,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ isMaximized: propIsMaximized
       </div>
 
       {/* Center: Draggable empty space */}
-      <div
-        data-tauri-drag-region
-        className="flex-1 h-full cursor-default"
-      />
+      <div data-tauri-drag-region className="flex-1 h-full cursor-default" />
 
       {/* Right: Window Controls Trio (Not Draggable) */}
       <div className="flex items-center h-full no-drag">

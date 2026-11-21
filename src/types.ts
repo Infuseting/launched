@@ -56,7 +56,7 @@ export interface AssetMetadata {
   background: string | string[];
   logo?: string;
   icon?: string;
-  links: { name: string; url: string; icon: string; }[];
+  links: { name: string; url: string; icon: string }[];
 }
 
 export interface SessionLink {
@@ -180,5 +180,9 @@ export interface AppHandlers {
   handleCrackModalResolve: (pseudo: string | null) => void;
   handleOpenOptionalMods: (session: Session, isFirstSync?: boolean) => void;
   handleCloseOptionalMods: () => void;
-  handleSaveOptionalMods: (sessionName: string, enabledFiles: string[], allOptionalFiles?: string[]) => Promise<void>;
+  handleSaveOptionalMods: (
+    sessionName: string,
+    enabledFiles: string[],
+    allOptionalFiles?: string[],
+  ) => Promise<void>;
 }

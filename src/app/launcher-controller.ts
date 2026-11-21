@@ -7,7 +7,7 @@ import type {
   DeviceCodePayload,
   Session,
   SyncProgress,
-  UpdateDownloadEvent
+  UpdateDownloadEvent,
 } from '../types';
 
 import * as authService from '../services/auth';
@@ -27,7 +27,9 @@ interface RuntimeUpdateManifest {
   version: string;
   body?: string;
   notes?: string;
-  downloadAndInstall: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>;
+  downloadAndInstall: (
+    onEvent: (event: UpdateDownloadEvent) => void,
+  ) => Promise<void>;
 }
 
 interface PendingUpdate {
@@ -68,11 +70,15 @@ function getErrorMessage(error: unknown): string {
 export class LauncherController {
   private readonly handlers: AppHandlers;
   private pendingUpdate: PendingUpdate | null = null;
-  private currentCrackModalResolve: ((pseudo: string | null) => void) | null = null;
-  private currentOptionalModsResolve: ((confirmed: boolean) => void) | null = null;
+  private currentCrackModalResolve: ((pseudo: string | null) => void) | null =
+    null;
+  private currentOptionalModsResolve: ((confirmed: boolean) => void) | null =
+    null;
   private optionalModsSaving = false;
   private launchPending = false;
   private discordAccessRevision = 0;
+  private playerCountRevision = 0;
+  private readonly assetRequests = new Map<string, Promise<void>>();
 
   constructor() {
     this.handlers = {
@@ -105,7 +111,7 @@ export class LauncherController {
               if (!s.assetsData && s.assetsPath) {
                 return this.fetchAssetMetadata(index);
               }
-            })
+            }),
           );
         }
       },
@@ -123,7 +129,8 @@ export class LauncherController {
         }
       },
       handleOpenOptionalMods: (session, isFirstSync) => {
-        if (state.isSyncing || this.launchPending || this.optionalModsSaving) return;
+        if (state.isSyncing || this.launchPending || this.optionalModsSaving)
+          return;
         state.optionalModsModalSession = session;
         state.optionalModsIsFirstSync = !!isFirstSync;
         state.optionalModsHasUpdates = false;
@@ -131,7 +138,11 @@ export class LauncherController {
       },
       handleCloseOptionalMods: () => this.handleCloseOptionalMods(),
       handleSaveOptionalMods: (sessionName, enabledFiles, allOptionalFiles) =>
-        this.handleSaveOptionalMods(sessionName, enabledFiles, allOptionalFiles)
+        this.handleSaveOptionalMods(
+          sessionName,
+          enabledFiles,
+          allOptionalFiles,
+        ),
     };
   }
 
@@ -147,7 +158,9 @@ export class LauncherController {
    */
   public async initialize(): Promise<void> {
     this.registerExternalLinksHandler();
-    await listen('discord-auth-required', () => { void this.handleDiscordAuthRequired(); });
+    await listen('discord-auth-required', () => {
+      void this.handleDiscordAuthRequired();
+    });
     await this.loadInitialData();
 
     await this.checkForUpdates(true);
@@ -168,7 +181,11 @@ export class LauncherController {
   private scheduleStartupUpdateRetries(): void {
     for (const delayMs of STARTUP_UPDATE_RETRY_DELAYS_MS) {
       setTimeout(() => {
-        if (state.updateManifest || state.isInstallingUpdate || state.isCheckingUpdate) {
+        if (
+          state.updateManifest ||
+          state.isInstallingUpdate ||
+          state.isCheckingUpdate
+        ) {
           return;
         }
 
@@ -178,8 +195,10 @@ export class LauncherController {
   }
 
   private registerExternalLinksHandler(): void {
-    document.addEventListener('click', event => {
-      const target = (event.target as HTMLElement).closest('.externalLink') as HTMLElement | null;
+    document.addEventListener('click', (event) => {
+      const target = (event.target as HTMLElement).closest(
+        '.externalLink',
+      ) as HTMLElement | null;
       if (!target) {
         return;
       }
@@ -194,28 +213,33 @@ export class LauncherController {
   /**
    * Executes Microsoft device-code login while keeping modal state in sync.
    */
-  private async loginMicrosoftWithModal(): Promise<Awaited<ReturnType<typeof authService.loginMicrosoft>>> {
+  private async loginMicrosoftWithModal(): Promise<
+    Awaited<ReturnType<typeof authService.loginMicrosoft>>
+  > {
     state.deviceCodePayload = null;
     state.deviceCodeError = null;
     state.deviceCodeModalOpen = true;
 
-    const unlistenCode = await listen<Partial<DeviceCodePayload>>('ms-device-code', event => {
-      const payload = event.payload;
-      const userCode = payload.user_code ?? '';
-      const verificationUri = payload.verification_uri ?? '';
+    const unlistenCode = await listen<Partial<DeviceCodePayload>>(
+      'ms-device-code',
+      (event) => {
+        const payload = event.payload;
+        const userCode = payload.user_code ?? '';
+        const verificationUri = payload.verification_uri ?? '';
 
-      state.deviceCodePayload = {
-        user_code: userCode,
-        verification_uri: verificationUri,
-        message: payload.message
-      };
+        state.deviceCodePayload = {
+          user_code: userCode,
+          verification_uri: verificationUri,
+          message: payload.message,
+        };
 
-      if (userCode) {
-        void navigator.clipboard.writeText(userCode).catch(() => {
-          // Ignore clipboard errors to avoid blocking auth flow.
-        });
-      }
-    });
+        if (userCode) {
+          void navigator.clipboard.writeText(userCode).catch(() => {
+            // Ignore clipboard errors to avoid blocking auth flow.
+          });
+        }
+      },
+    );
 
     try {
       const auth = await authService.loginMicrosoft();
@@ -231,7 +255,9 @@ export class LauncherController {
     }
   }
 
-  private async promptCrackPseudo(defaultPseudo: string): Promise<string | null> {
+  private async promptCrackPseudo(
+    defaultPseudo: string,
+  ): Promise<string | null> {
     state.crackModalDefaultPseudo = defaultPseudo;
     state.crackModalOpen = true;
 
@@ -247,7 +273,7 @@ export class LauncherController {
   private async promptOptionalMods(
     session: Session,
     isFirstSync = false,
-    hasUpdates = false
+    hasUpdates = false,
   ): Promise<boolean> {
     state.optionalModsModalSession = session;
     state.optionalModsIsFirstSync = isFirstSync;
@@ -279,19 +305,28 @@ export class LauncherController {
   private async handleSaveOptionalMods(
     sessionName: string,
     enabledFiles: string[],
-    allOptionalFiles: string[] = []
+    allOptionalFiles: string[] = [],
   ): Promise<void> {
     if (this.optionalModsSaving) return;
     const session = state.optionalModsModalSession;
-    if (!session || session.name !== sessionName) throw new Error('Session optionnelle invalide.');
+    if (!session || session.name !== sessionName)
+      throw new Error('Session optionnelle invalide.');
     this.optionalModsSaving = true;
     try {
-      await sessionService.setSessionOptionalFiles(toPlainObject(session), enabledFiles, allOptionalFiles);
+      await sessionService.setSessionOptionalFiles(
+        toPlainObject(session),
+        enabledFiles,
+        allOptionalFiles,
+      );
       if (!state.currentSettings.sessions[sessionName]) {
-        state.currentSettings.sessions[sessionName] = { ...state.currentSettings.defaultSettings };
+        state.currentSettings.sessions[sessionName] = {
+          ...state.currentSettings.defaultSettings,
+        };
       }
-      state.currentSettings.sessions[sessionName].enabledOptionalFiles = enabledFiles;
-      state.currentSettings.sessions[sessionName].optionalFilesConfigured = true;
+      state.currentSettings.sessions[sessionName].enabledOptionalFiles =
+        enabledFiles;
+      state.currentSettings.sessions[sessionName].optionalFilesConfigured =
+        true;
       // The backend already persisted this selection. Avoid overwriting it with stale settings.
       state.optionalModsModalOpen = false;
       state.optionalModsModalSession = null;
@@ -302,17 +337,29 @@ export class LauncherController {
     }
   }
 
-  private async markOptionalFilesConfigured(sessionName: string): Promise<void> {
+  private async markOptionalFilesConfigured(
+    sessionName: string,
+  ): Promise<void> {
     if (!state.currentSettings.sessions[sessionName]) {
-      state.currentSettings.sessions[sessionName] = { ...state.currentSettings.defaultSettings };
+      state.currentSettings.sessions[sessionName] = {
+        ...state.currentSettings.defaultSettings,
+      };
     }
     state.currentSettings.sessions[sessionName].enabledOptionalFiles = [];
     state.currentSettings.sessions[sessionName].optionalFilesConfigured = true;
-    await settingsService.saveSettingsInternal(toPlainObject(state.currentSettings));
+    await settingsService.saveSettingsInternal(
+      toPlainObject(state.currentSettings),
+    );
   }
 
   private async syncAndLoad(): Promise<void> {
-    if ((!state.discordUser && !state.discordSkipped) || state.isSyncing || this.launchPending || state.optionalModsModalOpen || state.globalSessions.length === 0) {
+    if (
+      (!state.discordUser && !state.discordSkipped) ||
+      state.isSyncing ||
+      this.launchPending ||
+      state.optionalModsModalOpen ||
+      state.globalSessions.length === 0
+    ) {
       return;
     }
 
@@ -325,7 +372,11 @@ export class LauncherController {
       let crackPseudo: string | undefined;
 
       if (session.crack) {
-        const defaultPseudo = state.currentSettings.lastCrackPseudo || state.authCache?.name || state.allAccounts[0]?.name || 'Player';
+        const defaultPseudo =
+          state.currentSettings.lastCrackPseudo ||
+          state.authCache?.name ||
+          state.allAccounts[0]?.name ||
+          'Player';
         const result = await this.promptCrackPseudo(defaultPseudo);
         if (!result || accessRevision !== this.discordAccessRevision) {
           return;
@@ -339,16 +390,26 @@ export class LauncherController {
       if (accessRevision !== this.discordAccessRevision) return;
 
       // Check if optional files exist: prompt if first sync OR if updates are available for enabled files
-      const configuredSessionSettings = state.currentSettings.sessions[session.name];
-      const isConfigured = configuredSessionSettings?.optionalFilesConfigured === true;
+      const configuredSessionSettings =
+        state.currentSettings.sessions[session.name];
+      const isConfigured =
+        configuredSessionSettings?.optionalFilesConfigured === true;
 
       {
-        const optionalFiles = await sessionService.getSessionOptionalFiles(toPlainObject(session));
+        const optionalFiles = await sessionService.getSessionOptionalFiles(
+          toPlainObject(session),
+        );
         if (accessRevision !== this.discordAccessRevision) return;
         if (optionalFiles && optionalFiles.length > 0) {
-          const hasUpdates = optionalFiles.some((f) => f.hasUpdate && f.isEnabled);
+          const hasUpdates = optionalFiles.some(
+            (f) => f.hasUpdate && f.isEnabled,
+          );
           if (!isConfigured || hasUpdates) {
-            const confirmed = await this.promptOptionalMods(session, !isConfigured, hasUpdates);
+            const confirmed = await this.promptOptionalMods(
+              session,
+              !isConfigured,
+              hasUpdates,
+            );
             if (!confirmed || accessRevision !== this.discordAccessRevision) {
               return;
             }
@@ -365,12 +426,15 @@ export class LauncherController {
         current_file: 'Starting synchronization...',
         files_done: 0,
         total_files: 0,
-        percentage: 0
+        percentage: 0,
       };
 
-      const unlistenSyncProgress = await listen<SyncProgress>('sync-progress', event => {
-        state.syncProgress = event.payload;
-      });
+      const unlistenSyncProgress = await listen<SyncProgress>(
+        'sync-progress',
+        (event) => {
+          state.syncProgress = event.payload;
+        },
+      );
 
       try {
         if (accessRevision !== this.discordAccessRevision) return;
@@ -383,18 +447,26 @@ export class LauncherController {
         return;
       }
 
-      const sessionSettings = state.currentSettings.sessions[session.name] ?? state.currentSettings.defaultSettings;
-      await sessionService.launchGame(session, sessionSettings.showLogs, crackPseudo);
+      const sessionSettings =
+        state.currentSettings.sessions[session.name] ??
+        state.currentSettings.defaultSettings;
+      await sessionService.launchGame(
+        session,
+        sessionSettings.showLogs,
+        crackPseudo,
+      );
 
       setTimeout(() => {
         state.isSyncing = false;
       }, 3000);
     } catch (error) {
-      if (accessRevision === this.discordAccessRevision) await this.handleLaunchError(error);
+      if (accessRevision === this.discordAccessRevision)
+        await this.handleLaunchError(error);
       state.isSyncing = false;
     } finally {
       this.launchPending = false;
-      if (accessRevision !== this.discordAccessRevision) state.isSyncing = false;
+      if (accessRevision !== this.discordAccessRevision)
+        state.isSyncing = false;
     }
   }
 
@@ -433,14 +505,24 @@ export class LauncherController {
       return;
     }
 
+    const revision = ++this.playerCountRevision;
     const session = state.globalSessions[state.activeSessionIndex];
-    if (!session.hostname) {
+    if (!session?.hostname) {
+      state.serverStatus = null;
       return;
     }
 
     try {
-      state.serverStatus = await statusService.fetchServerStatus(session.hostname);
+      const status = await statusService.fetchServerStatus(session.hostname);
+      if (
+        revision === this.playerCountRevision &&
+        state.globalSessions[state.activeSessionIndex]?.syncUrl ===
+          session.syncUrl
+      ) {
+        state.serverStatus = status;
+      }
     } catch (error) {
+      if (revision === this.playerCountRevision) state.serverStatus = null;
       console.error('Failed to fetch player count:', error);
     }
   }
@@ -450,7 +532,7 @@ export class LauncherController {
       const [auth, session, api] = await Promise.all([
         statusService.pingService('https://user.auth.xboxlive.com/'),
         statusService.pingService('https://sessionserver.mojang.com/'),
-        statusService.pingService('https://api.minecraftservices.com/')
+        statusService.pingService('https://api.minecraftservices.com/'),
       ]);
 
       state.mojangStatus = { auth, session, api };
@@ -480,16 +562,35 @@ export class LauncherController {
       return;
     }
 
-    try {
-      const assets = await sessionService.fetchJson(session.assetsPath);
-      if (revision === this.discordAccessRevision && (state.discordUser || state.discordSkipped)) {
-        const currentSession = state.globalSessions[index];
-        if (currentSession && (currentSession === session || currentSession.syncUrl === session.syncUrl)) {
-          currentSession.assetsData = assets;
+    const requestKey = `${revision}:${session.syncUrl}:${session.assetsPath}`;
+    const assetsPath = session.assetsPath;
+    const existing = this.assetRequests.get(requestKey);
+    if (existing) return existing;
+    const request = (async () => {
+      try {
+        const assets = await sessionService.fetchJson(assetsPath);
+        if (
+          revision === this.discordAccessRevision &&
+          (state.discordUser || state.discordSkipped)
+        ) {
+          const currentSession = state.globalSessions[index];
+          if (
+            currentSession &&
+            (currentSession === session ||
+              currentSession.syncUrl === session.syncUrl)
+          ) {
+            currentSession.assetsData = assets;
+          }
         }
+      } catch (error) {
+        console.error(`Failed to fetch assets for ${session.name}:`, error);
       }
-    } catch (error) {
-      console.error(`Failed to fetch assets for ${session.name}:`, error);
+    })();
+    this.assetRequests.set(requestKey, request);
+    try {
+      await request;
+    } finally {
+      this.assetRequests.delete(requestKey);
     }
   }
   private async loadInitialData(): Promise<void> {
@@ -562,7 +663,8 @@ export class LauncherController {
         state.discordError = getErrorMessage(error);
       }
     } finally {
-      if (revision === this.discordAccessRevision) state.discordChecking = false;
+      if (revision === this.discordAccessRevision)
+        state.discordChecking = false;
     }
   }
 
@@ -592,7 +694,13 @@ export class LauncherController {
   }
 
   private async handleContinueWithoutDiscord(): Promise<void> {
-    if (state.discordBusy || state.isSyncing || this.launchPending || this.optionalModsSaving) return;
+    if (
+      state.discordBusy ||
+      state.isSyncing ||
+      this.launchPending ||
+      this.optionalModsSaving
+    )
+      return;
     this.discordAccessRevision++;
     state.discordBusy = true;
     state.discordError = null;
@@ -607,7 +715,13 @@ export class LauncherController {
   }
 
   private async handleDiscordLogin(): Promise<void> {
-    if (state.discordBusy || state.isSyncing || this.launchPending || this.optionalModsSaving) return;
+    if (
+      state.discordBusy ||
+      state.isSyncing ||
+      this.launchPending ||
+      this.optionalModsSaving
+    )
+      return;
     state.discordBusy = true;
     state.discordError = null;
     try {
@@ -624,7 +738,13 @@ export class LauncherController {
   }
 
   private async handleDiscordLogout(): Promise<void> {
-    if (state.discordBusy || state.isSyncing || this.launchPending || this.optionalModsSaving) return;
+    if (
+      state.discordBusy ||
+      state.isSyncing ||
+      this.launchPending ||
+      this.optionalModsSaving
+    )
+      return;
     state.discordBusy = true;
     state.discordError = null;
     try {
@@ -639,7 +759,8 @@ export class LauncherController {
   }
 
   private async loadSessions(): Promise<void> {
-    if ((!state.discordUser && !state.discordSkipped) || state.sessionsLoading) return;
+    if ((!state.discordUser && !state.discordSkipped) || state.sessionsLoading)
+      return;
     const revision = this.discordAccessRevision;
     const selectedUrl = state.globalSessions[state.activeSessionIndex]?.syncUrl;
     state.sessionsLoading = true;
@@ -648,77 +769,100 @@ export class LauncherController {
       const sessions = await sessionService.getSessions();
       if (revision !== this.discordAccessRevision) return;
       state.globalSessions = sessions;
-      state.activeSessionIndex = Math.max(0, sessions.findIndex(session => session.syncUrl === selectedUrl));
+      state.activeSessionIndex = Math.max(
+        0,
+        sessions.findIndex((session) => session.syncUrl === selectedUrl),
+      );
       const lastSessionName = await sessionService.getActiveSessionName();
       if (revision !== this.discordAccessRevision) return;
       if (!selectedUrl && lastSessionName) {
-        const index = state.globalSessions.findIndex(session => session.name === lastSessionName);
+        const index = state.globalSessions.findIndex(
+          (session) => session.name === lastSessionName,
+        );
         if (index >= 0) {
           state.activeSessionIndex = index;
         }
       }
 
       const deepLink = await sessionService.getDeepLinkUrl();
+      if (revision !== this.discordAccessRevision) return;
       if (deepLink) {
         const slug = sessionService.extractSessionSlugFromDeepLink(deepLink);
         if (slug) {
-          const matchIndex = state.globalSessions.findIndex(s => {
-            if (s.slug && s.slug.toLowerCase() === slug.toLowerCase()) return true;
+          const matchIndex = state.globalSessions.findIndex((s) => {
+            if (s.slug && s.slug.toLowerCase() === slug.toLowerCase())
+              return true;
             if (s.name.toLowerCase() === slug.toLowerCase()) return true;
-            if (s.syncUrl && s.syncUrl.toLowerCase().includes(`/sessions/${slug.toLowerCase()}/`)) return true;
+            if (
+              s.syncUrl &&
+              s.syncUrl
+                .toLowerCase()
+                .includes(`/sessions/${slug.toLowerCase()}/`)
+            )
+              return true;
             return false;
           });
           if (matchIndex >= 0) {
             state.activeSessionIndex = matchIndex;
             state.isServerSelectOpen = false;
-            void sessionService.setActiveSession(state.globalSessions[matchIndex].name).catch(() => {});
+            void sessionService
+              .setActiveSession(state.globalSessions[matchIndex].name)
+              .catch(() => {});
           }
         }
       }
 
-      await Promise.all(state.globalSessions.map((_, index) => this.fetchAssetMetadata(index)));
+      await Promise.all(
+        state.globalSessions.map((_, index) => this.fetchAssetMetadata(index)),
+      );
     } catch (error) {
       if (revision !== this.discordAccessRevision) return;
       state.globalSessions = [];
       state.sessionsError = getErrorMessage(error);
     } finally {
-      if (revision === this.discordAccessRevision) state.sessionsLoading = false;
+      if (revision === this.discordAccessRevision)
+        state.sessionsLoading = false;
     }
   }
 
   private silentlyRefreshToken(): void {
-    authService.refreshActiveToken().then(refreshed => {
-      state.authCache = refreshed;
-      state.allAccounts = state.allAccounts.map(a =>
-        a.uuid === refreshed.uuid ? refreshed : a
-      );
-      console.log('[auth] Token refreshed silently for', refreshed.name);
-    }).catch(err => {
-      console.debug('[auth] Silent refresh skipped:', err);
-    });
+    authService
+      .refreshActiveToken()
+      .then((refreshed) => {
+        state.authCache = refreshed;
+        state.allAccounts = state.allAccounts.map((a) =>
+          a.uuid === refreshed.uuid ? refreshed : a,
+        );
+        console.log('[auth] Token refreshed silently for', refreshed.name);
+      })
+      .catch((err) => {
+        console.debug('[auth] Silent refresh skipped:', err);
+      });
   }
 
   private async checkForUpdates(forcePrompt = false): Promise<void> {
+    if (state.isCheckingUpdate || state.isInstallingUpdate) return;
     state.isCheckingUpdate = true;
     state.updateError = null;
 
     try {
-      const update = await updaterService.checkForAppUpdates() as RuntimeUpdateManifest | null;
+      const update =
+        (await updaterService.checkForAppUpdates()) as RuntimeUpdateManifest | null;
 
       this.pendingUpdate = update
         ? {
-          version: update.version,
-          body: update.body ?? update.notes,
-          // Bind keeps the plugin Update instance context required by private fields.
-          install: update.downloadAndInstall.bind(update)
-        }
+            version: update.version,
+            body: update.body ?? update.notes,
+            // Bind keeps the plugin Update instance context required by private fields.
+            install: update.downloadAndInstall.bind(update),
+          }
         : null;
 
       state.updateManifest = this.pendingUpdate
         ? {
-          version: this.pendingUpdate.version,
-          body: this.pendingUpdate.body
-        }
+            version: this.pendingUpdate.version,
+            body: this.pendingUpdate.body,
+          }
         : null;
 
       if (forcePrompt && this.pendingUpdate) {
@@ -752,7 +896,8 @@ export class LauncherController {
     if (!this.pendingUpdate) {
       await this.checkForUpdates(true);
       if (!this.pendingUpdate) {
-        state.updateError = state.updateError ?? 'Aucune mise a jour prete a installer.';
+        state.updateError =
+          state.updateError ?? 'Aucune mise a jour prete a installer.';
         return;
       }
     }
@@ -762,7 +907,7 @@ export class LauncherController {
     state.updateError = null;
 
     try {
-      await this.performUpdate(this.pendingUpdate.install, pct => {
+      await this.performUpdate(this.pendingUpdate.install, (pct) => {
         state.updateInstallProgress = Math.min(100, Math.max(0, pct));
       });
       state.updateInstallProgress = 100;
@@ -775,12 +920,12 @@ export class LauncherController {
 
   private async performUpdate(
     install: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>,
-    onProgress?: (pct: number) => void
+    onProgress?: (pct: number) => void,
   ): Promise<void> {
     let downloaded = 0;
     let contentLength = 0;
 
-    await install(event => {
+    await install((event) => {
       if (event.event === 'Started') {
         contentLength = event.data.contentLength ?? 0;
         return;
@@ -803,12 +948,15 @@ export class LauncherController {
 
   private async handleAccountSwap(uuid: string): Promise<void> {
     await authService.setActiveAccount(uuid);
-    state.authCache = state.allAccounts.find(account => account.uuid === uuid) ?? null;
+    state.authCache =
+      state.allAccounts.find((account) => account.uuid === uuid) ?? null;
   }
 
   private async handleAccountRemove(uuid: string): Promise<void> {
     await authService.removeAccount(uuid);
-    state.allAccounts = state.allAccounts.filter(account => account.uuid !== uuid);
+    state.allAccounts = state.allAccounts.filter(
+      (account) => account.uuid !== uuid,
+    );
 
     if (state.authCache?.uuid === uuid) {
       state.authCache = null;
@@ -836,7 +984,15 @@ export class LauncherController {
   }
 
   private async handleSessionSelect(index: number): Promise<void> {
+    if (
+      !Number.isInteger(index) ||
+      !state.globalSessions[index] ||
+      state.isSyncing ||
+      this.launchPending
+    )
+      return;
     state.activeSessionIndex = index;
+    state.serverStatus = null;
     const session = state.globalSessions[index];
 
     if (session) {

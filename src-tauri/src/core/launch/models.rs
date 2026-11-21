@@ -66,4 +66,3 @@ pub struct AssetIndex {
     #[serde(default)]
     pub url: Option<String>,
 }
-

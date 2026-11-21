@@ -2,9 +2,7 @@ pub use super::builder;
 pub(crate) use super::java::find_java;
 
 use crate::auth::AuthResponse;
-use crate::core::launch::builder::{
-    ClasspathBuilder, GameArgsBuilder, JvmArgsBuilder,
-};
+use crate::core::launch::builder::{ClasspathBuilder, GameArgsBuilder, JvmArgsBuilder};
 use crate::core::launch::models::VersionManifest;
 use crate::core::session::{LoaderKind, Session};
 use serde_json::Value;
@@ -157,7 +155,10 @@ impl LaunchArguments {
                     .join("minecraftforge")
                     .join("forge")
                     .join(format!("{}-{}", session.minecraft, forge_version))
-                    .join(format!("forge-{}-{}-client.jar", session.minecraft, forge_version));
+                    .join(format!(
+                        "forge-{}-{}-client.jar",
+                        session.minecraft, forge_version
+                    ));
 
                 if !forge_client_jar.exists() {
                     return Err(format!(
@@ -182,7 +183,9 @@ impl LaunchArguments {
                 .join(format!("{}.json", parent_id));
             if parent_json_path.exists() {
                 if let Ok(parent_content) = fs::read_to_string(&parent_json_path) {
-                    if let Ok(parent_manifest) = serde_json::from_str::<VersionManifest>(&parent_content) {
+                    if let Ok(parent_manifest) =
+                        serde_json::from_str::<VersionManifest>(&parent_content)
+                    {
                         let child_needs_asset_index = manifest
                             .asset_index
                             .as_ref()
@@ -248,7 +251,10 @@ impl LaunchArguments {
         let (java_major, java_path, java_home) = find_java(required_java, &official_mc_path)?;
         log::info!("Using java: {:?}, home: {:?}", java_path, java_home);
 
-        let session_settings = settings.sessions.get(&session.name).unwrap_or(&settings.default_settings);
+        let session_settings = settings
+            .sessions
+            .get(&session.name)
+            .unwrap_or(&settings.default_settings);
         let custom_jvm = if !session_settings.jvm_args.is_empty() {
             &session_settings.jvm_args
         } else {
@@ -290,9 +296,7 @@ impl LaunchArguments {
             version_id,
             &session.minecraft,
             &asset_index_id,
-            &auth.name,
-            &auth.uuid,
-            &auth.access_token,
+            auth,
             &settings.game_resolution,
         )
         .with_manifest_game_args(manifest_game)
@@ -300,7 +304,8 @@ impl LaunchArguments {
         .build();
 
         // Guarantee effective assets directory existence
-        let effective_assets_dir = Self::extract_assets_dir(&minecraft_args).unwrap_or_else(|| assets_dir.clone());
+        let effective_assets_dir =
+            Self::extract_assets_dir(&minecraft_args).unwrap_or_else(|| assets_dir.clone());
         Self::guarantee_assets_dir_and_subdirs(&effective_assets_dir)?;
 
         // Ensure asset index file on disk
@@ -319,12 +324,21 @@ impl LaunchArguments {
             .join(format!("{}.json", resolved_index_id));
 
         let is_corrupted_or_missing = !index_path.exists()
-            || fs::metadata(&index_path).map(|m| m.len() == 0).unwrap_or(true)
+            || fs::metadata(&index_path)
+                .map(|m| m.len() == 0)
+                .unwrap_or(true)
             || match fs::read_to_string(&index_path) {
                 Ok(content) => match serde_json::from_str::<Value>(&content) {
                     Ok(val) => {
-                        if manifest.asset_index.as_ref().and_then(|a| a.url.as_deref()).map_or(false, |u| !u.trim().is_empty()) {
-                            val.get("objects").and_then(|o| o.as_object()).map_or(true, |o| o.is_empty())
+                        if manifest
+                            .asset_index
+                            .as_ref()
+                            .and_then(|a| a.url.as_deref())
+                            .is_some_and(|u| !u.trim().is_empty())
+                        {
+                            val.get("objects")
+                                .and_then(|o| o.as_object())
+                                .map_or(true, |o| o.is_empty())
                         } else {
                             false
                         }
@@ -352,15 +366,16 @@ impl LaunchArguments {
                                 if let Ok(text) = resp.into_string() {
                                     if !text.trim().is_empty()
                                         && serde_json::from_str::<Value>(&text).is_ok()
+                                        && fs::write(&index_path, &text).is_ok()
                                     {
-                                        if let Ok(_) = fs::write(&index_path, &text) {
-                                            downloaded = true;
-                                            let manifest_index_path = effective_assets_dir
-                                                .join("indexes")
-                                                .join(format!("{}.json", asset_index.id));
-                                            if manifest_index_path != index_path && !manifest_index_path.exists() {
-                                                let _ = fs::write(&manifest_index_path, &text);
-                                            }
+                                        downloaded = true;
+                                        let manifest_index_path = effective_assets_dir
+                                            .join("indexes")
+                                            .join(format!("{}.json", asset_index.id));
+                                        if manifest_index_path != index_path
+                                            && !manifest_index_path.exists()
+                                        {
+                                            let _ = fs::write(&manifest_index_path, &text);
                                         }
                                     }
                                 }
@@ -372,7 +387,9 @@ impl LaunchArguments {
 
             if !downloaded
                 && (!index_path.exists()
-                    || fs::metadata(&index_path).map(|m| m.len() == 0).unwrap_or(true)
+                    || fs::metadata(&index_path)
+                        .map(|m| m.len() == 0)
+                        .unwrap_or(true)
                     || fs::read_to_string(&index_path)
                         .map(|s| serde_json::from_str::<Value>(&s).is_err())
                         .unwrap_or(true))

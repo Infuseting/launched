@@ -1,8 +1,17 @@
+import { useModalFocus } from '../hooks/useModalFocus';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LauncherState } from '../state';
 import type { Session } from '../types';
-import { ArrowLeft, Server, Star, Check, Search, Box, Settings } from 'lucide-react';
+import {
+  ArrowLeft,
+  Server,
+  Star,
+  Check,
+  Search,
+  Box,
+  Settings,
+} from 'lucide-react';
 import defaultBackground from '../assets/default-bg.jpg';
 
 interface ServerSelectModalProps {
@@ -24,6 +33,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   onFetchAssets,
   onOpenOptionalMods,
 }) => {
+  const dialogRef = useModalFocus(isOpen, 20);
   const [searchQuery, setSearchQuery] = useState('');
 
   React.useEffect(() => {
@@ -38,12 +48,21 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
 
   const filteredSessions = state.globalSessions
     .map((s, index) => ({ ...s, originalIndex: index }))
-    .filter((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.minecraft.includes(searchQuery));
+    .filter(
+      (s) =>
+        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.minecraft.includes(searchQuery),
+    );
 
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          ref={dialogRef}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="server-select-title"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -65,9 +84,15 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
 
               <div className="flex items-center gap-2">
                 <Server className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-black tracking-tight">Hub des Serveurs & Versions</span>
+                <span
+                  id="server-select-title"
+                  className="text-sm font-black tracking-tight"
+                >
+                  Hub des Serveurs & Versions
+                </span>
                 <span className="text-[10px] font-mono font-bold bg-white/5 px-2 py-0.5 rounded-md text-white/50 border border-white/5">
-                  {state.globalSessions.length} disponible{state.globalSessions.length > 1 ? 's' : ''}
+                  {state.globalSessions.length} disponible
+                  {state.globalSessions.length > 1 ? 's' : ''}
                 </span>
               </div>
             </div>
@@ -77,6 +102,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
               <Search className="w-4 h-4 text-white/30 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
+                aria-label="Rechercher un serveur par nom ou version"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher par nom ou version..."
@@ -90,24 +116,37 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
             <div className="max-w-6xl mx-auto space-y-6">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                <h2 className="text-2xl font-black tracking-tight">Choisissez votre Destination</h2>
-                <p className="text-white/40 text-xs mt-1">
-                  Sélectionnez le serveur ou le modpack sur lequel vous souhaitez vous connecter.
-                </p>
+                  <h2 className="text-2xl font-black tracking-tight">
+                    Choisissez votre Destination
+                  </h2>
+                  <p className="text-white/40 text-xs mt-1">
+                    Sélectionnez le serveur ou le modpack sur lequel vous
+                    souhaitez vous connecter.
+                  </p>
                 </div>
-                <button type="button" disabled={state.sessionsLoading || state.isSyncing} onClick={() => void onRefresh()} className="min-h-11 shrink-0 rounded-xl border border-white/10 px-4 text-xs font-semibold text-white/80 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50">{state.sessionsLoading ? 'Actualisation…' : 'Actualiser'}</button>
+                <button
+                  type="button"
+                  disabled={state.sessionsLoading || state.isSyncing}
+                  onClick={() => void onRefresh()}
+                  className="min-h-11 shrink-0 rounded-xl border border-white/10 px-4 text-xs font-semibold text-white/80 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50"
+                >
+                  {state.sessionsLoading ? 'Actualisation…' : 'Actualiser'}
+                </button>
               </div>
 
               {filteredSessions.length === 0 ? (
                 <div className="text-center py-20 text-white/30 text-xs rounded-3xl border border-dashed border-white/10 p-10 space-y-2">
                   <Box className="w-10 h-10 mx-auto opacity-30 mb-1" />
                   <p className="font-semibold text-sm">Aucun serveur trouvé</p>
-                  <p className="text-[11px] text-white/20">Modifiez votre recherche pour voir d'autres résultats.</p>
+                  <p className="text-[11px] text-white/20">
+                    Modifiez votre recherche pour voir d'autres résultats.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {filteredSessions.map((s) => {
-                    const isActive = s.originalIndex === state.activeSessionIndex;
+                    const isActive =
+                      s.originalIndex === state.activeSessionIndex;
                     const rawBg = Array.isArray(s.assetsData?.background)
                       ? s.assetsData.background[0]
                       : s.assetsData?.background;
@@ -120,10 +159,6 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         whileHover={{ y: -4, transition: { duration: 0.15 } }}
-                        onClick={() => {
-                          onSelect(s.originalIndex);
-                          onClose();
-                        }}
                         className={`
                           group relative rounded-3xl overflow-hidden border transition-all duration-200 cursor-pointer flex flex-col justify-between
                           ${
@@ -134,6 +169,17 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                         `}
                         style={{ minHeight: '190px' }}
                       >
+                        <button
+                          type="button"
+                          aria-label={`Sélectionner ${s.name}`}
+                          aria-pressed={isActive}
+                          disabled={state.isSyncing}
+                          onClick={() => {
+                            onSelect(s.originalIndex);
+                            onClose();
+                          }}
+                          className="absolute inset-0 z-20 rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-emerald-300 disabled:cursor-not-allowed"
+                        />
                         {/* Background Banner Preview */}
                         {bgUrl && (
                           <div className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
@@ -158,7 +204,11 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                               {/* Server Icon */}
                               <div className="w-13 h-13 rounded-2xl overflow-hidden bg-neutral-800 border border-white/15 flex items-center justify-center flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-200">
                                 {s.assetsData?.icon ? (
-                                  <img src={s.assetsData.icon} alt={s.name} className="w-full h-full object-cover" />
+                                  <img
+                                    src={s.assetsData.icon}
+                                    alt={s.name}
+                                    className="w-full h-full object-cover"
+                                  />
                                 ) : (
                                   <Box className="w-7 h-7 text-white/40" />
                                 )}
@@ -166,7 +216,9 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
 
                               <div>
                                 <div className="flex items-center gap-1.5">
-                                  <h3 className={`font-black text-base tracking-tight ${isActive ? 'text-emerald-300' : 'text-white'}`}>
+                                  <h3
+                                    className={`font-black text-base tracking-tight ${isActive ? 'text-emerald-300' : 'text-white'}`}
+                                  >
                                     {s.name}
                                   </h3>
                                   {s.isDefault && (
@@ -175,9 +227,13 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                                 </div>
 
                                 {s.hostname ? (
-                                  <p className="text-[11px] font-mono text-white/40">{s.hostname}</p>
+                                  <p className="text-[11px] font-mono text-white/40">
+                                    {s.hostname}
+                                  </p>
                                 ) : (
-                                  <p className="text-[11px] text-white/40">Configuration officielle</p>
+                                  <p className="text-[11px] text-white/40">
+                                    Configuration officielle
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -215,9 +271,11 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                         </div>
 
                         {/* Bottom Card Action Footer */}
-                        <div className="relative z-10 p-4 px-5 bg-black/40 border-t border-white/5 flex items-center justify-between text-xs">
+                        <div className="relative z-30 pointer-events-none p-4 px-5 bg-black/40 border-t border-white/5 flex items-center justify-between text-xs">
                           <span className="text-white/40 text-[11px]">
-                            {isActive ? 'Session prête au lancement' : 'Cliquer pour sélectionner'}
+                            {isActive
+                              ? 'Session prête au lancement'
+                              : 'Cliquer pour sélectionner'}
                           </span>
                           <div className="flex items-center gap-2">
                             {onOpenOptionalMods && (
@@ -229,13 +287,12 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                                   e.stopPropagation();
                                   onOpenOptionalMods(s);
                                 }}
-                                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/25 text-white/60 hover:text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="pointer-events-auto relative z-30 p-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/25 text-white/60 hover:text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 <Settings className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            <button
-                              type="button"
+                            <span
                               className={`px-3.5 py-1 rounded-xl text-xs font-bold transition-all ${
                                 isActive
                                   ? 'bg-emerald-400 text-neutral-950 font-black'
@@ -243,7 +300,7 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
                               }`}
                             >
                               {isActive ? 'Sélectionné' : 'Rejoindre'}
-                            </button>
+                            </span>
                           </div>
                         </div>
                       </motion.div>

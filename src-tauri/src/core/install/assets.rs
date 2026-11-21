@@ -12,7 +12,7 @@ pub struct AssetManager {
 
 impl AssetManager {
     pub fn new(path: PathBuf) -> Self {
-        let assets_dir = if path.file_name().map_or(false, |name| name == ".minecraft") {
+        let assets_dir = if path.file_name().is_some_and(|name| name == ".minecraft") {
             path.join("assets")
         } else {
             path
@@ -40,9 +40,12 @@ impl AssetManager {
         window: Option<&tauri::Window>,
         asset_index_ref: &AssetIndexReference,
     ) -> Result<(), String> {
-        fs::create_dir_all(&self.assets_dir)
-            .await
-            .map_err(|e| format!("Failed to create assets directory {:?}: {}", self.assets_dir, e))?;
+        fs::create_dir_all(&self.assets_dir).await.map_err(|e| {
+            format!(
+                "Failed to create assets directory {:?}: {}",
+                self.assets_dir, e
+            )
+        })?;
 
         let index_dir = self.assets_dir.join("indexes");
         let index_file = index_dir.join(format!("{}.json", asset_index_ref.id));
@@ -60,7 +63,11 @@ impl AssetManager {
                 } else if let Ok(content) = fs::read_to_string(&index_file).await {
                     match serde_json::from_str::<serde_json::Value>(&content) {
                         Ok(val) => {
-                            if asset_index_ref.url.as_deref().map_or(false, |u| !u.trim().is_empty()) {
+                            if asset_index_ref
+                                .url
+                                .as_deref()
+                                .is_some_and(|u| !u.trim().is_empty())
+                            {
                                 val.get("objects")
                                     .and_then(|o| o.as_object())
                                     .map_or(true, |o| o.is_empty())
@@ -87,7 +94,9 @@ impl AssetManager {
             let trimmed_url = index_url.trim();
             if !trimmed_url.is_empty() {
                 let checksum = asset_index_ref.sha1.clone().map(Checksum::Sha1);
-                let is_valid = DownloadEngine::is_file_valid(&index_file, asset_index_ref.size, &checksum).await;
+                let is_valid =
+                    DownloadEngine::is_file_valid(&index_file, asset_index_ref.size, &checksum)
+                        .await;
 
                 if !is_valid {
                     log::info!(
@@ -141,7 +150,11 @@ impl AssetManager {
         let manifest: AssetIndexManifest = match serde_json::from_str(&content) {
             Ok(m) => m,
             Err(e) => {
-                log::warn!("Failed to parse asset index {:?}: {}, writing valid fallback", index_file, e);
+                log::warn!(
+                    "Failed to parse asset index {:?}: {}, writing valid fallback",
+                    index_file,
+                    e
+                );
                 let _ = fs::write(&index_file, r#"{"objects":{}}"#).await;
                 AssetIndexManifest {
                     objects: std::collections::HashMap::new(),
@@ -150,9 +163,12 @@ impl AssetManager {
         };
 
         let objects_dir = self.assets_dir.join("objects");
-        fs::create_dir_all(&objects_dir)
-            .await
-            .map_err(|e| format!("Failed to create asset objects directory {:?}: {}", objects_dir, e))?;
+        fs::create_dir_all(&objects_dir).await.map_err(|e| {
+            format!(
+                "Failed to create asset objects directory {:?}: {}",
+                objects_dir, e
+            )
+        })?;
 
         // 4. Prepare asset download tasks
         let mut tasks = Vec::with_capacity(manifest.objects.len());

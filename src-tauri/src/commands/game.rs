@@ -1,3 +1,4 @@
+use super::session::authorized_session;
 use crate::auth::microsoft::MicrosoftAuth;
 use crate::auth::secrets::SecretManager;
 use crate::auth::AuthResponse;
@@ -9,7 +10,6 @@ use crate::core::session::Session;
 use crate::core::settings::SettingsManager;
 use crate::core::sync::SyncService;
 use crate::state::{load_prefs, save_prefs, AppState};
-use super::session::authorized_session;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
@@ -22,7 +22,9 @@ pub async fn sync_session(
     let session = authorized_session(&app_handle, &session).await?;
     let install_service = InstallService;
     let sync_service = SyncService;
-    let session_dir = crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name).await?;
+    let session_dir =
+        crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name)
+            .await?;
 
     // Save as active session
     {
@@ -81,7 +83,9 @@ pub async fn launch_game(
         return Err("Cette session requiert un compte Minecraft.".into());
     }
 
-    let session_dir = crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name).await?;
+    let session_dir =
+        crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name)
+            .await?;
 
     // Get auth: try keychain first
     let auth = if let Some(pseudo) = crack_pseudo {
@@ -94,18 +98,26 @@ pub async fn launch_game(
         }
     } else {
         let mut settings = SettingsManager::load(&app_handle);
-        let mut auth = SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref())
-            .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
+        let mut auth =
+            SecretManager::get_active_account(&app_handle, settings.active_account_uuid.as_deref())
+                .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
 
         // Validate token before launch; if expired, try refresh_token once.
         if !MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {
-            log::warn!("Stored Minecraft token is invalid/expired for account {}", auth.name);
+            log::warn!(
+                "Stored Minecraft token is invalid/expired for account {}",
+                auth.name
+            );
 
             if let Some(refresh_token) = auth.refresh_token.clone() {
                 match MicrosoftAuth.refresh_auth(&refresh_token).await {
                     Ok(refreshed) => {
-                        log::info!("Successfully refreshed Minecraft auth for {}", refreshed.name);
-                        SecretManager::add_account(&app_handle, refreshed.clone()).map_err(|e| e.to_string())?;
+                        log::info!(
+                            "Successfully refreshed Minecraft auth for {}",
+                            refreshed.name
+                        );
+                        SecretManager::add_account(&app_handle, refreshed.clone())
+                            .map_err(|e| e.to_string())?;
 
                         settings.active_account_uuid = Some(refreshed.uuid.clone());
                         let _ = SettingsManager::save(&app_handle, &settings);
@@ -125,7 +137,10 @@ pub async fn launch_game(
                                     .to_string(),
                             );
                         } else {
-                            return Err(format!("Erreur lors de l'authentification Minecraft: {}", e));
+                            return Err(format!(
+                                "Erreur lors de l'authentification Minecraft: {}",
+                                e
+                            ));
                         }
                     }
                 }
@@ -154,11 +169,15 @@ pub async fn launch_game(
             let _ = window.set_focus();
             let _ = window.eval("document.getElementById('log-container').innerHTML = ''");
         } else {
-            match WebviewWindowBuilder::new(&app_handle, "logs", WebviewUrl::App("logs.html".into()))
-                .title("Minecraft Output Console")
-                .inner_size(800.0, 600.0)
-                .resizable(true)
-                .build()
+            match WebviewWindowBuilder::new(
+                &app_handle,
+                "logs",
+                WebviewUrl::App("logs.html".into()),
+            )
+            .title("Minecraft Output Console")
+            .inner_size(800.0, 600.0)
+            .resizable(true)
+            .build()
             {
                 Ok(_) => {
                     log::info!("Log window created successfully");
@@ -170,9 +189,9 @@ pub async fn launch_game(
         }
     }
 
-    let presence = session.discord_presence.unwrap_or_else(|| {
-        DiscordPresence::launched(Some(&session.name), Some(&auth.uuid))
-    });
+    let presence = session
+        .discord_presence
+        .unwrap_or_else(|| DiscordPresence::launched(Some(&session.name), Some(&auth.uuid)));
     launch_service.launch(args, show_logs, &app_handle, &presence)
 }
 

@@ -1,7 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-interface SwitchProps {
+interface SwitchProps extends Pick<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'aria-label' | 'aria-labelledby'
+> {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
@@ -15,6 +18,7 @@ export const Switch: React.FC<SwitchProps> = ({
   disabled = false,
   id,
   className = '',
+  ...accessibilityProps
 }) => {
   return (
     <button
@@ -22,6 +26,7 @@ export const Switch: React.FC<SwitchProps> = ({
       type="button"
       role="switch"
       aria-checked={checked}
+      {...accessibilityProps}
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
       className={`

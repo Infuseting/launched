@@ -20,8 +20,8 @@ const rawState: LauncherStateModel = {
       maxRam: 4096,
       jvmArgs: '',
       wrapperCommand: '',
-      showLogs: false
-    }
+      showLogs: false,
+    },
   },
   authCache: null,
   allAccounts: [],
@@ -37,13 +37,13 @@ const rawState: LauncherStateModel = {
     current_file: '',
     files_done: 0,
     total_files: 0,
-    percentage: 0
+    percentage: 0,
   },
   appVersion: '1.0.0',
   mojangStatus: {
     auth: true,
     session: true,
-    api: true
+    api: true,
   },
   serverStatus: null,
   isCheckingUpdate: false,
@@ -58,28 +58,40 @@ const rawState: LauncherStateModel = {
   optionalModsModalOpen: false,
   optionalModsModalSession: null,
   optionalModsIsFirstSync: false,
-  optionalModsHasUpdates: false
+  optionalModsHasUpdates: false,
 };
 
-function createSnapshot(source: LauncherStateModel): LauncherStateModel {
-  return {
-    ...source,
-    syncProgress: { ...source.syncProgress },
-    currentSettings: {
-      ...source.currentSettings,
-      defaultSettings: { ...source.currentSettings.defaultSettings },
-      sessions: { ...source.currentSettings.sessions },
-    },
-    mojangStatus: { ...source.mojangStatus },
-  };
+/** Keep previous snapshots immutable while preserving unchanged branch identities. */
+function createSnapshot<T>(source: T, previous?: T): T {
+  if (!isObject(source)) return source;
+
+  const previousObject = isObject(previous) ? previous : undefined;
+  const entries = Object.entries(source);
+  let unchanged =
+    previousObject !== undefined &&
+    entries.length === Object.keys(previousObject).length &&
+    Array.isArray(source) === Array.isArray(previousObject) &&
+    (!Array.isArray(source) || source.length === previousObject.length);
+  const next = Array.isArray(source) ? new Array<unknown>(source.length) : {};
+
+  for (const [key, value] of entries) {
+    const snapshot = createSnapshot(value, previousObject?.[key]);
+    Reflect.set(next, key, snapshot);
+    unchanged =
+      unchanged &&
+      Object.hasOwn(previousObject ?? {}, key) &&
+      Object.is(snapshot, previousObject?.[key]);
+  }
+
+  return (unchanged ? previous : next) as T;
 }
 
 const listeners = new Set<() => void>();
 let lastSnapshot: LauncherStateModel = createSnapshot(rawState);
 
 function notify() {
-  lastSnapshot = createSnapshot(rawState);
-  listeners.forEach(l => l());
+  lastSnapshot = createSnapshot(rawState, lastSnapshot);
+  listeners.forEach((l) => l());
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -87,6 +99,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 const proxyCache = new WeakMap<object, object>();
+const rawObjects = new WeakMap<object, object>();
 
 function createRecursiveProxy<T extends object>(obj: T): T {
   const existing = proxyCache.get(obj);
@@ -103,6 +116,8 @@ function createRecursiveProxy<T extends object>(obj: T): T {
       return value;
     },
     set(target, prop, value, receiver) {
+      // Assigning one reactive branch to another must not wrap a proxy again.
+      if (isObject(value)) value = rawObjects.get(value) ?? value;
       const currentValue = Reflect.get(target, prop, receiver);
       if (Object.is(currentValue, value)) {
         return true;
@@ -111,10 +126,17 @@ function createRecursiveProxy<T extends object>(obj: T): T {
       const result = Reflect.set(target, prop, value, receiver);
       notify();
       return result;
-    }
+    },
+    deleteProperty(target, prop) {
+      if (!Reflect.has(target, prop)) return true;
+      const result = Reflect.deleteProperty(target, prop);
+      if (result) notify();
+      return result;
+    },
   });
 
   proxyCache.set(obj, proxy);
+  rawObjects.set(proxy, obj);
   return proxy as T;
 }
 
@@ -144,15 +166,19 @@ export function useLauncherState(): LauncherState {
  */
 export function useLauncherSelector<T>(
   selector: (state: LauncherStateModel) => T,
-  isEqual: (a: T, b: T) => boolean = Object.is
+  isEqual: (a: T, b: T) => boolean = Object.is,
 ): T {
-  const currentState = useLauncherState();
-  const lastSelectedRef = React.useRef<T | undefined>(undefined);
-  const nextSelected = selector(currentState);
+  const getSelection = React.useMemo(() => {
+    let snapshot: LauncherStateModel | undefined;
+    let selected: T;
+    return () => {
+      if (snapshot === lastSnapshot) return selected;
+      const next = selector(lastSnapshot);
+      if (snapshot === undefined || !isEqual(selected, next)) selected = next;
+      snapshot = lastSnapshot;
+      return selected;
+    };
+  }, [selector, isEqual]);
 
-  if (lastSelectedRef.current !== undefined && isEqual(lastSelectedRef.current, nextSelected)) {
-    return lastSelectedRef.current;
-  }
-  lastSelectedRef.current = nextSelected;
-  return nextSelected;
+  return React.useSyncExternalStore(subscribeToState, getSelection);
 }

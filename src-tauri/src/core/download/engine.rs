@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::Emitter;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Clone)]
 pub enum Checksum {
@@ -68,15 +68,19 @@ impl DownloadEngine {
     }
 
     /// Verifies if a local file exists and matches size and/or checksum.
-    pub async fn is_file_valid(path: &Path, expected_size: Option<u64>, expected_checksum: &Option<Checksum>) -> bool {
-        if !path.exists() {
-            return false;
-        }
-
+    pub async fn is_file_valid(
+        path: &Path,
+        expected_size: Option<u64>,
+        expected_checksum: &Option<Checksum>,
+    ) -> bool {
         let metadata = match fs::metadata(path).await {
             Ok(m) => m,
             Err(_) => return false,
         };
+
+        if !metadata.is_file() {
+            return false;
+        }
 
         if let Some(size) = expected_size {
             if metadata.len() != size {
@@ -85,22 +89,36 @@ impl DownloadEngine {
         }
 
         if let Some(checksum) = expected_checksum {
-            let data = match fs::read(path).await {
-                Ok(d) => d,
+            let mut file = match fs::File::open(path).await {
+                Ok(file) => file,
                 Err(_) => return false,
             };
+            // Modpacks contain large archives; bounded buffers prevent each
+            // concurrent verification from holding a whole archive in memory.
+            let mut buffer = [0_u8; 64 * 1024];
+            let mut sha1_hasher = sha1::Sha1::new();
+            let mut md5_context = md5::Context::new();
+            loop {
+                let bytes_read = match file.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(bytes_read) => bytes_read,
+                    Err(_) => return false,
+                };
+                match checksum {
+                    Checksum::Sha1(_) => sha1_hasher.update(&buffer[..bytes_read]),
+                    Checksum::Md5(_) => md5_context.consume(&buffer[..bytes_read]),
+                }
+            }
 
             match checksum {
                 Checksum::Sha1(expected) => {
-                    let mut hasher = sha1::Sha1::new();
-                    hasher.update(&data);
-                    let result = format!("{:x}", hasher.finalize());
+                    let result = format!("{:x}", sha1_hasher.finalize());
                     if !result.eq_ignore_ascii_case(expected) {
                         return false;
                     }
                 }
                 Checksum::Md5(expected) => {
-                    let hash = format!("{:x}", md5::compute(&data));
+                    let hash = format!("{:x}", md5_context.finalize());
                     if !hash.eq_ignore_ascii_case(expected) {
                         return false;
                     }
@@ -128,7 +146,11 @@ impl DownloadEngine {
             uuid::Uuid::new_v4().simple(),
             task.dest.file_name().unwrap_or_default().to_string_lossy()
         );
-        let temp_path = task.dest.parent().unwrap_or_else(|| Path::new(".")).join(temp_filename);
+        let temp_path = task
+            .dest
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(temp_filename);
 
         let mut attempts = 0;
         let max_attempts = 4;
@@ -137,14 +159,20 @@ impl DownloadEngine {
         while attempts < max_attempts {
             attempts += 1;
 
-            match self.download_to_temp(&task.url, &temp_path, &task.checksum).await {
+            match self
+                .download_to_temp(&task.url, &temp_path, task.size, &task.checksum)
+                .await
+            {
                 Ok(()) => {
                     // Atomic move to destination
                     if let Err(e) = fs::rename(&temp_path, &task.dest).await {
                         // Fallback copy + remove if cross-filesystem rename fails
                         if let Err(copy_err) = fs::copy(&temp_path, &task.dest).await {
                             let _ = fs::remove_file(&temp_path).await;
-                            return Err(format!("Failed to move {:?} to {:?}: {} / {}", temp_path, task.dest, e, copy_err));
+                            return Err(format!(
+                                "Failed to move {:?} to {:?}: {} / {}",
+                                temp_path, task.dest, e, copy_err
+                            ));
                         }
                         let _ = fs::remove_file(&temp_path).await;
                     }
@@ -165,16 +193,26 @@ impl DownloadEngine {
                     let _ = fs::remove_file(&temp_path).await;
                     last_error = e;
                     if attempts < max_attempts {
-                        tokio::time::sleep(Duration::from_millis(150 * (2_u64.pow(attempts)))).await;
+                        tokio::time::sleep(Duration::from_millis(150 * (2_u64.pow(attempts))))
+                            .await;
                     }
                 }
             }
         }
 
-        Err(format!("Failed to download {} after {} attempts: {}", task.url, max_attempts, last_error))
+        Err(format!(
+            "Failed to download {} after {} attempts: {}",
+            task.url, max_attempts, last_error
+        ))
     }
 
-    async fn download_to_temp(&self, url: &str, temp_path: &Path, expected_checksum: &Option<Checksum>) -> Result<(), String> {
+    async fn download_to_temp(
+        &self,
+        url: &str,
+        temp_path: &Path,
+        expected_size: Option<u64>,
+        expected_checksum: &Option<Checksum>,
+    ) -> Result<(), String> {
         let mut request = self.client.get(url);
         if let Some(token) = &self.auth_token {
             request = request.bearer_auth(token);
@@ -194,12 +232,19 @@ impl DownloadEngine {
 
         let mut sha1_hasher = sha1::Sha1::new();
         let mut md5_context = md5::Context::new();
+        let mut received_size = 0_u64;
 
         while let Some(chunk) = response
             .chunk()
             .await
             .map_err(|e| format!("Error receiving chunk from {}: {}", url, e))?
         {
+            received_size += chunk.len() as u64;
+            // Validate the manifest size even when no checksum is available. An
+            // HTTP 200 response can still contain a truncated or incorrect file.
+            if expected_size.is_some_and(|size| received_size > size) {
+                return Err(format!("Download exceeds expected size for {}", url));
+            }
             if let Some(Checksum::Sha1(_)) = expected_checksum {
                 sha1_hasher.update(&chunk);
             } else if let Some(Checksum::Md5(_)) = expected_checksum {
@@ -216,18 +261,33 @@ impl DownloadEngine {
             .map_err(|e| format!("Error flushing file {:?}: {}", temp_path, e))?;
         drop(file);
 
+        if let Some(size) = expected_size {
+            if received_size != size {
+                return Err(format!(
+                    "Size mismatch for {}: expected {}, got {}",
+                    url, size, received_size
+                ));
+            }
+        }
+
         if let Some(checksum) = expected_checksum {
             match checksum {
                 Checksum::Sha1(expected) => {
                     let calculated = format!("{:x}", sha1_hasher.finalize());
                     if !calculated.eq_ignore_ascii_case(expected) {
-                        return Err(format!("SHA-1 mismatch for {}: expected {}, got {}", url, expected, calculated));
+                        return Err(format!(
+                            "SHA-1 mismatch for {}: expected {}, got {}",
+                            url, expected, calculated
+                        ));
                     }
                 }
                 Checksum::Md5(expected) => {
                     let calculated = format!("{:x}", md5_context.finalize());
                     if !calculated.eq_ignore_ascii_case(expected) {
-                        return Err(format!("MD5 mismatch for {}: expected {}, got {}", url, expected, calculated));
+                        return Err(format!(
+                            "MD5 mismatch for {}: expected {}, got {}",
+                            url, expected, calculated
+                        ));
                     }
                 }
             }
@@ -353,5 +413,87 @@ impl DownloadEngine {
             .text()
             .await
             .map_err(|e| format!("Failed to read text from {}: {}", url, e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Checksum, DownloadEngine, DownloadTask};
+    use sha1::Digest;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    #[tokio::test]
+    async fn directories_are_not_valid_downloaded_files() {
+        assert!(!DownloadEngine::is_file_valid(&std::env::temp_dir(), None, &None).await);
+    }
+
+    #[tokio::test]
+    async fn verifies_checksums_across_multiple_buffers() {
+        let path = std::env::temp_dir().join(format!("launched-checksum-{}", uuid::Uuid::new_v4()));
+        let content = vec![b'x'; 150_000];
+        tokio::fs::write(&path, &content).await.unwrap();
+        for checksum in [
+            Checksum::Sha1(format!("{:X}", sha1::Sha1::digest(&content))),
+            Checksum::Md5(format!("{:X}", md5::compute(&content))),
+        ] {
+            assert!(
+                DownloadEngine::is_file_valid(&path, Some(content.len() as u64), &Some(checksum))
+                    .await
+            );
+        }
+        for checksum in [
+            Checksum::Sha1("invalid".into()),
+            Checksum::Md5("invalid".into()),
+        ] {
+            assert!(!DownloadEngine::is_file_valid(&path, None, &Some(checksum)).await);
+        }
+        tokio::fs::remove_file(path).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejects_incorrect_sizes_without_replacing_existing_file() {
+        let root = std::env::temp_dir().join(format!("launched-download-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&root).await.unwrap();
+        let destination = root.join("client.jar");
+        tokio::fs::write(&destination, b"previous-file")
+            .await
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/client.jar", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            // Each failed download is retried four times. Both size mismatches
+            // must preserve the previous file and clean up their temporary file.
+            for _ in 0..8 {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = [0; 2048];
+                assert!(stream.read(&mut request).await.unwrap() > 0);
+                stream
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\ndata",
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+        let engine = DownloadEngine::new(4);
+        for expected_size in [3, 5] {
+            let task = DownloadTask {
+                url: url.clone(),
+                dest: destination.clone(),
+                size: Some(expected_size),
+                checksum: None,
+                is_executable: false,
+                description: None,
+            };
+            assert!(engine.download_single(&task).await.is_err());
+            assert_eq!(
+                tokio::fs::read(&destination).await.unwrap(),
+                b"previous-file"
+            );
+            assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        }
+        server.await.unwrap();
+        tokio::fs::remove_dir_all(root).await.unwrap();
     }
 }

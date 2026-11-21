@@ -11,7 +11,7 @@ interface SessionsState {
 
 export function useSessions(): SessionsState {
   return useLauncherSelector(
-    state => ({
+    (state) => ({
       globalSessions: state.globalSessions,
       activeSessionIndex: state.activeSessionIndex,
       activeSession: state.globalSessions[state.activeSessionIndex],
@@ -23,6 +23,6 @@ export function useSessions(): SessionsState {
       prev.activeSessionIndex === next.activeSessionIndex &&
       prev.activeSession === next.activeSession &&
       prev.sessionsLoading === next.sessionsLoading &&
-      prev.sessionsError === next.sessionsError
+      prev.sessionsError === next.sessionsError,
   );
 }

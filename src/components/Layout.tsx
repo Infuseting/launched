@@ -29,16 +29,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     checkState();
 
     let unlisten: (() => void) | undefined;
+    let disposed = false;
     try {
       const win = getCurrentWindow();
-      win.onResized(() => {
-        checkState();
-      }).then((fn) => {
-        unlisten = fn;
-      }).catch(() => {});
-    } catch {}
+      win
+        .onResized(() => {
+          checkState();
+        })
+        .then((fn) => {
+          if (disposed) fn();
+          else unlisten = fn;
+        })
+        .catch(() => {});
+    } catch {
+      // Window APIs are unavailable when previewing the UI in a browser.
+    }
 
     return () => {
+      disposed = true;
       if (unlisten) unlisten();
     };
   }, []);
@@ -46,10 +54,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div
       className={`h-screen w-screen flex flex-col bg-neutral-950 font-sans antialiased selection:bg-blue-500/30 overflow-hidden ${
-        isMaximized ? 'rounded-none border-0' : 'rounded-xl border border-white/10 shadow-2xl'
+        isMaximized
+          ? 'rounded-none border-0'
+          : 'rounded-xl border border-white/10 shadow-2xl'
       }`}
     >
-      <TitleBar isMaximized={isMaximized} onToggleMaximize={() => setIsMaximized((prev) => !prev)} />
+      <TitleBar
+        isMaximized={isMaximized}
+        onToggleMaximize={() => setIsMaximized((prev) => !prev)}
+      />
       <main className="flex-1 relative overflow-hidden flex flex-col">
         {children}
       </main>

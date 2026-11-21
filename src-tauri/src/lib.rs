@@ -110,7 +110,8 @@ pub fn run() {
             if let Ok(app_dir) = app.path().app_data_dir() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(error) = discord_presence::launcher_presence(&handle, &app_dir).await {
+                    if let Err(error) = discord_presence::launcher_presence(&handle, &app_dir).await
+                    {
                         log::warn!("Discord Rich Presence unavailable: {error}");
                     }
                 });

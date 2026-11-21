@@ -1,12 +1,22 @@
-import React, { useRef, useEffect } from 'react';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import React, { Suspense, lazy, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { state as sourceState, type LauncherState } from '../../state';
 import type { AppHandlers, AppSettings, SessionSettings } from '../../types';
 import AccountsTab from './AccountsTab';
-import SkinTab from '../skin/SkinTab';
 import SettingsGeneralTab from './SettingsGeneralTab';
 import SettingsAdvancedTab from './SettingsAdvancedTab';
-import { ArrowLeft, Users, Palette, Sliders, Terminal, Layers } from 'lucide-react';
+import {
+  ArrowLeft,
+  Users,
+  Palette,
+  Sliders,
+  Terminal,
+  Layers,
+} from 'lucide-react';
+
+// The WebGL preview is only needed when the skin studio is opened.
+const SkinTab = lazy(() => import('../skin/SkinTab'));
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,29 +41,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   state,
   handlers,
 }) => {
+  const dialogRef = useModalFocus(isOpen, 10);
   const { maxSystemRam, activeSettingsTab } = state;
   const activeSession = state.globalSessions[state.activeSessionIndex];
   const sessionName = activeSession?.name;
 
-  const getSessionSettings = React.useCallback((settings: AppSettings, name: string | undefined): SessionSettings => {
-    if (name && settings.sessions[name]) {
-      return settings.sessions[name];
-    }
-    return settings.defaultSettings;
-  }, []);
+  const getSessionSettings = React.useCallback(
+    (settings: AppSettings, name: string | undefined): SessionSettings => {
+      if (name && settings.sessions[name]) {
+        return settings.sessions[name];
+      }
+      return settings.defaultSettings;
+    },
+    [],
+  );
 
-  const currentEffective = getSessionSettings(state.currentSettings, sessionName);
+  const currentEffective = getSessionSettings(
+    state.currentSettings,
+    sessionName,
+  );
 
   const toGb = React.useCallback((val: number): number => {
     if (val <= 0) return 1;
     return val < 64 ? val : Math.max(1, Math.round(val / 1024));
   }, []);
 
-  const [localMinRam, setLocalMinRam] = React.useState(toGb(currentEffective.minRam));
-  const [localMaxRam, setLocalMaxRam] = React.useState(toGb(currentEffective.maxRam));
-  const [localShowLogs, setLocalShowLogs] = React.useState(currentEffective.showLogs);
-  const [localJvmArgs, setLocalJvmArgs] = React.useState(currentEffective.jvmArgs);
-  const [localWrapperCommand, setLocalWrapperCommand] = React.useState(currentEffective.wrapperCommand);
+  const [localMinRam, setLocalMinRam] = React.useState(
+    toGb(currentEffective.minRam),
+  );
+  const [localMaxRam, setLocalMaxRam] = React.useState(
+    toGb(currentEffective.maxRam),
+  );
+  const [localShowLogs, setLocalShowLogs] = React.useState(
+    currentEffective.showLogs,
+  );
+  const [localJvmArgs, setLocalJvmArgs] = React.useState(
+    currentEffective.jvmArgs,
+  );
+  const [localWrapperCommand, setLocalWrapperCommand] = React.useState(
+    currentEffective.wrapperCommand,
+  );
 
   const saveTimeoutRef = useRef<number | null>(null);
   const hasPendingSaveRef = useRef(false);
@@ -70,39 +97,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [handlers]);
 
-  const scheduleSave = React.useCallback((immediate = false) => {
-    hasPendingSaveRef.current = true;
+  const scheduleSave = React.useCallback(
+    (immediate = false) => {
+      hasPendingSaveRef.current = true;
 
-    if (saveTimeoutRef.current !== null) {
-      window.clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = null;
-    }
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
 
-    if (immediate) {
-      flushSave();
-      return;
-    }
+      if (immediate) {
+        flushSave();
+        return;
+      }
 
-    saveTimeoutRef.current = window.setTimeout(() => {
-      flushSave();
-    }, 250);
-  }, [flushSave]);
+      saveTimeoutRef.current = window.setTimeout(() => {
+        flushSave();
+      }, 250);
+    },
+    [flushSave],
+  );
 
-  const updateSetting = React.useCallback(<K extends keyof SessionSettings>(key: K, value: SessionSettings[K], persist = false) => {
-    if (!sessionName) return;
+  const updateSetting = React.useCallback(
+    <K extends keyof SessionSettings>(
+      key: K,
+      value: SessionSettings[K],
+      persist = false,
+    ) => {
+      if (!sessionName) return;
 
-    if (!sourceState.currentSettings.sessions[sessionName]) {
-      sourceState.currentSettings.sessions[sessionName] = JSON.parse(JSON.stringify(sourceState.currentSettings.defaultSettings));
-    }
+      if (!sourceState.currentSettings.sessions[sessionName]) {
+        sourceState.currentSettings.sessions[sessionName] = {
+          ...sourceState.currentSettings.defaultSettings,
+        };
+      }
 
-    sourceState.currentSettings.sessions[sessionName][key] = value;
+      sourceState.currentSettings.sessions[sessionName][key] = value;
 
-    if (persist) {
-      scheduleSave(true);
-    } else {
-      scheduleSave();
-    }
-  }, [sessionName, scheduleSave]);
+      if (persist) {
+        scheduleSave(true);
+      } else {
+        scheduleSave();
+      }
+    },
+    [sessionName, scheduleSave],
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -123,16 +162,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setLocalJvmArgs(current.jvmArgs);
       setLocalWrapperCommand(current.wrapperCommand);
     }
-  }, [isOpen, activeSettingsTab, state.currentSettings, sessionName, getSessionSettings, toGb]);
+  }, [
+    isOpen,
+    activeSettingsTab,
+    state.currentSettings,
+    sessionName,
+    getSessionSettings,
+    toGb,
+  ]);
 
   const handleMinRamChange = (valGb: number) => {
     setLocalMinRam(valGb);
     updateSetting('minRam', valGb * 1024);
+    if (valGb > localMaxRam) {
+      setLocalMaxRam(valGb);
+      updateSetting('maxRam', valGb * 1024);
+    }
   };
 
   const handleMaxRamChange = (valGb: number) => {
     setLocalMaxRam(valGb);
     updateSetting('maxRam', valGb * 1024);
+    if (valGb < localMinRam) {
+      setLocalMinRam(valGb);
+      updateSetting('minRam', valGb * 1024);
+    }
   };
 
   const handleShowLogsChange = (val: boolean) => {
@@ -151,16 +205,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const tabs = [
-    { id: 'account', label: 'Comptes', icon: Users, desc: 'Minecraft et Discord' },
-    { id: 'skin', label: 'Skin Studio 3D', icon: Palette, desc: 'Aperçu 3D, bibliothèque et personnalisation' },
-    { id: 'general', label: 'Général & RAM', icon: Sliders, desc: 'Mémoire allouée, logs et mises à jour' },
-    { id: 'advanced', label: 'Options Avancées', icon: Terminal, desc: 'Arguments JVM et commande wrapper' },
+    {
+      id: 'account',
+      label: 'Comptes',
+      icon: Users,
+      desc: 'Minecraft et Discord',
+    },
+    {
+      id: 'skin',
+      label: 'Skin Studio 3D',
+      icon: Palette,
+      desc: 'Aperçu 3D, bibliothèque et personnalisation',
+    },
+    {
+      id: 'general',
+      label: 'Général & RAM',
+      icon: Sliders,
+      desc: 'Mémoire allouée, logs et mises à jour',
+    },
+    {
+      id: 'advanced',
+      label: 'Options Avancées',
+      icon: Terminal,
+      desc: 'Arguments JVM et commande wrapper',
+    },
   ];
 
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
+          ref={dialogRef}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-title"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -168,30 +247,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           className="fixed inset-x-0 bottom-0 top-8 z-50 bg-neutral-950/98 backdrop-blur-3xl flex flex-col text-white select-none overflow-hidden"
         >
           {/* Top Bar Header */}
-          <header className="h-16 px-8 border-b border-white/10 flex items-center justify-between bg-black/40 flex-shrink-0">
-            <div className="flex items-center gap-4">
+          <header className="h-16 px-8 border-b border-white/10 flex items-center justify-between gap-4 bg-black/40 flex-shrink-0">
+            <div className="flex min-w-0 items-center gap-4">
               <button
                 onClick={() => handlers.handleSettingsToggle(false)}
-                className="group flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
+                className="group flex shrink-0 items-center gap-2.5 whitespace-nowrap px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
               >
                 <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                 <span>Retour au Launcher</span>
               </button>
 
-              <div className="h-4 w-px bg-white/10" />
+              <div className="h-4 w-px shrink-0 bg-white/10" />
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-black tracking-tight">Paramètres</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  id="settings-title"
+                  className="shrink-0 text-sm font-black tracking-tight"
+                >
+                  Paramètres
+                </span>
                 {sessionName && activeSettingsTab !== 'account' && (
-                  <span className="text-[11px] font-medium text-white/50 bg-white/5 px-2.5 py-0.5 rounded-lg border border-white/5 flex items-center gap-1.5">
-                    <Layers className="w-3 h-3 text-emerald-400" />
-                    Session : {sessionName}
+                  <span
+                    title={sessionName}
+                    className="min-w-0 text-[11px] font-medium text-white/50 bg-white/5 px-2.5 py-0.5 rounded-lg border border-white/5 flex items-center gap-1.5"
+                  >
+                    <Layers className="w-3 h-3 shrink-0 text-emerald-400" />
+                    <span className="truncate">Session : {sessionName}</span>
                   </span>
                 )}
               </div>
             </div>
 
-            <div className={`items-center gap-2 text-[11px] text-white/40 font-medium ${activeSettingsTab === 'account' ? 'hidden' : 'flex'}`}>
+            <div
+              className={`shrink-0 items-center gap-2 text-[11px] text-white/40 font-medium ${activeSettingsTab === 'account' ? 'hidden' : 'sr-only lg:not-sr-only lg:flex'}`}
+            >
               <span>Modifications sauvegardées automatiquement</span>
             </div>
           </header>
@@ -223,14 +312,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       <div
                         className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                          isActive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-white/40'
+                          isActive
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'bg-white/5 text-white/40'
                         }`}
                       >
                         <Icon className="w-4.5 h-4.5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <span className="font-bold text-xs block truncate">{tab.label}</span>
-                        <span className="text-[10px] text-white/35 block truncate mt-0.5">{tab.desc}</span>
+                        <span className="font-bold text-xs block truncate">
+                          {tab.label}
+                        </span>
+                        <span className="text-[10px] text-white/35 block truncate mt-0.5">
+                          {tab.desc}
+                        </span>
                       </div>
                     </button>
                   );
@@ -243,7 +338,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   Launched Client
                 </span>
-                <span className="font-mono text-white/50">v{state.appVersion}</span>
+                <span className="font-mono text-white/50">
+                  v{state.appVersion}
+                </span>
               </div>
             </aside>
 
@@ -274,13 +371,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="space-y-6"
                     >
                       <div>
-                        <h2 className="text-2xl font-black tracking-tight">Studio de Skin 3D</h2>
+                        <h2 className="text-2xl font-black tracking-tight">
+                          Studio de Skin 3D
+                        </h2>
                         <p className="text-white/40 text-xs mt-1">
-                          Visualisez votre personnage en 3D en temps réel, changez de modèle et appliquez vos skins personnalisés.
+                          Visualisez votre personnage en 3D en temps réel,
+                          changez de modèle et appliquez vos skins
+                          personnalisés.
                         </p>
                       </div>
 
-                      <SkinTab />
+                      <Suspense
+                        fallback={
+                          <p
+                            role="status"
+                            className="py-12 text-center text-sm text-white/60"
+                          >
+                            Chargement du studio de skins…
+                          </p>
+                        }
+                      >
+                        <SkinTab />
+                      </Suspense>
                     </motion.div>
                   )}
 
@@ -294,9 +406,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="space-y-6"
                     >
                       <div>
-                        <h2 className="text-2xl font-black tracking-tight">Options Générales & Mémoire</h2>
+                        <h2 className="text-2xl font-black tracking-tight">
+                          Options Générales & Mémoire
+                        </h2>
                         <p className="text-white/40 text-xs mt-1">
-                          Configurez les performances d'exécution et les préférences du launcher.
+                          Configurez les performances d'exécution et les
+                          préférences du launcher.
                         </p>
                       </div>
 
@@ -304,7 +419,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         localMinRam={localMinRam}
                         localMaxRam={localMaxRam}
                         localShowLogs={localShowLogs}
-                        maxSystemRam={Math.max(2, Math.round(maxSystemRam / 1024))}
+                        maxSystemRam={Math.max(
+                          2,
+                          Math.round(maxSystemRam / 1024),
+                        )}
                         state={state}
                         handlers={handlers}
                         onMinRamChange={handleMinRamChange}
@@ -324,9 +442,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="space-y-6"
                     >
                       <div>
-                        <h2 className="text-2xl font-black tracking-tight">Paramètres Avancés</h2>
+                        <h2 className="text-2xl font-black tracking-tight">
+                          Paramètres Avancés
+                        </h2>
                         <p className="text-white/40 text-xs mt-1">
-                          Options techniques avancées pour la JVM et les commandes de lancement.
+                          Options techniques avancées pour la JVM et les
+                          commandes de lancement.
                         </p>
                       </div>
 

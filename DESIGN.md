@@ -1,7 +1,7 @@
 # DESIGN.md - Launcher Desktop (React + Tauri)
 
 Date: 2026-04-24  
-Scope: Application launcher desktop (pas le site web dans le dossier web/)
+Scope: Application launcher desktop (le site est dans le dépôt voisin `../launched-site`)
 
 ## 1. Vision Produit
 
@@ -105,7 +105,7 @@ Effet UX: l'identite de la session domine visuellement, l'UI reste legere.
 - Grande modale centree, fond noir translucide blur.
 - Header + tabs internes (Accounts / General / Advanced).
 - Tab General:
-  - allocation RAM min/max (sl-range),
+  - allocation RAM min/max (contrôle Slider),
   - show logs,
   - JVM args,
   - wrapper command.
@@ -113,8 +113,8 @@ Effet UX: l'identite de la session domine visuellement, l'UI reste legere.
 
 Reference:
 
-- [src/components/SettingsModal.tsx](src/components/SettingsModal.tsx)
-- [src/components/AccountSwitcher.tsx](src/components/AccountSwitcher.tsx)
+- [src/components/settings/SettingsModal.tsx](src/components/settings/SettingsModal.tsx)
+- [src/components/settings/AccountSwitcher.tsx](src/components/settings/AccountSwitcher.tsx)
 
 ### 5.2 Server Select Modal
 
@@ -200,7 +200,7 @@ References:
 
 - React pour la composition d'interfaces.
 - Tailwind CSS v4 pour les utilitaires de style.
-- Shoelace (theme dark) pour composants web standards (`sl-icon`, `sl-range`, `sl-tooltip`).
+- Contrôles React partagés (`src/components/ui`) pour les sliders et interrupteurs.
 - Framer Motion pour animations.
 
 Bootstrap UI:
@@ -220,5 +220,5 @@ Bootstrap UI:
 ## 10. Notes de coherence
 
 - Le launcher desktop suit deja une direction "ultra clean" tres proche de la spec Material redesign.
-- Le dossier web/ suit une logique differente (site marketing) et n'entre pas dans ce document.
-- `style.css` contient aussi des styles historiques lies a une ancienne UI; la surface active actuelle repose majoritairement sur les composants React + Tailwind.
+- Le dépôt voisin `../launched-site` suit une logique differente (site marketing) et n'entre pas dans ce document.
+- La surface active repose sur les composants React + Tailwind ; `style.css` porte les styles de base, le focus clavier et la réduction des animations.

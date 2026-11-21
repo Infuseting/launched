@@ -9,7 +9,10 @@ interface SocialLinksProps {
   assetsPath?: string;
 }
 
-export const SocialLinks: React.FC<SocialLinksProps> = ({ links, assetsPath }) => {
+export const SocialLinks: React.FC<SocialLinksProps> = ({
+  links,
+  assetsPath,
+}) => {
   if (!links || links.length === 0) return null;
 
   const handleLinkClick = async (url: string) => {
@@ -21,17 +24,23 @@ export const SocialLinks: React.FC<SocialLinksProps> = ({ links, assetsPath }) =
   };
 
   return (
-    <nav aria-label="Liens sociaux" className="flex flex-col gap-2.5 items-center">
+    <nav
+      aria-label="Liens sociaux"
+      className="flex flex-col gap-2.5 items-center"
+    >
       {links.map((link, index) => {
         let iconUrl = link.icon;
-        const isRemote = iconUrl.startsWith('http') || iconUrl.startsWith('data:');
+        const isRemote =
+          iconUrl.startsWith('http') || iconUrl.startsWith('data:');
 
         if (!isRemote && assetsPath) {
           iconUrl = `${assetsPath}/${iconUrl}`;
         }
 
         const isDiscord = link.name.toLowerCase().includes('discord');
-        const isWeb = link.name.toLowerCase().includes('site') || link.name.toLowerCase().includes('web');
+        const isWeb =
+          link.name.toLowerCase().includes('site') ||
+          link.name.toLowerCase().includes('web');
 
         return (
           <motion.button

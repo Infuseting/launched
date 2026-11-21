@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/
+.verification/
+docs/superpowers/
+aidd_docs/
+package-lock.json

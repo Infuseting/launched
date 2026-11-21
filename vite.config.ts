@@ -12,6 +12,12 @@ export default defineConfig({
         main: './index.html',
         logs: './logs.html',
       },
+      output: {
+        // Keep the lazy skin studio and its WebGL engine independently cacheable.
+        manualChunks(id) {
+          if (id.includes('/node_modules/three/')) return 'three';
+        },
+      },
     },
   },
   server: {

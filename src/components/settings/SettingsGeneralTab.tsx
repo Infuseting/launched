@@ -3,7 +3,13 @@ import type { LauncherState } from '../../state';
 import type { AppHandlers } from '../../types';
 import Slider from '../ui/Slider';
 import Switch from '../ui/Switch';
-import { Cpu, Terminal, RefreshCw, ArrowUpCircle, ExternalLink } from 'lucide-react';
+import {
+  Cpu,
+  Terminal,
+  RefreshCw,
+  ArrowUpCircle,
+  ExternalLink,
+} from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
 import DiscordIcon from '../DiscordIcon';
 
@@ -39,8 +45,12 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
             <Cpu className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-white font-black text-sm tracking-tight">Allocation de la Mémoire RAM</h3>
-            <p className="text-[11px] text-white/40">Mémoire maximale du système détectée : {maxSystemRam} Go</p>
+            <h3 className="text-white font-black text-sm tracking-tight">
+              Allocation de la Mémoire RAM
+            </h3>
+            <p className="text-[11px] text-white/40">
+              Mémoire maximale du système détectée : {maxSystemRam} Go
+            </p>
           </div>
         </div>
 
@@ -48,7 +58,7 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
           <Slider
             label="RAM Minimale au Démarrage"
             min={1}
-            max={Math.max(4, maxSystemRam)}
+            max={maxSystemRam}
             step={1}
             value={localMinRam}
             unit="Go"
@@ -75,11 +85,19 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
               <Terminal className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-white font-bold text-xs">Afficher la console de logs en jeu</h4>
-              <p className="text-white/40 text-[11px]">Ouvre une fenêtre détaillée pendant le lancement</p>
+              <h4 className="text-white font-bold text-xs">
+                Afficher la console de logs en jeu
+              </h4>
+              <p className="text-white/40 text-[11px]">
+                Ouvre une fenêtre détaillée pendant le lancement
+              </p>
             </div>
           </div>
-          <Switch checked={localShowLogs} onChange={onShowLogsChange} />
+          <Switch
+            aria-label="Afficher la console de logs en jeu"
+            checked={localShowLogs}
+            onChange={onShowLogsChange}
+          />
         </div>
       </div>
 
@@ -91,8 +109,12 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
               <ArrowUpCircle className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="text-white font-semibold text-xs tracking-tight">Mise à jour du Launcher</h4>
-              <p className="text-white/40 text-[11px] font-mono">Version actuelle : v{state.appVersion}</p>
+              <h4 className="text-white font-semibold text-xs tracking-tight">
+                Mise à jour du Launcher
+              </h4>
+              <p className="text-white/40 text-[11px] font-mono">
+                Version actuelle : v{state.appVersion}
+              </p>
             </div>
           </div>
 
@@ -102,7 +124,9 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
             disabled={state.isCheckingUpdate || state.isInstallingUpdate}
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-semibold transition-all duration-150 cursor-pointer disabled:opacity-40"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${state.isCheckingUpdate ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${state.isCheckingUpdate ? 'animate-spin' : ''}`}
+            />
             <span>{state.isCheckingUpdate ? 'Recherche...' : 'Vérifier'}</span>
           </button>
         </div>
@@ -133,13 +157,24 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
       </div>
       <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
         <div className="flex min-w-0 items-center gap-3">
-          <DiscordIcon aria-hidden="true" className="h-5 w-6 shrink-0 text-indigo-300" />
+          <DiscordIcon
+            aria-hidden="true"
+            className="h-5 w-6 shrink-0 text-indigo-300"
+          />
           <div>
-            <h4 className="text-xs font-semibold text-white">Discord Launched</h4>
-            <p className="mt-1 text-[11px] text-white/40">Support et annonces du launcher</p>
+            <h4 className="text-xs font-semibold text-white">
+              Discord Launched
+            </h4>
+            <p className="mt-1 text-[11px] text-white/40">
+              Support et annonces du launcher
+            </p>
           </div>
         </div>
-        <button type="button" onClick={() => void open('https://discord.gg/BWaj9JzsX6')} className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-white/5 px-3.5 text-xs font-medium text-white/70 transition-colors hover:bg-indigo-400/10 hover:text-indigo-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300">
+        <button
+          type="button"
+          onClick={() => void open('https://discord.gg/BWaj9JzsX6')}
+          className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-white/5 px-3.5 text-xs font-medium text-white/70 transition-colors hover:bg-indigo-400/10 hover:text-indigo-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300"
+        >
           Rejoindre
           <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
         </button>

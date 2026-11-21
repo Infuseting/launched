@@ -23,12 +23,20 @@ export const SettingsAdvancedTab: React.FC<SettingsAdvancedTabProps> = ({
             <Terminal className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-white font-black text-sm tracking-tight">Arguments Personnalisés JVM</h3>
-            <p className="text-[11px] text-white/40">Paramètres transmis directement à la machine virtuelle Java</p>
+            <h3
+              id="jvm-args-label"
+              className="text-white font-black text-sm tracking-tight"
+            >
+              Arguments Personnalisés JVM
+            </h3>
+            <p className="text-[11px] text-white/40">
+              Paramètres transmis directement à la machine virtuelle Java
+            </p>
           </div>
         </div>
 
         <textarea
+          aria-labelledby="jvm-args-label"
           rows={4}
           value={localJvmArgs}
           onChange={(e) => onJvmArgsChange(e.target.value)}
@@ -44,12 +52,20 @@ export const SettingsAdvancedTab: React.FC<SettingsAdvancedTabProps> = ({
             <Command className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-white font-black text-sm tracking-tight">Commande Wrapper (GameMode / Mangohud...)</h3>
-            <p className="text-[11px] text-white/40">Préfixe de commande exécuté avant le binaire Java</p>
+            <h3
+              id="wrapper-command-label"
+              className="text-white font-black text-sm tracking-tight"
+            >
+              Commande Wrapper (GameMode / Mangohud...)
+            </h3>
+            <p className="text-[11px] text-white/40">
+              Préfixe de commande exécuté avant le binaire Java
+            </p>
           </div>
         </div>
 
         <input
+          aria-labelledby="wrapper-command-label"
           type="text"
           value={localWrapperCommand}
           onChange={(e) => onWrapperCommandChange(e.target.value)}

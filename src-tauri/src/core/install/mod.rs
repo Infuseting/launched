@@ -7,8 +7,8 @@ pub mod runtime;
 
 pub use assets::AssetManager;
 
-use async_trait::async_trait;
 use crate::core::session::{LoaderKind, Session};
+use async_trait::async_trait;
 use tauri::Emitter;
 
 pub struct InstallService;
@@ -24,7 +24,9 @@ struct ForgeInstaller;
 
 #[async_trait]
 impl LoaderInstaller for ForgeInstaller {
-    fn kind(&self) -> LoaderKind { LoaderKind::Forge }
+    fn kind(&self) -> LoaderKind {
+        LoaderKind::Forge
+    }
     fn loader_name(&self) -> &'static str {
         "Forge"
     }
@@ -38,7 +40,9 @@ struct FabricInstaller;
 
 #[async_trait]
 impl LoaderInstaller for FabricInstaller {
-    fn kind(&self) -> LoaderKind { LoaderKind::Fabric }
+    fn kind(&self) -> LoaderKind {
+        LoaderKind::Fabric
+    }
     fn loader_name(&self) -> &'static str {
         "Fabric"
     }
@@ -52,15 +56,23 @@ struct NeoForgeInstaller;
 
 #[async_trait]
 impl LoaderInstaller for NeoForgeInstaller {
-    fn kind(&self) -> LoaderKind { LoaderKind::NeoForge }
-    fn loader_name(&self) -> &'static str { "NeoForge" }
+    fn kind(&self) -> LoaderKind {
+        LoaderKind::NeoForge
+    }
+    fn loader_name(&self) -> &'static str {
+        "NeoForge"
+    }
     async fn install(&self, session: &Session, version: &str) -> Result<(), String> {
         neoforge::install_neoforge(&session.minecraft, version).await
     }
 }
 
 fn loader_installers() -> Vec<Box<dyn LoaderInstaller>> {
-    vec![Box::new(ForgeInstaller), Box::new(FabricInstaller), Box::new(NeoForgeInstaller)]
+    vec![
+        Box::new(ForgeInstaller),
+        Box::new(FabricInstaller),
+        Box::new(NeoForgeInstaller),
+    ]
 }
 
 impl InstallService {
@@ -71,7 +83,10 @@ impl InstallService {
     ) -> Result<(), String> {
         let selected = session.selected_loader()?;
         let official_mc_path = mojang::get_official_mc_path().await?;
-        let assets_dir = crate::core::launch::args::LaunchArguments::resolve_assets_dir(session, &official_mc_path);
+        let assets_dir = crate::core::launch::args::LaunchArguments::resolve_assets_dir(
+            session,
+            &official_mc_path,
+        );
 
         // 1. Install Minecraft Base and Assets
         let _ = window.emit(
@@ -83,7 +98,8 @@ impl InstallService {
                 percentage: 0.0,
             },
         );
-        mojang::install_version_with_assets(&session.minecraft, Some(&assets_dir), Some(window)).await?;
+        mojang::install_version_with_assets(&session.minecraft, Some(&assets_dir), Some(window))
+            .await?;
 
         // 2. Install selected mod loaders using a strategy list.
         for installer in loader_installers() {
@@ -127,7 +143,13 @@ mod tests {
     fn registers_one_installer_for_each_supported_loader() {
         let installers = loader_installers();
         for kind in [LoaderKind::Fabric, LoaderKind::Forge, LoaderKind::NeoForge] {
-            assert_eq!(installers.iter().filter(|installer| installer.kind() == kind).count(), 1);
+            assert_eq!(
+                installers
+                    .iter()
+                    .filter(|installer| installer.kind() == kind)
+                    .count(),
+                1
+            );
         }
     }
 }

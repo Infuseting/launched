@@ -22,7 +22,10 @@ pub async fn get_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, S
 }
 
 #[tauri::command]
-pub async fn save_settings(app_handle: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+pub async fn save_settings(
+    app_handle: tauri::AppHandle,
+    settings: AppSettings,
+) -> Result<(), String> {
     SettingsManager::save(&app_handle, &settings)
 }
 

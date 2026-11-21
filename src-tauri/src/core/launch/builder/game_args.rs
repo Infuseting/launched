@@ -1,4 +1,5 @@
 use super::rules::{apply_placeholders, argument_value_strings};
+use crate::auth::AuthResponse;
 use serde_json::Value;
 use std::path::Path;
 
@@ -24,9 +25,7 @@ impl<'a> GameArgsBuilder<'a> {
         version_id: &'a str,
         minecraft_version: &'a str,
         asset_index_id: &'a str,
-        auth_name: &'a str,
-        auth_uuid: &'a str,
-        auth_access_token: &'a str,
+        auth: &'a AuthResponse,
         game_resolution: &'a str,
     ) -> Self {
         Self {
@@ -35,9 +34,9 @@ impl<'a> GameArgsBuilder<'a> {
             version_id,
             minecraft_version,
             asset_index_id,
-            auth_name,
-            auth_uuid,
-            auth_access_token,
+            auth_name: &auth.name,
+            auth_uuid: &auth.uuid,
+            auth_access_token: &auth.access_token,
             game_resolution,
             manifest_game_args: None,
             legacy_minecraft_arguments: None,
@@ -56,8 +55,16 @@ impl<'a> GameArgsBuilder<'a> {
 
     pub fn build(self) -> Vec<String> {
         let is_offline = self.auth_access_token == "offline";
-        let user_type = if is_offline { "mojang".to_string() } else { "msa".to_string() };
-        let xuid = if is_offline { "".to_string() } else { self.auth_uuid.replace('-', "") };
+        let user_type = if is_offline {
+            "mojang".to_string()
+        } else {
+            "msa".to_string()
+        };
+        let xuid = if is_offline {
+            "".to_string()
+        } else {
+            self.auth_uuid.replace('-', "")
+        };
 
         let width = self
             .game_resolution
@@ -175,11 +182,17 @@ impl<'a> GameArgsBuilder<'a> {
             minecraft_args.push("--gameDir".to_string());
             minecraft_args.push(self.session_dir.to_string_lossy().to_string());
         }
-        if !minecraft_args.iter().any(|a| a == "--assetsDir" || a.starts_with("--assetsDir=")) {
+        if !minecraft_args
+            .iter()
+            .any(|a| a == "--assetsDir" || a.starts_with("--assetsDir="))
+        {
             minecraft_args.push("--assetsDir".to_string());
             minecraft_args.push(self.assets_dir.to_string_lossy().to_string());
         }
-        if !minecraft_args.iter().any(|a| a == "--assetIndex" || a.starts_with("--assetIndex=")) {
+        if !minecraft_args
+            .iter()
+            .any(|a| a == "--assetIndex" || a.starts_with("--assetIndex="))
+        {
             minecraft_args.push("--assetIndex".to_string());
             minecraft_args.push(self.asset_index_id.to_string());
         }
@@ -202,9 +215,7 @@ impl<'a> GameArgsBuilder<'a> {
 
         // 5. Clean up unwanted demo/quickPlay flags
         minecraft_args.retain(|a| {
-            a != "--demo"
-                && !a.starts_with("--quickPlay")
-                && !a.starts_with("${quickPlay")
+            a != "--demo" && !a.starts_with("--quickPlay") && !a.starts_with("${quickPlay")
         });
 
         minecraft_args

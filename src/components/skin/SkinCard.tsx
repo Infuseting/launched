@@ -27,13 +27,20 @@ export const SkinCard: React.FC<SkinCardProps> = ({
       exit={{ opacity: 0, scale: 0.9 }}
       onMouseEnter={() => onPreview(skin)}
       onMouseLeave={() => onPreview(null)}
+      onFocus={() => onPreview(skin)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) onPreview(null);
+      }}
       className="group relative bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 hover:border-emerald-500/40 rounded-2xl p-3 flex flex-col items-center gap-2.5 transition-all duration-200 shadow-md"
     >
       <div className="bg-black/40 rounded-xl p-2.5 flex items-center justify-center w-full min-h-[85px] group-hover:scale-105 transition-transform duration-200">
         <SkinThumbnail textureB64={skin.textureB64} scale={3.2} />
       </div>
 
-      <p className="text-white/90 text-xs font-bold text-center truncate w-full px-1" title={skin.name}>
+      <p
+        className="text-white/90 text-xs font-bold text-center truncate w-full px-1"
+        title={skin.name}
+      >
         {skin.name}
       </p>
 
@@ -45,6 +52,7 @@ export const SkinCard: React.FC<SkinCardProps> = ({
         <button
           type="button"
           onClick={() => void onApply(skin)}
+          aria-label={`Activer le skin ${skin.name}`}
           disabled={isApplying}
           className="flex-1 py-1.5 rounded-xl bg-white/10 hover:bg-emerald-500/25 border border-white/10 text-white/80 hover:text-emerald-300 text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
         >
@@ -54,6 +62,7 @@ export const SkinCard: React.FC<SkinCardProps> = ({
         <button
           type="button"
           onClick={() => void onDelete(skin)}
+          aria-label={`Supprimer le skin ${skin.name}`}
           className="w-7 h-7 flex items-center justify-center rounded-xl bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-300 border border-white/10 transition-all cursor-pointer"
           title="Supprimer"
         >

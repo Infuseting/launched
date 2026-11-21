@@ -195,21 +195,34 @@ impl JreManager {
         // Revalidate every manifest file and repair missing/corrupt files in place.
         // The download engine checks SHA-1 and propagates failures.
 
-        log::info!("Downloading isolated Mojang Java runtime '{}' for '{}'...", component, platform);
+        log::info!(
+            "Downloading isolated Mojang Java runtime '{}' for '{}'...",
+            component,
+            platform
+        );
 
         // 1. Fetch JRE manifest index
         let index: JreManifestIndex = self.engine.fetch_json(JRE_MANIFEST_URL).await?;
 
         let platform_map = index.platforms.get(platform).ok_or_else(|| {
-            format!("Platform '{}' not found in Mojang JRE manifest index", platform)
+            format!(
+                "Platform '{}' not found in Mojang JRE manifest index",
+                platform
+            )
         })?;
 
         let component_list = platform_map.get(component).ok_or_else(|| {
-            format!("Component '{}' not found for platform '{}' in JRE manifest index", component, platform)
+            format!(
+                "Component '{}' not found for platform '{}' in JRE manifest index",
+                component, platform
+            )
         })?;
 
         let component_entry = component_list.first().ok_or_else(|| {
-            format!("No entry for component '{}' on platform '{}'", component, platform)
+            format!(
+                "No entry for component '{}' on platform '{}'",
+                component, platform
+            )
         })?;
 
         // 2. Fetch component manifest
@@ -284,7 +297,9 @@ mod tests {
         fs::create_dir_all(java.parent().unwrap()).await.unwrap();
         fs::create_dir_all(root.join("lib")).await.unwrap();
         fs::write(&java, b"incomplete executable").await.unwrap();
-        fs::write(root.join("lib/modules"), b"partial modules").await.unwrap();
+        fs::write(root.join("lib/modules"), b"partial modules")
+            .await
+            .unwrap();
         // Both previous presence checks accepted this installation.
         assert!(validate_java(&java).await.is_err());
         fs::remove_dir_all(root).await.unwrap();

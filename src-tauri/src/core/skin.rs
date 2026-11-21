@@ -57,7 +57,10 @@ pub fn load_skin_history(app_handle: &tauri::AppHandle) -> Vec<SkinEntry> {
     }
 }
 
-pub fn save_skin_history(app_handle: &tauri::AppHandle, history: &[SkinEntry]) -> Result<(), String> {
+pub fn save_skin_history(
+    app_handle: &tauri::AppHandle,
+    history: &[SkinEntry],
+) -> Result<(), String> {
     let path = skin_history_path(app_handle);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -80,7 +83,10 @@ pub async fn fetch_minecraft_profile(access_token: &str) -> Result<MinecraftProf
         return Err(format!("Mojang API error: HTTP {}", resp.status()));
     }
 
-    let profile: MojangProfile = resp.json().await.map_err(|e| format!("Parse error: {}", e))?;
+    let profile: MojangProfile = resp
+        .json()
+        .await
+        .map_err(|e| format!("Parse error: {}", e))?;
 
     let active_skin = profile
         .skins
@@ -120,7 +126,9 @@ pub async fn upload_skin_to_mojang(
     body.extend_from_slice(variant_upper.as_bytes());
     body.extend_from_slice(b"\r\n");
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
-    body.extend_from_slice(b"Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"\r\n");
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"\r\n",
+    );
     body.extend_from_slice(b"Content-Type: image/png\r\n\r\n");
     body.extend_from_slice(&png_bytes);
     body.extend_from_slice(b"\r\n");
@@ -145,7 +153,10 @@ pub async fn upload_skin_to_mojang(
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Mojang skin upload failed: HTTP {} – {}", status, text));
+        return Err(format!(
+            "Mojang skin upload failed: HTTP {} – {}",
+            status, text
+        ));
     }
 
     Ok(())
@@ -155,9 +166,7 @@ pub async fn upload_skin_to_mojang(
 pub async fn reset_skin_on_mojang(access_token: &str, _uuid: &str) -> Result<(), String> {
     let client = reqwest::Client::new();
     let resp = client
-        .delete(format!(
-            "https://api.minecraftservices.com/minecraft/profile/skins/active"
-        ))
+        .delete("https://api.minecraftservices.com/minecraft/profile/skins/active")
         .bearer_auth(access_token)
         .send()
         .await

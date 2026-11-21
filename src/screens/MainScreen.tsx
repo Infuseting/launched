@@ -9,7 +9,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import defaultBackground from '../assets/default-bg.jpg';
 
 interface MainScreenProps {
-  handlers: Pick<AppHandlers, 'syncAndLoad' | 'handleSettingsToggle' | 'handleServerSelectToggle' | 'handleTabChange'>;
+  handlers: Pick<
+    AppHandlers,
+    | 'syncAndLoad'
+    | 'handleSettingsToggle'
+    | 'handleServerSelectToggle'
+    | 'handleTabChange'
+  >;
 }
 
 export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
@@ -21,8 +27,13 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
   const backgroundPool = React.useMemo(() => {
     let pool: string[] = [];
     if (Array.isArray(backgroundSource)) {
-      pool = backgroundSource.filter((url): url is string => typeof url === 'string' && url.length > 0);
-    } else if (typeof backgroundSource === 'string' && backgroundSource.length > 0) {
+      pool = backgroundSource.filter(
+        (url): url is string => typeof url === 'string' && url.length > 0,
+      );
+    } else if (
+      typeof backgroundSource === 'string' &&
+      backgroundSource.length > 0
+    ) {
       pool = [backgroundSource];
     }
 
@@ -33,22 +44,29 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
     return pool;
   }, [backgroundSource]);
 
-  const pickRandomBackground = React.useCallback((exclude?: string) => {
-    if (backgroundPool.length === 0) {
-      return undefined;
-    }
+  const pickRandomBackground = React.useCallback(
+    (exclude?: string) => {
+      if (backgroundPool.length === 0) {
+        return undefined;
+      }
 
-    if (backgroundPool.length === 1) {
-      return backgroundPool[0];
-    }
+      if (backgroundPool.length === 1) {
+        return backgroundPool[0];
+      }
 
-    const choices = exclude ? backgroundPool.filter(bg => bg !== exclude) : backgroundPool;
-    const pool = choices.length > 0 ? choices : backgroundPool;
-    const index = Math.floor(Math.random() * pool.length);
-    return pool[index];
-  }, [backgroundPool]);
+      const choices = exclude
+        ? backgroundPool.filter((bg) => bg !== exclude)
+        : backgroundPool;
+      const pool = choices.length > 0 ? choices : backgroundPool;
+      const index = Math.floor(Math.random() * pool.length);
+      return pool[index];
+    },
+    [backgroundPool],
+  );
 
-  const [activeBackground, setActiveBackground] = React.useState<string | undefined>(undefined);
+  const [activeBackground, setActiveBackground] = React.useState<
+    string | undefined
+  >(undefined);
 
   React.useEffect(() => {
     setActiveBackground(pickRandomBackground());
@@ -60,7 +78,7 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
     }
 
     const intervalId = setInterval(() => {
-      setActiveBackground(previous => pickRandomBackground(previous));
+      setActiveBackground((previous) => pickRandomBackground(previous));
     }, 10_000);
 
     return () => clearInterval(intervalId);
@@ -68,7 +86,10 @@ export const MainScreen: React.FC<MainScreenProps> = ({ handlers }) => {
 
   // Combine and deduplicate links from session and assetsData
   const links = React.useMemo(() => {
-    const rawLinks = [...(session?.assetsData?.links || []), ...(session?.links || [])];
+    const rawLinks = [
+      ...(session?.assetsData?.links || []),
+      ...(session?.links || []),
+    ];
     const seen = new Set<string>();
     return rawLinks.filter((link) => {
       const normalized = link.url.trim().toLowerCase().replace(/\/+$/, '');

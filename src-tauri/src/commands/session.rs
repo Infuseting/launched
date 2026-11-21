@@ -4,7 +4,11 @@ use crate::state::{load_prefs, save_prefs, AppState, DeepLinkState};
 
 #[tauri::command]
 pub fn get_deep_link_url(state: tauri::State<'_, DeepLinkState>) -> Option<String> {
-    state.pending_url.lock().ok().and_then(|mut guard| guard.take())
+    state
+        .pending_url
+        .lock()
+        .ok()
+        .and_then(|mut guard| guard.take())
 }
 
 #[tauri::command]
@@ -18,13 +22,19 @@ pub async fn get_sessions(
     let servers_url = if std::env::var("LAUNCHED_SERVERS_URL").is_ok() {
         servers_url
     } else {
-        discord::site_url()?.join("sessions").map_err(|e| e.to_string())?.to_string()
+        discord::site_url()?
+            .join("sessions")
+            .map_err(|e| e.to_string())?
+            .to_string()
     };
     let sessions = SessionManager::fetch_sessions(&app_handle, &servers_url).await?;
     {
         let mut active = state.active_session.lock().unwrap();
         if let Some(previous) = active.as_ref() {
-            *active = sessions.iter().find(|s| s.sync_url == previous.sync_url).cloned();
+            *active = sessions
+                .iter()
+                .find(|s| s.sync_url == previous.sync_url)
+                .cloned();
         }
     }
 
@@ -44,18 +54,29 @@ pub async fn get_sessions(
 }
 
 /// Resolve fresh server configuration before sync/launch, including already installed sessions.
-pub async fn authorized_session(app: &tauri::AppHandle, requested: &Session) -> Result<Session, String> {
-    let url = std::env::var("LAUNCHED_SERVERS_URL")
-        .unwrap_or(discord::site_url()?.join("sessions").map_err(|e| e.to_string())?.to_string());
+pub async fn authorized_session(
+    app: &tauri::AppHandle,
+    requested: &Session,
+) -> Result<Session, String> {
+    let url = std::env::var("LAUNCHED_SERVERS_URL").unwrap_or(
+        discord::site_url()?
+            .join("sessions")
+            .map_err(|e| e.to_string())?
+            .to_string(),
+    );
     SessionManager::fetch_sessions(app, &url)
         .await?
         .into_iter()
         .find(|session| session.sync_url == requested.sync_url)
-        .ok_or_else(|| "Vous n’avez plus accès à cette session. Actualisez la liste des sessions.".into())
+        .ok_or_else(|| {
+            "Vous n’avez plus accès à cette session. Actualisez la liste des sessions.".into()
+        })
 }
 
 #[tauri::command]
-pub async fn get_active_session_name(app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
+pub async fn get_active_session_name(
+    app_handle: tauri::AppHandle,
+) -> Result<Option<String>, String> {
     let prefs = load_prefs(&app_handle);
     Ok(prefs.last_session_name)
 }
@@ -69,8 +90,12 @@ pub async fn set_active_session(app_handle: tauri::AppHandle, name: String) -> R
 }
 
 #[tauri::command]
-pub async fn fetch_json(app_handle: tauri::AppHandle, url: String) -> Result<serde_json::Value, String> {
-    discord::site_get(&app_handle, &url).await?
+pub async fn fetch_json(
+    app_handle: tauri::AppHandle,
+    url: String,
+) -> Result<serde_json::Value, String> {
+    discord::site_get(&app_handle, &url)
+        .await?
         .json::<serde_json::Value>()
         .await
         .map_err(|e| e.to_string())
@@ -82,7 +107,8 @@ pub async fn get_session_optional_files(
     session: Session,
 ) -> Result<Vec<crate::core::optional_files::OptionalFileDto>, String> {
     let session = authorized_session(&app_handle, &session).await?;
-    crate::core::optional_files::OptionalFilesManager::get_optional_files(&app_handle, &session).await
+    crate::core::optional_files::OptionalFilesManager::get_optional_files(&app_handle, &session)
+        .await
 }
 
 #[tauri::command]

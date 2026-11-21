@@ -103,8 +103,14 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             .join("minecraftforge")
             .join("forge")
             .join(format!("{}-{}", ctx.mc_version, ctx.forge_version));
-        let dest_jar = lib_dir.join(format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version));
-        let dest_universal_jar = lib_dir.join(format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version));
+        let dest_jar = lib_dir.join(format!(
+            "forge-{}-{}.jar",
+            ctx.mc_version, ctx.forge_version
+        ));
+        let dest_universal_jar = lib_dir.join(format!(
+            "forge-{}-{}-universal.jar",
+            ctx.mc_version, ctx.forge_version
+        ));
 
         let mut version_info_obj: Option<Value> = None;
         let mut profile_libraries: Vec<ProfileLibrary> = Vec::new();
@@ -137,19 +143,29 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
                 if profile_file.read_to_string(&mut s).is_ok() {
                     if let Ok(parsed) = serde_json::from_str::<Value>(&s) {
                         if let Some(libs_val) = parsed.get("libraries") {
-                            if let Ok(libs) = serde_json::from_value::<Vec<ProfileLibrary>>(libs_val.clone()) {
+                            if let Ok(libs) =
+                                serde_json::from_value::<Vec<ProfileLibrary>>(libs_val.clone())
+                            {
                                 profile_libraries = libs;
                             }
                         }
 
                         if version_info_obj.is_none() {
-                            if let Some(v_info) = parsed.get("versionInfo").filter(|v| v.is_object()) {
+                            if let Some(v_info) =
+                                parsed.get("versionInfo").filter(|v| v.is_object())
+                            {
                                 version_info_obj = Some(v_info.clone());
-                            } else if let Some(v_info) = parsed.get("version").filter(|v| v.is_object()) {
+                            } else if let Some(v_info) =
+                                parsed.get("version").filter(|v| v.is_object())
+                            {
                                 version_info_obj = Some(v_info.clone());
-                            } else if let Some(v_info) = parsed.get("json").filter(|v| v.is_object()) {
+                            } else if let Some(v_info) =
+                                parsed.get("json").filter(|v| v.is_object())
+                            {
                                 version_info_obj = Some(v_info.clone());
-                            } else if parsed.get("mainClass").is_some() || parsed.get("minecraftArguments").is_some() {
+                            } else if parsed.get("mainClass").is_some()
+                                || parsed.get("minecraftArguments").is_some()
+                            {
                                 version_info_obj = Some(parsed.clone());
                             }
                         }
@@ -165,12 +181,21 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
 
             // 4. Candidate names for universal / forge jar in zip
             let candidate_names = [
-                format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version),
+                format!(
+                    "forge-{}-{}-universal.jar",
+                    ctx.mc_version, ctx.forge_version
+                ),
                 format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version),
                 format!("forge-{}-universal.jar", ctx.forge_version),
                 format!("forge-{}.jar", ctx.forge_version),
-                format!("maven/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}-universal.jar", ctx.mc_version, ctx.forge_version),
-                format!("maven/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}.jar", ctx.mc_version, ctx.forge_version),
+                format!(
+                    "maven/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}-universal.jar",
+                    ctx.mc_version, ctx.forge_version
+                ),
+                format!(
+                    "maven/net/minecraftforge/forge/{0}-{1}/forge-{0}-{1}.jar",
+                    ctx.mc_version, ctx.forge_version
+                ),
             ];
 
             let mut found_entry_name: Option<String> = None;
@@ -186,7 +211,10 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
                 for i in 0..archive.len() {
                     if let Ok(entry) = archive.by_index(i) {
                         let name = entry.name().to_string();
-                        if name.ends_with(".jar") && name.contains(&ctx.forge_version) && (name.contains("universal") || name.contains("forge")) {
+                        if name.ends_with(".jar")
+                            && name.contains(&ctx.forge_version)
+                            && (name.contains("universal") || name.contains("forge"))
+                        {
                             found_entry_name = Some(name);
                             break;
                         }
@@ -233,9 +261,14 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             obj
         } else {
             // Load vanilla version JSON as fallback base
-            let vanilla_path = ctx.mc_path.join("versions").join(&ctx.mc_version).join(format!("{}.json", ctx.mc_version));
+            let vanilla_path = ctx
+                .mc_path
+                .join("versions")
+                .join(&ctx.mc_version)
+                .join(format!("{}.json", ctx.mc_version));
             let mut vanilla_obj = if vanilla_path.exists() {
-                let content = fs::read_to_string(&vanilla_path).map_err(|e| format!("Failed to read vanilla json: {}", e))?;
+                let content = fs::read_to_string(&vanilla_path)
+                    .map_err(|e| format!("Failed to read vanilla json: {}", e))?;
                 serde_json::from_str::<Value>(&content).unwrap_or_else(|_| serde_json::json!({}))
             } else {
                 serde_json::json!({
@@ -249,8 +282,14 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             };
 
             if let Value::Object(ref mut map) = vanilla_obj {
-                map.insert("mainClass".to_string(), Value::String("net.minecraft.launchwrapper.Launch".to_string()));
-                map.insert("inheritsFrom".to_string(), Value::String(ctx.mc_version.clone()));
+                map.insert(
+                    "mainClass".to_string(),
+                    Value::String("net.minecraft.launchwrapper.Launch".to_string()),
+                );
+                map.insert(
+                    "inheritsFrom".to_string(),
+                    Value::String(ctx.mc_version.clone()),
+                );
             }
             vanilla_obj
         };
@@ -282,7 +321,7 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             .join("versions")
             .join(&ctx.mc_version)
             .join(format!("{}.json", ctx.mc_version));
-            
+
         let mut comp_from_json = None;
         if vanilla_json_path.exists() {
             if let Ok(content) = fs::read_to_string(&vanilla_json_path) {
@@ -333,7 +372,8 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
                 java_component,
                 required_major
             );
-            let (_, bin, _) = crate::core::launch::args::find_java(Some(required_major), &ctx.mc_path)?;
+            let (_, bin, _) =
+                crate::core::launch::args::find_java(Some(required_major), &ctx.mc_path)?;
             bin
         };
 
@@ -351,8 +391,11 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             let _ = fs::write(&profiles_path, "{\n  \"profiles\": {}\n}\n");
         }
 
-        log::info!("Running Forge Installer natively using java: {:?}", java_bin);
-        
+        log::info!(
+            "Running Forge Installer natively using java: {:?}",
+            java_bin
+        );
+
         // 4. Execute Forge Installer headlessly (asynchronously via tokio process)
         let mut cmd = tokio::process::Command::new(&java_bin);
         cmd.current_dir(&ctx.mc_path)
@@ -374,15 +417,24 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("Forge installer failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr));
+            return Err(format!(
+                "Forge installer failed:\nSTDOUT: {}\nSTDERR: {}",
+                stdout, stderr
+            ));
         }
 
         // 5. Ensure version.json is available in the expected location
         if !ctx.installed_json.exists() {
-            log::warn!("Forge installer did not create json at {:?}, extracting manually...", ctx.installed_json);
-            
+            log::warn!(
+                "Forge installer did not create json at {:?}, extracting manually...",
+                ctx.installed_json
+            );
+
             let file = fs::File::open(&ctx.installer_path).map_err(|e| {
-                format!("Failed to open forge installer {:?}: {}", ctx.installer_path, e)
+                format!(
+                    "Failed to open forge installer {:?}: {}",
+                    ctx.installer_path, e
+                )
             })?;
             let mut archive = zip::ZipArchive::new(file)
                 .map_err(|e| format!("Failed to read forge installer ZIP: {}", e))?;
@@ -431,7 +483,9 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
                     parsed_profile
                 }
             } else {
-                return Err("Missing version.json and install_profile.json in installer".to_string());
+                return Err(
+                    "Missing version.json and install_profile.json in installer".to_string()
+                );
             };
 
             set_json_id(&mut version_json, &ctx.forge_id)?;
@@ -455,7 +509,10 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             .join("minecraftforge")
             .join("forge")
             .join(format!("{}-{}", ctx.mc_version, ctx.forge_version))
-            .join(format!("forge-{}-{}-client.jar", ctx.mc_version, ctx.forge_version));
+            .join(format!(
+                "forge-{}-{}-client.jar",
+                ctx.mc_version, ctx.forge_version
+            ));
 
         if !forge_client_jar.exists() {
             return Err(format!(
@@ -472,12 +529,18 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
 
         ensure_manifest_libraries(client, &ctx.mc_path, &manifest).await?;
 
-        log::info!("Forge {} installed with modern strategy via native installer", ctx.forge_id);
+        log::info!(
+            "Forge {} installed with modern strategy via native installer",
+            ctx.forge_id
+        );
         Ok(())
     }
 }
 
-async fn ensure_installer_downloaded(client: &Client, ctx: &ForgeInstallContext) -> Result<(), String> {
+async fn ensure_installer_downloaded(
+    client: &Client,
+    ctx: &ForgeInstallContext,
+) -> Result<(), String> {
     if ctx.installer_path.exists() {
         if let Ok(meta) = fs::metadata(&ctx.installer_path) {
             if meta.len() > 100_000 {
@@ -613,14 +676,18 @@ async fn ensure_manifest_libraries(
     for lib in &manifest.libraries {
         if let Err(e) = ensure_library_from_manifest(client, mc_path, lib).await {
             log::warn!("Failed to download manifest library {}: {}", lib.name, e);
-            if lib.name.starts_with("net.minecraftforge:") || lib.name.starts_with("net.minecraft:client:") {
+            if lib.name.starts_with("net.minecraftforge:")
+                || lib.name.starts_with("net.minecraft:client:")
+            {
                 missing_critical = true;
             }
         }
     }
 
     if missing_critical {
-        return Err("Critical Forge libraries are missing and could not be downloaded.".to_string());
+        return Err(
+            "Critical Forge libraries are missing and could not be downloaded.".to_string(),
+        );
     }
 
     Ok(())
@@ -640,21 +707,35 @@ async fn ensure_profile_libraries(
 
         let mut success = false;
         if let Some(url) = lib.url.as_deref() {
-            if ensure_library_from_coordinates(client, mc_path, &lib.name, Some(url)).await.is_ok() {
+            if ensure_library_from_coordinates(client, mc_path, &lib.name, Some(url))
+                .await
+                .is_ok()
+            {
                 success = true;
             }
         }
 
         if !success {
             // Try default maven
-            if ensure_library_from_coordinates(client, mc_path, &lib.name, None).await.is_ok() {
+            if ensure_library_from_coordinates(client, mc_path, &lib.name, None)
+                .await
+                .is_ok()
+            {
                 success = true;
             }
         }
 
         if !success {
             // Try forge maven
-            if ensure_library_from_coordinates(client, mc_path, &lib.name, Some("https://maven.minecraftforge.net/")).await.is_ok() {
+            if ensure_library_from_coordinates(
+                client,
+                mc_path,
+                &lib.name,
+                Some("https://maven.minecraftforge.net/"),
+            )
+            .await
+            .is_ok()
+            {
                 success = true;
             }
         }
@@ -755,10 +836,7 @@ fn maven_path_from_name(name: &str) -> Option<String> {
         format!("{}-{}.{}", artifact, version, extension)
     };
 
-    Some(format!(
-        "{}/{}/{}/{}",
-        group, artifact, version, filename
-    ))
+    Some(format!("{}/{}/{}/{}", group, artifact, version, filename))
 }
 
 fn join_maven_url(base: &str, path: &str) -> String {
@@ -769,7 +847,11 @@ fn join_maven_url(base: &str, path: &str) -> String {
     }
 }
 
-async fn download_file_stream(client: &Client, url: &str, destination: &Path) -> Result<(), String> {
+async fn download_file_stream(
+    client: &Client,
+    url: &str,
+    destination: &Path,
+) -> Result<(), String> {
     if let Some(parent) = destination.parent() {
         tokio_fs::create_dir_all(parent)
             .await
@@ -831,8 +913,15 @@ pub async fn is_forge_installed(mc_version: &str, forge_version: &str) -> bool {
                 .join("minecraftforge")
                 .join("forge")
                 .join(format!("{}-{}", mc_version, forge_version));
-            lib_dir.join(format!("forge-{}-{}.jar", mc_version, forge_version)).exists()
-                || lib_dir.join(format!("forge-{}-{}-universal.jar", mc_version, forge_version)).exists()
+            lib_dir
+                .join(format!("forge-{}-{}.jar", mc_version, forge_version))
+                .exists()
+                || lib_dir
+                    .join(format!(
+                        "forge-{}-{}-universal.jar",
+                        mc_version, forge_version
+                    ))
+                    .exists()
         } else {
             let client_jar = mc_path
                 .join("libraries")
@@ -848,7 +937,10 @@ pub async fn is_forge_installed(mc_version: &str, forge_version: &str) -> bool {
     }
 }
 
-async fn ensure_existing_installation(client: &Client, ctx: &ForgeInstallContext) -> Result<(), String> {
+async fn ensure_existing_installation(
+    client: &Client,
+    ctx: &ForgeInstallContext,
+) -> Result<(), String> {
     // 1. Critical check: Verify presence of the Forge client / universal jar on disk
     if !is_legacy_forge_layout(&ctx.mc_version) {
         let forge_client_jar = ctx
@@ -858,11 +950,20 @@ async fn ensure_existing_installation(client: &Client, ctx: &ForgeInstallContext
             .join("minecraftforge")
             .join("forge")
             .join(format!("{}-{}", ctx.mc_version, ctx.forge_version))
-            .join(format!("forge-{}-{}-client.jar", ctx.mc_version, ctx.forge_version));
+            .join(format!(
+                "forge-{}-{}-client.jar",
+                ctx.mc_version, ctx.forge_version
+            ));
 
         if !forge_client_jar.exists() {
-            log::warn!("Modern Forge client JAR is missing on disk: {:?}", forge_client_jar);
-            return Err(format!("Modern Forge client JAR is missing: {:?}", forge_client_jar));
+            log::warn!(
+                "Modern Forge client JAR is missing on disk: {:?}",
+                forge_client_jar
+            );
+            return Err(format!(
+                "Modern Forge client JAR is missing: {:?}",
+                forge_client_jar
+            ));
         }
     } else {
         let lib_dir = ctx
@@ -872,8 +973,14 @@ async fn ensure_existing_installation(client: &Client, ctx: &ForgeInstallContext
             .join("minecraftforge")
             .join("forge")
             .join(format!("{}-{}", ctx.mc_version, ctx.forge_version));
-        let dest_jar = lib_dir.join(format!("forge-{}-{}.jar", ctx.mc_version, ctx.forge_version));
-        let dest_universal_jar = lib_dir.join(format!("forge-{}-{}-universal.jar", ctx.mc_version, ctx.forge_version));
+        let dest_jar = lib_dir.join(format!(
+            "forge-{}-{}.jar",
+            ctx.mc_version, ctx.forge_version
+        ));
+        let dest_universal_jar = lib_dir.join(format!(
+            "forge-{}-{}-universal.jar",
+            ctx.mc_version, ctx.forge_version
+        ));
         if !dest_jar.exists() && !dest_universal_jar.exists() {
             log::warn!("Legacy Forge JAR is missing on disk: {:?}", lib_dir);
             return Err("Legacy Forge JAR is missing".to_string());
@@ -908,7 +1015,11 @@ async fn ensure_existing_installation(client: &Client, ctx: &ForgeInstallContext
                 .join(format!("client-{}-{}-extra.jar", ctx.mc_version, mcp_ver));
 
             if !client_srg.exists() || !client_extra.exists() {
-                log::warn!("Modern Forge client srg or extra JAR is missing on disk: {:?}, {:?}", client_srg, client_extra);
+                log::warn!(
+                    "Modern Forge client srg or extra JAR is missing on disk: {:?}, {:?}",
+                    client_srg,
+                    client_extra
+                );
                 return Err("Modern Forge client srg or extra JAR is missing".to_string());
             }
         }
@@ -929,7 +1040,9 @@ async fn ensure_existing_installation(client: &Client, ctx: &ForgeInstallContext
 
             extract_maven_entries(&mut archive, &ctx.mc_path)?;
 
-            let parsed_profile_libraries = if let Ok(mut profile_file) = archive.by_name("install_profile.json") {
+            let parsed_profile_libraries = if let Ok(mut profile_file) =
+                archive.by_name("install_profile.json")
+            {
                 let mut profile_str = String::new();
                 profile_file
                     .read_to_string(&mut profile_str)
@@ -988,7 +1101,10 @@ mod tests {
             }
         });
         let manifest: VersionManifest = serde_json::from_value(manifest_json).unwrap();
-        assert_eq!(extract_mcp_version(&manifest), Some("20230612.114412".to_string()));
+        assert_eq!(
+            extract_mcp_version(&manifest),
+            Some("20230612.114412".to_string())
+        );
     }
 
     #[tokio::test]

@@ -8,7 +8,10 @@ interface TopBarProps {
   onAccountClick: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  onSettingsClick,
+  onAccountClick,
+}) => {
   const { authCache: user, discordUser } = useAuth();
   const [avatarFailed, setAvatarFailed] = React.useState(false);
   const [fallbackTried, setFallbackTried] = React.useState(false);
@@ -57,7 +60,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onAccountClick 
         <div className="flex flex-col pr-2">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-bold text-white tracking-tight group-hover:text-emerald-300 transition-colors">
-              {user ? user.name : discordUser?.username ?? 'Non connecté'}
+              {user ? user.name : (discordUser?.username ?? 'Non connecté')}
             </span>
             {user && (
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 opacity-80" />

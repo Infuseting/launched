@@ -94,7 +94,10 @@ impl SettingsManager {
                 match serde_json::from_str::<AppSettings>(&content) {
                     Ok(settings) => return settings,
                     Err(e) => {
-                        log::error!("Failed to parse new settings format: {}. Attempting fallback.", e);
+                        log::error!(
+                            "Failed to parse new settings format: {}. Attempting fallback.",
+                            e
+                        );
                     }
                 }
             }
@@ -133,7 +136,7 @@ impl SettingsManager {
                 };
             }
         }
-        
+
         AppSettings::default()
     }
 

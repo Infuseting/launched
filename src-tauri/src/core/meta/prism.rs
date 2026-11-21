@@ -29,7 +29,10 @@ impl PrismMetaClient {
     }
 
     /// Recursively resolves all components and their dependencies (such as org.lwjgl / org.lwjgl3).
-    pub async fn resolve_all_components(&self, initial: &[crate::core::session::ComponentSpec]) -> Result<Vec<ComponentManifest>, String> {
+    pub async fn resolve_all_components(
+        &self,
+        initial: &[crate::core::session::ComponentSpec],
+    ) -> Result<Vec<ComponentManifest>, String> {
         let mut manifests: Vec<ComponentManifest> = Vec::new();
         let mut queue: Vec<crate::core::session::ComponentSpec> = initial.to_vec();
         let mut seen_uids: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -45,13 +48,21 @@ impl PrismMetaClient {
             if let Some(requires) = &manifest.requires {
                 for req in requires {
                     if !seen_uids.contains(&req.uid) {
-                        let mut ver = req.equals.clone().or_else(|| req.suggests.clone()).unwrap_or_default();
+                        let mut ver = req
+                            .equals
+                            .clone()
+                            .or_else(|| req.suggests.clone())
+                            .unwrap_or_default();
                         if ver.is_empty() {
                             // Fallback to Minecraft version
-                            ver = initial.iter().find(|c| c.uid == "net.minecraft")
+                            ver = initial
+                                .iter()
+                                .find(|c| c.uid == "net.minecraft")
                                 .map(|c| c.version.clone())
                                 .or_else(|| {
-                                    manifests.iter().find(|m| m.uid.as_deref() == Some("net.minecraft"))
+                                    manifests
+                                        .iter()
+                                        .find(|m| m.uid.as_deref() == Some("net.minecraft"))
                                         .and_then(|m| m.version.clone())
                                 })
                                 .unwrap_or_default();
@@ -68,19 +79,21 @@ impl PrismMetaClient {
         }
 
         // Sort so org.lwjgl/org.lwjgl3 come first, then net.minecraft, then mod loaders
-        manifests.sort_by_key(|m| {
-            match m.uid.as_deref() {
-                Some("org.lwjgl") | Some("org.lwjgl3") => 0,
-                Some("net.minecraft") => 1,
-                _ => 10,
-            }
+        manifests.sort_by_key(|m| match m.uid.as_deref() {
+            Some("org.lwjgl") | Some("org.lwjgl3") => 0,
+            Some("net.minecraft") => 1,
+            _ => 10,
         });
 
         Ok(manifests)
     }
 
     /// Fetches a component manifest from cache or Prism Meta API.
-    pub async fn get_component(&self, uid: &str, version: &str) -> Result<ComponentManifest, String> {
+    pub async fn get_component(
+        &self,
+        uid: &str,
+        version: &str,
+    ) -> Result<ComponentManifest, String> {
         let meta_dir = self.mc_path.join("meta").join(uid);
         let cached_file = meta_dir.join(format!("{}.json", version));
 
@@ -106,24 +119,39 @@ impl PrismMetaClient {
                 Ok(manifest)
             }
             Err(err) => {
-                log::warn!("Prism Meta fetch failed for {} {}: {}. Attempting fallback...", uid, version, err);
+                log::warn!(
+                    "Prism Meta fetch failed for {} {}: {}. Attempting fallback...",
+                    uid,
+                    version,
+                    err
+                );
                 self.fallback_fetch_component(uid, version).await
             }
         }
     }
 
     /// Fallback fetcher from official Mojang / Fabric APIs if Prism Meta is unreachable.
-    async fn fallback_fetch_component(&self, uid: &str, version: &str) -> Result<ComponentManifest, String> {
+    async fn fallback_fetch_component(
+        &self,
+        uid: &str,
+        version: &str,
+    ) -> Result<ComponentManifest, String> {
         if uid == "net.minecraft" {
             self.fallback_fetch_mojang_minecraft(version).await
         } else if uid == "net.fabricmc.fabric-loader" {
             self.fallback_fetch_fabric_loader(version).await
         } else {
-            Err(format!("Could not fetch component {} {} from Meta API or fallback", uid, version))
+            Err(format!(
+                "Could not fetch component {} {} from Meta API or fallback",
+                uid, version
+            ))
         }
     }
 
-    async fn fallback_fetch_mojang_minecraft(&self, version: &str) -> Result<ComponentManifest, String> {
+    async fn fallback_fetch_mojang_minecraft(
+        &self,
+        version: &str,
+    ) -> Result<ComponentManifest, String> {
         #[derive(serde::Deserialize)]
         struct VersionManifestIndex {
             versions: Vec<VersionIndexItem>,
@@ -146,15 +174,25 @@ impl PrismMetaClient {
             .ok_or_else(|| format!("Minecraft version {} not found in Mojang index", version))?;
 
         let raw_json: serde_json::Value = self.engine.fetch_json(&entry.url).await?;
-        let manifest: ComponentManifest = serde_json::from_value(raw_json)
-            .map_err(|e| format!("Failed to parse Mojang version manifest for {}: {}", version, e))?;
+        let manifest: ComponentManifest = serde_json::from_value(raw_json).map_err(|e| {
+            format!(
+                "Failed to parse Mojang version manifest for {}: {}",
+                version, e
+            )
+        })?;
 
         Ok(manifest)
     }
 
-    async fn fallback_fetch_fabric_loader(&self, version: &str) -> Result<ComponentManifest, String> {
+    async fn fallback_fetch_fabric_loader(
+        &self,
+        version: &str,
+    ) -> Result<ComponentManifest, String> {
         // Simple generic fallback for Fabric profile
-        let url = format!("https://meta.fabricmc.net/v2/versions/loader/{}/profile/json", version);
+        let url = format!(
+            "https://meta.fabricmc.net/v2/versions/loader/{}/profile/json",
+            version
+        );
         let raw_json: serde_json::Value = self.engine.fetch_json(&url).await?;
         let manifest: ComponentManifest = serde_json::from_value(raw_json)
             .map_err(|e| format!("Failed to parse Fabric loader profile: {}", e))?;
@@ -208,7 +246,9 @@ impl PrismMetaClient {
     }
 
     /// Resolves the absolute download URL and local relative path for a LibraryItem.
-    pub fn resolve_library_urls(lib: &LibraryItem) -> Vec<(String, String, Option<String>, Option<u64>)> {
+    pub fn resolve_library_urls(
+        lib: &LibraryItem,
+    ) -> Vec<(String, String, Option<String>, Option<u64>)> {
         // Returns list of tuples: (download_url, relative_path, sha1, size)
         let mut results = Vec::new();
         let os = current_os_name();
@@ -235,13 +275,10 @@ impl PrismMetaClient {
             if let (Some(natives_map), Some(classifiers)) = (&lib.natives, &downloads.classifiers) {
                 if let Some(native_key) = natives_map.get(os) {
                     if let Some(native_art) = classifiers.get(native_key) {
-                        let path = native_art
-                            .path
-                            .clone()
-                            .or_else(|| {
-                                let coord_with_classifier = format!("{}:{}", lib.name, native_key);
-                                Self::maven_coordinate_to_path(&coord_with_classifier)
-                            });
+                        let path = native_art.path.clone().or_else(|| {
+                            let coord_with_classifier = format!("{}:{}", lib.name, native_key);
+                            Self::maven_coordinate_to_path(&coord_with_classifier)
+                        });
 
                         if let Some(rel_path) = path {
                             let url = native_art.url.clone().unwrap_or_else(|| {
@@ -321,4 +358,3 @@ pub fn get_default_maven_base(lib_name: &str) -> &'static str {
         "https://libraries.minecraft.net/"
     }
 }
-

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import * as skinService from '../../services/skin';
 import type { SkinEntry, MinecraftProfile } from '../../services/skin';
@@ -16,12 +16,18 @@ import {
 } from 'lucide-react';
 
 export const SkinTab: React.FC = () => {
+  const reducedMotion = useReducedMotion();
   const { authCache } = useAuth();
   const [profile, setProfile] = useState<MinecraftProfile | null>(null);
   const [library, setLibrary] = useState<SkinEntry[]>([]);
   const [currentSkinB64, setCurrentSkinB64] = useState<string | null>(null);
-  const [currentVariant, setCurrentVariant] = useState<'classic' | 'slim'>('classic');
-  const [previewSkin, setPreviewSkin] = useState<{ b64: string; variant: 'classic' | 'slim' } | null>(null);
+  const [currentVariant, setCurrentVariant] = useState<'classic' | 'slim'>(
+    'classic',
+  );
+  const [previewSkin, setPreviewSkin] = useState<{
+    b64: string;
+    variant: 'classic' | 'slim';
+  } | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -29,62 +35,91 @@ export const SkinTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [uploadVariant, setUploadVariant] = useState<'classic' | 'slim'>('classic');
+  const [uploadVariant, setUploadVariant] = useState<'classic' | 'slim'>(
+    'classic',
+  );
   const [uploadName, setUploadName] = useState('');
   const [uploadB64, setUploadB64] = useState<string | null>(null);
-  const [animating, setAnimating] = useState(true);
+  const [animating, setAnimating] = useState(!reducedMotion);
 
-  const notify = (type: 'ok' | 'err', msg: string) => {
+  const notify = useCallback((type: 'ok' | 'err', msg: string) => {
     if (type === 'ok') {
       setSuccess(msg);
-      setTimeout(() => setSuccess(null), 3000);
     } else {
       setError(msg);
-      setTimeout(() => setError(null), 5000);
     }
-  };
+  }, []);
 
-  const syncProfileFromMojang = useCallback(async () => {
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => setSuccess(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [success]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = window.setTimeout(() => setError(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [error]);
+
+  const syncProfileFromMojang = useCallback(async (signal?: AbortSignal) => {
     try {
       const prof = await skinService.getMinecraftProfile();
+      if (signal?.aborted) return;
       setProfile(prof);
       if (prof.skinUrl) {
         const secureUrl = prof.skinUrl.replace(/^http:\/\//i, 'https://');
-        const resp = await fetch(secureUrl);
+        const resp = await fetch(secureUrl, { signal });
+        if (!resp.ok)
+          throw new Error('Impossible de récupérer le skin Minecraft.');
         const blob = await resp.blob();
-        const b64 = await new Promise<string>((res) => {
+        const b64 = await new Promise<string>((res, reject) => {
           const r = new FileReader();
-          r.onloadend = () => res((r.result as string).split(',')[1]);
+          r.onload = () => res((r.result as string).split(',')[1]);
+          r.onerror = () => reject(r.error);
           r.readAsDataURL(blob);
         });
+        if (signal?.aborted) return;
         setCurrentSkinB64(b64);
       } else {
         setCurrentSkinB64(null);
       }
-      setCurrentVariant(prof.skinVariant?.toLowerCase() === 'slim' ? 'slim' : 'classic');
+      setCurrentVariant(
+        prof.skinVariant?.toLowerCase() === 'slim' ? 'slim' : 'classic',
+      );
     } catch (e) {
+      if (signal?.aborted) return;
       console.error('Failed to sync profile from Mojang:', e);
     }
   }, []);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [lib] = await Promise.all([skinService.getSkinHistory(), syncProfileFromMojang()]);
-      setLibrary(lib);
-    } catch (e) {
-      notify('err', String(e));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [syncProfileFromMojang]);
+  const loadData = useCallback(
+    async (signal: AbortSignal) => {
+      setIsLoading(true);
+      try {
+        const [lib] = await Promise.all([
+          skinService.getSkinHistory(),
+          syncProfileFromMojang(signal),
+        ]);
+        if (!signal.aborted) setLibrary(lib);
+      } catch (e) {
+        if (!signal.aborted) notify('err', String(e));
+      } finally {
+        if (!signal.aborted) setIsLoading(false);
+      }
+    },
+    [notify, syncProfileFromMojang],
+  );
 
   useEffect(() => {
-    void loadData();
+    const controller = new AbortController();
+    void loadData(controller.signal);
+    return () => controller.abort();
   }, [loadData]);
 
   const viewer3dB64 = previewSkin?.b64 ?? uploadB64 ?? currentSkinB64;
-  const viewer3dVariant = previewSkin?.variant ?? uploadVariant ?? currentVariant;
+  const viewer3dVariant =
+    previewSkin?.variant ?? (uploadB64 ? uploadVariant : currentVariant);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,7 +131,8 @@ export const SkinTab: React.FC = () => {
     if (!uploadName) setUploadName(file.name.replace('.png', ''));
 
     const r = new FileReader();
-    r.onloadend = () => {
+    r.onerror = () => notify('err', 'Impossible de lire le fichier PNG.');
+    r.onload = () => {
       const dataUrl = r.result as string;
       const b64 = dataUrl.split(',')[1];
 
@@ -105,7 +141,10 @@ export const SkinTab: React.FC = () => {
         const w = img.naturalWidth;
         const h = img.naturalHeight;
         if (!((w === 64 && h === 64) || (w === 128 && h === 128))) {
-          notify('err', `Dimensions de skin invalides (${w}×${h}px). Mojang exige 64×64 ou 128×128.`);
+          notify(
+            'err',
+            `Dimensions de skin invalides (${w}×${h}px). Mojang exige 64×64 ou 128×128.`,
+          );
           return;
         }
         setUploadB64(b64);
@@ -123,13 +162,20 @@ export const SkinTab: React.FC = () => {
     }
     setIsUploading(true);
     try {
-      const entry = await skinService.uploadSkin(uploadName.trim() || 'Mon Skin', uploadB64, uploadVariant);
+      const entry = await skinService.uploadSkin(
+        uploadName.trim() || 'Mon Skin',
+        uploadB64,
+        uploadVariant,
+      );
       setLibrary((prev) => [entry, ...prev]);
       setCurrentSkinB64(uploadB64);
       setCurrentVariant(uploadVariant);
       setUploadB64(null);
       setUploadName('');
-      notify('ok', `"${entry.name}" appliqué et enregistré dans votre bibliothèque !`);
+      notify(
+        'ok',
+        `"${entry.name}" appliqué et enregistré dans votre bibliothèque !`,
+      );
       await syncProfileFromMojang();
     } catch (e) {
       notify('err', String(e));
@@ -178,7 +224,9 @@ export const SkinTab: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <div className="w-8 h-8 border-2 border-emerald-400/20 border-t-emerald-400 rounded-full animate-spin" />
-        <p className="text-white/40 text-xs font-medium">Chargement du studio de skins...</p>
+        <p className="text-white/40 text-xs font-medium">
+          Chargement du studio de skins...
+        </p>
       </div>
     );
   }
@@ -188,6 +236,7 @@ export const SkinTab: React.FC = () => {
       <AnimatePresence>
         {success && (
           <motion.div
+            role="status"
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -199,6 +248,7 @@ export const SkinTab: React.FC = () => {
         )}
         {error && (
           <motion.div
+            role="alert"
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -216,18 +266,27 @@ export const SkinTab: React.FC = () => {
           <div
             className="w-full relative rounded-3xl overflow-hidden border border-white/10 shadow-[0_25px_60px_rgba(0,0,0,0.7)] flex items-center justify-center p-2"
             style={{
-              background: 'radial-gradient(ellipse at 50% 30%, #1a2232 0%, #090c14 100%)',
+              background:
+                'radial-gradient(ellipse at 50% 30%, #1a2232 0%, #090c14 100%)',
               minHeight: '460px',
             }}
           >
             <div
               className="absolute bottom-4 inset-x-8 h-16 rounded-full opacity-40 pointer-events-none"
-              style={{ background: 'radial-gradient(ellipse at center, rgba(52,211,153,0.3) 0%, transparent 70%)' }}
+              style={{
+                background:
+                  'radial-gradient(ellipse at center, rgba(52,211,153,0.3) 0%, transparent 70%)',
+              }}
             />
 
             <Skin3DViewer
               textureB64={viewer3dB64}
-              skinUrl={profile?.skinUrl || (authCache?.uuid ? `https://mc-heads.net/skin/${authCache.uuid}` : undefined)}
+              skinUrl={
+                profile?.skinUrl ||
+                (authCache?.uuid
+                  ? `https://mc-heads.net/skin/${authCache.uuid}`
+                  : undefined)
+              }
               variant={viewer3dVariant}
               width={320}
               height={440}
@@ -245,7 +304,11 @@ export const SkinTab: React.FC = () => {
                   : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
               }`}
             >
-              {animating ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+              {animating ? (
+                <Pause className="w-3.5 h-3.5" />
+              ) : (
+                <Play className="w-3.5 h-3.5" />
+              )}
               <span>{animating ? 'Pause' : 'Marche'}</span>
             </button>
             <button
@@ -289,7 +352,9 @@ export const SkinTab: React.FC = () => {
         library={library}
         applyingId={applyingId}
         onPreview={(skin) =>
-          setPreviewSkin(skin ? { b64: skin.textureB64, variant: skin.variant } : null)
+          setPreviewSkin(
+            skin ? { b64: skin.textureB64, variant: skin.variant } : null,
+          )
         }
         onApply={handleApply}
         onDelete={handleDelete}

@@ -17,7 +17,7 @@ pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, St
         .active_account_uuid
         .as_ref()
         .and_then(|uid| accounts.iter().find(|a| a.uuid == *uid).cloned())
-        .or_else(|| accounts.iter().next().cloned())
+        .or_else(|| accounts.first().cloned())
         .ok_or_else(|| "Not authenticated – please login first.".to_string())?;
 
     // Token still valid → return immediately
@@ -25,7 +25,10 @@ pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, St
         return Ok(auth.access_token);
     }
 
-    log::warn!("Minecraft token expired for {}, attempting silent refresh…", auth.name);
+    log::warn!(
+        "Minecraft token expired for {}, attempting silent refresh…",
+        auth.name
+    );
 
     // Try silent refresh via the stored refresh_token
     if let Some(refresh_token) = auth.refresh_token.clone() {
@@ -52,7 +55,10 @@ pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, St
                             .to_string(),
                     );
                 } else {
-                    return Err(format!("Erreur lors du rafraîchissement de la session: {}", e));
+                    return Err(format!(
+                        "Erreur lors du rafraîchissement de la session: {}",
+                        e
+                    ));
                 }
             }
         }
@@ -69,7 +75,9 @@ pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, St
 }
 
 #[tauri::command]
-pub async fn get_minecraft_profile(app_handle: tauri::AppHandle) -> Result<MinecraftProfile, String> {
+pub async fn get_minecraft_profile(
+    app_handle: tauri::AppHandle,
+) -> Result<MinecraftProfile, String> {
     let token = get_valid_token(&app_handle).await?;
     fetch_minecraft_profile(&token).await
 }
@@ -177,7 +185,11 @@ pub async fn apply_skin_from_history(
         .iter()
         .find(|e| e.id == skin_id)
         .ok_or_else(|| format!("Skin '{}' not found in history", skin_id))?;
-    log::info!("Applying skin '{}' ({}) from history to Mojang...", entry.name, entry.id);
+    log::info!(
+        "Applying skin '{}' ({}) from history to Mojang...",
+        entry.name,
+        entry.id
+    );
     upload_skin_to_mojang(&token, &entry.texture_b64, &entry.variant).await?;
     log::info!("Skin '{}' successfully applied to Mojang", entry.name);
     Ok(())

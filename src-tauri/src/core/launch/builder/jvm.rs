@@ -68,7 +68,10 @@ impl JvmArgsBuilder {
         let mut jvm_args = Vec::new();
 
         // 1. Tell JVM where to find native .so/.dll/.dylib files
-        jvm_args.push(format!("-Djava.library.path={}", self.natives_dir.display()));
+        jvm_args.push(format!(
+            "-Djava.library.path={}",
+            self.natives_dir.display()
+        ));
 
         // 2. Include launcher-provided JVM args from manifest with placeholder substitutions
         let cp_sep = if cfg!(windows) { ";" } else { ":" };

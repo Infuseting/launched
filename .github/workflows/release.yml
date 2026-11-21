@@ -47,11 +47,14 @@ jobs:
       - name: Sync node version and setup cache
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Validate frontend before packaging
+        run: npm run check
 
       - name: Add macOS x86 target
         if: matrix.platform == 'macos-latest'
@@ -70,7 +73,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Launched v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: false
+          # Publish only after every platform has uploaded its signed artifacts.
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}

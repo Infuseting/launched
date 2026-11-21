@@ -10,8 +10,10 @@ interface Skin3DViewerProps {
   animate?: boolean;
 }
 
-const DEFAULT_STEVE_SKIN = 'https://textures.minecraft.net/texture/1a429d89cc0c3260840b2a7585a9ef2249e0c5d35a51cf163351d7ea94e7';
-const DEFAULT_ALEX_SKIN = 'https://textures.minecraft.net/texture/3e67ae8a89151522f281e05be3ff5e79603cf3d7a858ff8f5c3577dcf95f5043';
+const DEFAULT_STEVE_SKIN =
+  'https://textures.minecraft.net/texture/1a429d89cc0c3260840b2a7585a9ef2249e0c5d35a51cf163351d7ea94e7';
+const DEFAULT_ALEX_SKIN =
+  'https://textures.minecraft.net/texture/3e67ae8a89151522f281e05be3ff5e79603cf3d7a858ff8f5c3577dcf95f5043';
 
 export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
   textureB64,
@@ -49,23 +51,6 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
 
     viewerRef.current = viewer;
 
-    // Apply animation immediately
-    if (animate) {
-      const anim = new skinview3d.WalkingAnimation();
-      anim.speed = 0.6;
-      viewer.animation = anim;
-    }
-
-    // Apply skin texture immediately
-    const modelType = variant === 'slim' ? 'slim' : 'default';
-    if (textureB64) {
-      void viewer.loadSkin(`data:image/png;base64,${textureB64}`, { model: modelType });
-    } else if (skinUrl) {
-      void viewer.loadSkin(skinUrl, { model: modelType });
-    } else {
-      void viewer.loadSkin(variant === 'slim' ? DEFAULT_ALEX_SKIN : DEFAULT_STEVE_SKIN, { model: modelType });
-    }
-
     return () => {
       viewer.dispose();
       viewerRef.current = null;
@@ -84,7 +69,7 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
     } else {
       viewer.animation = null;
     }
-  }, [animate]);
+  }, [animate, width, height]);
 
   // Update skin texture when textureB64, skinUrl, or variant changes
   useEffect(() => {
@@ -92,18 +77,20 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
     if (!viewer) return;
 
     const modelType = variant === 'slim' ? 'slim' : 'default';
-    if (textureB64) {
-      void viewer.loadSkin(`data:image/png;base64,${textureB64}`, { model: modelType });
-    } else if (skinUrl) {
-      void viewer.loadSkin(skinUrl, { model: modelType });
-    } else {
-      void viewer.loadSkin(variant === 'slim' ? DEFAULT_ALEX_SKIN : DEFAULT_STEVE_SKIN, { model: modelType });
-    }
-  }, [textureB64, skinUrl, variant]);
+    const source = textureB64
+      ? `data:image/png;base64,${textureB64}`
+      : skinUrl ||
+        (variant === 'slim' ? DEFAULT_ALEX_SKIN : DEFAULT_STEVE_SKIN);
+    void viewer.loadSkin(source, { model: modelType }).catch((error) => {
+      console.error('Failed to load skin preview:', error);
+    });
+  }, [textureB64, skinUrl, variant, width, height]);
 
   return (
     <canvas
       ref={canvasRef}
+      role="img"
+      aria-label="Aper�u 3D du skin Minecraft"
       width={width}
       height={height}
       className="cursor-grab active:cursor-grabbing outline-none block"

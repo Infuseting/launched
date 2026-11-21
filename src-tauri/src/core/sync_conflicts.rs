@@ -75,7 +75,7 @@ impl SyncConflicts {
             let dir = dir.trim_end_matches('/');
             relative == dir || relative.starts_with(&format!("{dir}/"))
         });
-        if !synchronized && !(metadata.is_file() && managed.contains(relative)) {
+        if !(synchronized || metadata.is_file() && managed.contains(relative)) {
             return Err(format!(
                 "Conflit de type pour {relative} : le fichier personnel a été conservé"
             ));

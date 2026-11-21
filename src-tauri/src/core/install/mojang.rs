@@ -1,11 +1,11 @@
-use reqwest::Client;
-use serde::Deserialize;
-use std::path::PathBuf;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use crate::core::install::assets::AssetManager;
 use crate::core::meta::models::AssetIndexReference;
 use crate::core::retry::retry_with_backoff;
+use reqwest::Client;
+use serde::Deserialize;
+use std::path::{Path, PathBuf};
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 
@@ -168,7 +168,7 @@ fn library_allowed(rules: &Option<Vec<LibraryRule>>) -> bool {
     allowed
 }
 
-async fn download_file(client: &Client, url: &str, path: &PathBuf) -> Result<bool, String> {
+async fn download_file(client: &Client, url: &str, path: &Path) -> Result<bool, String> {
     if path.exists() {
         return Ok(false); // Already present
     }
@@ -180,7 +180,7 @@ async fn download_file(client: &Client, url: &str, path: &PathBuf) -> Result<boo
     }
 
     let url = url.to_string();
-    let path = path.clone();
+    let path = path.to_path_buf();
     let client = client.clone();
 
     retry_with_backoff(|| async {
@@ -412,7 +412,12 @@ pub async fn install_version_with_assets(
     };
     fs::create_dir_all(&effective_assets_dir)
         .await
-        .map_err(|e| format!("Failed to create assets directory {:?}: {}", effective_assets_dir, e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to create assets directory {:?}: {}",
+                effective_assets_dir, e
+            )
+        })?;
     let _ = fs::create_dir_all(effective_assets_dir.join("indexes")).await;
     let _ = fs::create_dir_all(effective_assets_dir.join("objects")).await;
 
@@ -427,10 +432,18 @@ pub async fn install_version_with_assets(
         let asset_manager = AssetManager::new_with_assets_dir(effective_assets_dir);
         asset_manager.ensure_assets(window, asset_index_ref).await?;
     } else {
-        let default_index = effective_assets_dir.join("indexes").join(format!("{}.json", version));
+        let default_index = effective_assets_dir
+            .join("indexes")
+            .join(format!("{}.json", version));
         let needs_fallback = !default_index.exists()
-            || fs::metadata(&default_index).await.map(|m| m.len() == 0).unwrap_or(true)
-            || fs::read_to_string(&default_index).await.map(|s| serde_json::from_str::<serde_json::Value>(&s).is_err()).unwrap_or(true);
+            || fs::metadata(&default_index)
+                .await
+                .map(|m| m.len() == 0)
+                .unwrap_or(true)
+            || fs::read_to_string(&default_index)
+                .await
+                .map(|s| serde_json::from_str::<serde_json::Value>(&s).is_err())
+                .unwrap_or(true);
         if needs_fallback {
             let _ = fs::write(&default_index, r#"{"objects":{}}"#).await;
         }

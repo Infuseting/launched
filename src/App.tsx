@@ -23,7 +23,19 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (launcherState.optionalModsModalOpen) {
+        // Installation owns the overlay until completion; Escape must not close a page underneath it.
+        if (launcherState.isInstallingUpdate) {
+          e.preventDefault();
+          return;
+        }
+        if (
+          launcherState.updateManifest &&
+          launcherState.dismissedUpdateVersion !==
+            launcherState.updateManifest.version
+        ) {
+          e.preventDefault();
+          handlers.handleDismissUpdatePrompt();
+        } else if (launcherState.optionalModsModalOpen) {
           e.preventDefault();
           handlers.handleCloseOptionalMods();
         } else if (launcherState.crackModalOpen) {
@@ -32,13 +44,6 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
         } else if (launcherState.deviceCodeModalOpen) {
           e.preventDefault();
           handlers.handleDeviceCodeModalToggle(false);
-        } else if (
-          launcherState.updateManifest &&
-          !launcherState.isInstallingUpdate &&
-          launcherState.dismissedUpdateVersion !== launcherState.updateManifest.version
-        ) {
-          e.preventDefault();
-          handlers.handleDismissUpdatePrompt();
         } else if (launcherState.isServerSelectOpen) {
           e.preventDefault();
           handlers.handleServerSelectToggle(false);
@@ -55,66 +60,102 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
 
   return (
     <Layout>
-      {launcherState.discordChecking ? <div role="status" className="flex h-full items-center justify-center gap-2 bg-neutral-950 text-sm text-white/60">
-        <LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />
-        Chargement…
-      </div> : !launcherState.discordUser && !launcherState.discordSkipped ? <>
-        <DiscordLoginScreen state={launcherState} handlers={handlers} />
-        <UpdatePromptModal state={launcherState} handlers={handlers} />
-      </> :
-      <div className="relative w-full h-full">
-        <MainScreen handlers={handlers} />
-        {launcherState.sessionsLoading && <p role="status" className="absolute inset-x-8 top-24 z-40 rounded-2xl bg-neutral-900/95 p-4 text-center text-sm text-white/80">Chargement de vos sessions…</p>}
-        {(launcherState.sessionsError || (!launcherState.sessionsLoading && launcherState.globalSessions.length === 0)) && <div className="absolute inset-x-8 top-24 z-40 rounded-2xl border border-white/10 bg-neutral-900/95 p-5 text-center text-white">
-          <p role={launcherState.sessionsError ? 'alert' : 'status'} className="text-sm">{launcherState.sessionsError || (launcherState.discordSkipped ? 'Aucune session publique disponible.' : 'Aucune session accessible pour ce compte Discord. Demandez un accès au créateur de votre session.')}</p>
-          <button type="button" disabled={launcherState.sessionsLoading} onClick={() => void handlers.handleRefreshSessions()} className="mt-3 min-h-11 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20 disabled:opacity-50">Actualiser les sessions</button>
-        </div>}
+      {launcherState.discordChecking ? (
+        <div
+          role="status"
+          className="flex h-full items-center justify-center gap-2 bg-neutral-950 text-sm text-white/60"
+        >
+          <LoaderCircle
+            aria-hidden="true"
+            className="h-4 w-4 motion-safe:animate-spin"
+          />
+          Chargement…
+        </div>
+      ) : !launcherState.discordUser && !launcherState.discordSkipped ? (
+        <>
+          <DiscordLoginScreen state={launcherState} handlers={handlers} />
+          <UpdatePromptModal state={launcherState} handlers={handlers} />
+        </>
+      ) : (
+        <div className="relative w-full h-full">
+          <MainScreen handlers={handlers} />
+          {launcherState.sessionsLoading && (
+            <p
+              role="status"
+              className="absolute inset-x-8 top-24 z-40 rounded-2xl bg-neutral-900/95 p-4 text-center text-sm text-white/80"
+            >
+              Chargement de vos sessions…
+            </p>
+          )}
+          {(launcherState.sessionsError ||
+            (!launcherState.sessionsLoading &&
+              launcherState.globalSessions.length === 0)) && (
+            <div className="absolute inset-x-8 top-24 z-40 rounded-2xl border border-white/10 bg-neutral-900/95 p-5 text-center text-white">
+              <p
+                role={launcherState.sessionsError ? 'alert' : 'status'}
+                className="text-sm"
+              >
+                {launcherState.sessionsError ||
+                  (launcherState.discordSkipped
+                    ? 'Aucune session publique disponible.'
+                    : 'Aucune session accessible pour ce compte Discord. Demandez un accès au créateur de votre session.')}
+              </p>
+              <button
+                type="button"
+                disabled={launcherState.sessionsLoading}
+                onClick={() => void handlers.handleRefreshSessions()}
+                className="mt-3 min-h-11 rounded-lg bg-white/10 px-4 text-sm hover:bg-white/20 disabled:opacity-50"
+              >
+                Actualiser les sessions
+              </button>
+            </div>
+          )}
 
-        <SettingsModal
-          isOpen={launcherState.isSettingsOpen}
-          state={launcherState}
-          handlers={handlers}
-        />
+          <SettingsModal
+            isOpen={launcherState.isSettingsOpen}
+            state={launcherState}
+            handlers={handlers}
+          />
 
-        <ServerSelectModal
-          isOpen={launcherState.isServerSelectOpen}
-          state={launcherState}
-          onSelect={async (index) => {
-            await handlers.handleSessionSelect(index);
-          }}
-          onClose={() => handlers.handleServerSelectToggle(false)}
-          onRefresh={handlers.handleRefreshSessions}
-          onFetchAssets={handlers.fetchAssetMetadata}
-          onOpenOptionalMods={(session) => handlers.handleOpenOptionalMods(session)}
-        />
+          <ServerSelectModal
+            isOpen={launcherState.isServerSelectOpen}
+            state={launcherState}
+            onSelect={async (index) => {
+              await handlers.handleSessionSelect(index);
+            }}
+            onClose={() => handlers.handleServerSelectToggle(false)}
+            onRefresh={handlers.handleRefreshSessions}
+            onFetchAssets={handlers.fetchAssetMetadata}
+            onOpenOptionalMods={(session) =>
+              handlers.handleOpenOptionalMods(session)
+            }
+          />
 
-        <MicrosoftDeviceCodeModal
-          isOpen={launcherState.deviceCodeModalOpen}
-          payload={launcherState.deviceCodePayload}
-          errorMessage={launcherState.deviceCodeError}
-          onClose={() => handlers.handleDeviceCodeModalToggle(false)}
-        />
+          <MicrosoftDeviceCodeModal
+            isOpen={launcherState.deviceCodeModalOpen}
+            payload={launcherState.deviceCodePayload}
+            errorMessage={launcherState.deviceCodeError}
+            onClose={() => handlers.handleDeviceCodeModalToggle(false)}
+          />
 
-        <UpdatePromptModal
-          state={launcherState}
-          handlers={handlers}
-        />
+          <UpdatePromptModal state={launcherState} handlers={handlers} />
 
-        <CrackModal
-          isOpen={launcherState.crackModalOpen}
-          defaultPseudo={launcherState.crackModalDefaultPseudo}
-          onResolve={handlers.handleCrackModalResolve}
-        />
+          <CrackModal
+            isOpen={launcherState.crackModalOpen}
+            defaultPseudo={launcherState.crackModalDefaultPseudo}
+            onResolve={handlers.handleCrackModalResolve}
+          />
 
-        <OptionalModsModal
-          isOpen={launcherState.optionalModsModalOpen}
-          session={launcherState.optionalModsModalSession}
-          isFirstSync={launcherState.optionalModsIsFirstSync}
-          hasUpdates={launcherState.optionalModsHasUpdates}
-          onClose={handlers.handleCloseOptionalMods}
-          onSave={handlers.handleSaveOptionalMods}
-        />
-      </div>}
+          <OptionalModsModal
+            isOpen={launcherState.optionalModsModalOpen}
+            session={launcherState.optionalModsModalSession}
+            isFirstSync={launcherState.optionalModsIsFirstSync}
+            hasUpdates={launcherState.optionalModsHasUpdates}
+            onClose={handlers.handleCloseOptionalMods}
+            onSave={handlers.handleSaveOptionalMods}
+          />
+        </div>
+      )}
     </Layout>
   );
 };

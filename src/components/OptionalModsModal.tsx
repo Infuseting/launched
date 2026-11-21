@@ -1,3 +1,4 @@
+import { useModalFocus } from '../hooks/useModalFocus';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -26,7 +27,11 @@ interface OptionalModsModalProps {
   isFirstSync?: boolean;
   hasUpdates?: boolean;
   onClose: () => void;
-  onSave: (sessionName: string, enabledFiles: string[], allOptionalFiles: string[]) => Promise<void>;
+  onSave: (
+    sessionName: string,
+    enabledFiles: string[],
+    allOptionalFiles: string[],
+  ) => Promise<void>;
 }
 
 function formatBytes(bytesStr: string): string {
@@ -54,6 +59,7 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const dialogRef = useModalFocus(isOpen && !!session, 60);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +96,11 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
       .catch((err) => {
         if (!isMounted) return;
         console.error('Failed to load optional files:', err);
-        setError(typeof err === 'string' ? err : 'Impossible de récupérer la liste des fichiers optionnels.');
+        setError(
+          typeof err === 'string'
+            ? err
+            : 'Impossible de récupérer la liste des fichiers optionnels.',
+        );
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -108,7 +118,7 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
       (f) =>
         f.name.toLowerCase().includes(q) ||
         f.folder.toLowerCase().includes(q) ||
-        f.destPath.toLowerCase().includes(q)
+        f.destPath.toLowerCase().includes(q),
     );
 
     const map: Record<string, OptionalFileItem[]> = Object.create(null);
@@ -183,7 +193,13 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
       await onSave(session.name, Array.from(selectedPaths), allOptional);
     } catch (err) {
       console.error('Failed to save optional files:', err);
-      setError(typeof err === 'string' ? err : err instanceof Error ? err.message : 'Erreur lors de la sauvegarde des modifications.');
+      setError(
+        typeof err === 'string'
+          ? err
+          : err instanceof Error
+            ? err.message
+            : 'Erreur lors de la sauvegarde des modifications.',
+      );
     } finally {
       setSaving(false);
     }
@@ -209,6 +225,8 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
 
           {/* Modal Container */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="optional-files-title"
@@ -236,12 +254,15 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 id="optional-files-title" className="font-bold text-base tracking-tight text-white">
+                    <h3
+                      id="optional-files-title"
+                      className="font-bold text-base tracking-tight text-white"
+                    >
                       {isUpdateMode
                         ? 'Mises à jour des fichiers optionnels'
                         : isFirstSync
-                        ? 'Personnalisez votre modpack'
-                        : 'Fichiers & Mods Optionnels'}
+                          ? 'Personnalisez votre modpack'
+                          : 'Fichiers & Mods Optionnels'}
                     </h3>
                     {session && (
                       <span className="text-[11px] font-medium text-emerald-300 bg-emerald-500/15 px-2.5 py-0.5 rounded-lg border border-emerald-500/25">
@@ -253,8 +274,8 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
                     {isUpdateMode
                       ? 'Des versions plus récentes sont disponibles sur le serveur pour vos fichiers optionnels.'
                       : isFirstSync
-                      ? 'Sélectionnez les mods, shaders ou packs de textures optionnels à télécharger.'
-                      : 'Activez ou désactivez les éléments optionnels sans avoir à tout retélécharger.'}
+                        ? 'Sélectionnez les mods, shaders ou packs de textures optionnels à télécharger.'
+                        : 'Activez ou désactivez les éléments optionnels sans avoir à tout retélécharger.'}
                   </p>
                 </div>
               </div>
@@ -271,7 +292,10 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
             </div>
 
             {/* Toolbar: Search & Select All */}
-            <fieldset disabled={loading || saving || !loaded} className="p-4 px-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between gap-4 flex-shrink-0">
+            <fieldset
+              disabled={loading || saving || !loaded}
+              className="p-4 px-6 border-b border-white/5 bg-white/[0.02] flex items-center justify-between gap-4 flex-shrink-0"
+            >
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -313,10 +337,13 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
                   </div>
                   <div>
                     <p className="text-xs font-bold text-amber-200">
-                      {updateFiles.length} mise{updateFiles.length > 1 ? 's' : ''} à jour disponible{updateFiles.length > 1 ? 's' : ''}
+                      {updateFiles.length} mise
+                      {updateFiles.length > 1 ? 's' : ''} à jour disponible
+                      {updateFiles.length > 1 ? 's' : ''}
                     </p>
                     <p className="text-[11px] text-amber-200/70">
-                      Une nouvelle version est disponible sur le serveur pour vos fichiers optionnels.
+                      Une nouvelle version est disponible sur le serveur pour
+                      vos fichiers optionnels.
                     </p>
                   </div>
                 </div>
@@ -337,7 +364,11 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
               {error && (
                 <div className="p-3.5 px-4 rounded-xl bg-red-500/15 border border-red-500/25 text-red-300 text-xs flex items-center justify-between">
                   <span>{error}</span>
-                  <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-200">
+                  <button
+                    type="button"
+                    onClick={() => setError(null)}
+                    className="text-red-400 hover:text-red-200"
+                  >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -346,100 +377,125 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
               {loading ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-3 text-white/40">
                   <Loader2 className="w-7 h-7 animate-spin text-emerald-400" />
-                  <span className="text-xs">Chargement des fichiers optionnels...</span>
+                  <span className="text-xs">
+                    Chargement des fichiers optionnels...
+                  </span>
                 </div>
               ) : Object.keys(groupedFiles).length === 0 ? (
                 <div className="py-16 text-center text-white/40 space-y-1">
                   <Box className="w-8 h-8 mx-auto opacity-30" />
-                  <p className="text-xs font-semibold">Aucun fichier optionnel trouvé</p>
+                  <p className="text-xs font-semibold">
+                    Aucun fichier optionnel trouvé
+                  </p>
                   <p className="text-[11px] text-white/25">
-                    {searchQuery ? 'Modifiez votre recherche.' : 'Ce serveur n’a configuré aucun fichier optionnel.'}
+                    {searchQuery
+                      ? 'Modifiez votre recherche.'
+                      : 'Ce serveur n’a configuré aucun fichier optionnel.'}
                   </p>
                 </div>
               ) : (
-                Object.entries(groupedFiles).map(([folderName, folderFiles]) => {
-                  const Icon = getFolderIcon(folderName);
-                  const allFolderSelected = folderFiles.every((f) => selectedPaths.has(f.destPath));
-                  const someFolderSelected = folderFiles.some((f) => selectedPaths.has(f.destPath));
-                  const selectedCount = folderFiles.filter((f) => selectedPaths.has(f.destPath)).length;
+                Object.entries(groupedFiles).map(
+                  ([folderName, folderFiles]) => {
+                    const Icon = getFolderIcon(folderName);
+                    const allFolderSelected = folderFiles.every((f) =>
+                      selectedPaths.has(f.destPath),
+                    );
+                    const someFolderSelected = folderFiles.some((f) =>
+                      selectedPaths.has(f.destPath),
+                    );
+                    const selectedCount = folderFiles.filter((f) =>
+                      selectedPaths.has(f.destPath),
+                    ).length;
 
-                  return (
-                    <div
-                      key={folderName}
-                      className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden"
-                    >
-                      {/* Subfolder Header with whole-folder toggle */}
-                      <div className="p-3.5 px-4 bg-white/[0.04] border-b border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                            <Icon className="w-3.5 h-3.5" />
+                    return (
+                      <div
+                        key={folderName}
+                        className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden"
+                      >
+                        {/* Subfolder Header with whole-folder toggle */}
+                        <div className="p-3.5 px-4 bg-white/[0.04] border-b border-white/5 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                              <Icon className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <span className="font-bold text-xs uppercase tracking-wider text-white">
+                                {folderName}
+                              </span>
+                              <span className="ml-2 text-[10px] text-white/40 font-mono">
+                                ({selectedCount}/{folderFiles.length} activé
+                                {folderFiles.length > 1 ? 's' : ''})
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="font-bold text-xs uppercase tracking-wider text-white">
-                              {folderName}
-                            </span>
-                            <span className="ml-2 text-[10px] text-white/40 font-mono">
-                              ({selectedCount}/{folderFiles.length} activé{folderFiles.length > 1 ? 's' : ''})
-                            </span>
-                          </div>
-                        </div>
 
-                        {/* Whole-folder check/uncheck button */}
-                        <button
-                          type="button"
-                          onClick={() => toggleFolder(folderName, !allFolderSelected)}
-                          disabled={saving}
-                          className={`
+                          {/* Whole-folder check/uncheck button */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleFolder(folderName, !allFolderSelected)
+                            }
+                            disabled={saving}
+                            className={`
                             px-3 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border
                             ${
                               allFolderSelected
                                 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
                                 : someFolderSelected
-                                ? 'bg-amber-500/20 border-amber-500/30 text-amber-300'
-                                : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
+                                  ? 'bg-amber-500/20 border-amber-500/30 text-amber-300'
+                                  : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
                             }
                           `}
-                        >
-                          <Check className={`w-3 h-3 ${allFolderSelected ? 'opacity-100' : 'opacity-40'}`} />
-                          <span>
-                            {allFolderSelected
-                              ? 'Dossier activé'
-                              : someFolderSelected
-                              ? 'Partiellement activé'
-                              : 'Activer tout le dossier'}
-                          </span>
-                        </button>
-                      </div>
+                          >
+                            <Check
+                              className={`w-3 h-3 ${allFolderSelected ? 'opacity-100' : 'opacity-40'}`}
+                            />
+                            <span>
+                              {allFolderSelected
+                                ? 'Dossier activé'
+                                : someFolderSelected
+                                  ? 'Partiellement activé'
+                                  : 'Activer tout le dossier'}
+                            </span>
+                          </button>
+                        </div>
 
-                      {/* Folder Files List */}
-                      <div className="divide-y divide-white/5">
-                        {folderFiles.map((file) => {
-                          const isChecked = selectedPaths.has(file.destPath);
+                        {/* Folder Files List */}
+                        <div className="divide-y divide-white/5">
+                          {folderFiles.map((file) => {
+                            const isChecked = selectedPaths.has(file.destPath);
 
-                          return (
-                            <div
-                              key={file.destPath}
-                              role="checkbox"
-                              tabIndex={saving ? -1 : 0}
-                              aria-disabled={saving}
-                              aria-label={file.name}
-                              aria-checked={isChecked}
-                              onKeyDown={(e) => {
-                                if (!saving && (e.key === ' ' || e.key === 'Enter')) {
-                                  e.preventDefault();
-                                  toggleFile(file.destPath);
+                            return (
+                              <div
+                                key={file.destPath}
+                                role="checkbox"
+                                tabIndex={saving ? -1 : 0}
+                                aria-disabled={saving}
+                                aria-label={file.name}
+                                aria-checked={isChecked}
+                                onKeyDown={(e) => {
+                                  if (
+                                    !saving &&
+                                    (e.key === ' ' || e.key === 'Enter')
+                                  ) {
+                                    e.preventDefault();
+                                    toggleFile(file.destPath);
+                                  }
+                                }}
+                                onClick={
+                                  saving
+                                    ? undefined
+                                    : () => toggleFile(file.destPath)
                                 }
-                              }}
-                              onClick={saving ? undefined : () => toggleFile(file.destPath)}
-                              className={`
+                                className={`
                                 p-3 px-4 flex items-center justify-between gap-4 transition-colors cursor-pointer outline-none focus-visible:bg-white/10
                                 ${isChecked ? 'bg-emerald-500/[0.04] hover:bg-emerald-500/[0.07]' : 'hover:bg-white/[0.03]'}
                               `}
-                            >
-                              <div className="flex items-center gap-3.5 min-w-0">
-                                {/* Checkbox */}
-                                <div
-                                  className={`
+                              >
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                  {/* Checkbox */}
+                                  <div
+                                    className={`
                                     w-5 h-5 rounded-lg border flex items-center justify-center transition-all flex-shrink-0
                                     ${
                                       isChecked
@@ -447,61 +503,65 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
                                         : 'border-white/20 bg-black/40 text-transparent'
                                     }
                                   `}
-                                >
-                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  >
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <p
+                                      className={`text-xs font-medium truncate ${isChecked ? 'text-white' : 'text-white/60'}`}
+                                    >
+                                      {file.name}
+                                    </p>
+                                    <p className="text-[10px] text-white/30 font-mono truncate">
+                                      {file.destPath}
+                                    </p>
+                                    {file.oldVersionPath && (
+                                      <p className="text-[10px] text-amber-400/90 font-mono truncate flex items-center gap-1 mt-0.5">
+                                        <RefreshCw className="w-2.5 h-2.5 animate-spin-slow" />
+                                        Remplace l&apos;ancienne version :{' '}
+                                        {file.oldVersionPath.split('/').pop()}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
 
-                                <div className="min-w-0">
-                                  <p className={`text-xs font-medium truncate ${isChecked ? 'text-white' : 'text-white/60'}`}>
-                                    {file.name}
-                                  </p>
-                                  <p className="text-[10px] text-white/30 font-mono truncate">
-                                    {file.destPath}
-                                  </p>
-                                  {file.oldVersionPath && (
-                                    <p className="text-[10px] text-amber-400/90 font-mono truncate flex items-center gap-1 mt-0.5">
-                                      <RefreshCw className="w-2.5 h-2.5 animate-spin-slow" />
-                                      Remplace l&apos;ancienne version : {file.oldVersionPath.split('/').pop()}
-                                    </p>
+                                <div className="flex items-center gap-2.5 flex-shrink-0">
+                                  {/* Size */}
+                                  <span className="text-[10px] font-mono text-white/40">
+                                    {formatBytes(file.size)}
+                                  </span>
+
+                                  {/* Status Badge */}
+                                  {file.hasUpdate ? (
+                                    <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/35 text-[10px] font-bold text-amber-300 flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                                      <ArrowUpCircle className="w-3 h-3 text-amber-400" />
+                                      Mise à jour
+                                    </span>
+                                  ) : file.isDownloaded ? (
+                                    isChecked ? (
+                                      <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-[10px] font-bold text-emerald-300">
+                                        Actif
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-[10px] font-bold text-amber-300">
+                                        Désactivé (local)
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-lg bg-sky-500/15 border border-sky-500/25 text-[10px] font-bold text-sky-300">
+                                      À télécharger
+                                    </span>
                                   )}
                                 </div>
                               </div>
-
-                              <div className="flex items-center gap-2.5 flex-shrink-0">
-                                {/* Size */}
-                                <span className="text-[10px] font-mono text-white/40">
-                                  {formatBytes(file.size)}
-                                </span>
-
-                                {/* Status Badge */}
-                                {file.hasUpdate ? (
-                                  <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/35 text-[10px] font-bold text-amber-300 flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                                    <ArrowUpCircle className="w-3 h-3 text-amber-400" />
-                                    Mise à jour
-                                  </span>
-                                ) : file.isDownloaded ? (
-                                  isChecked ? (
-                                    <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-[10px] font-bold text-emerald-300">
-                                      Actif
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-[10px] font-bold text-amber-300">
-                                      Désactivé (local)
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-lg bg-sky-500/15 border border-sky-500/25 text-[10px] font-bold text-sky-300">
-                                    À télécharger
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  },
+                )
               )}
             </div>
 
@@ -510,7 +570,9 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
               <div className="flex items-center gap-2 text-xs text-white/40">
                 <HardDrive className="w-3.5 h-3.5" />
                 <span>
-                  {selectedPaths.size} fichier{selectedPaths.size > 1 ? 's' : ''} sélectionné{selectedPaths.size > 1 ? 's' : ''}
+                  {selectedPaths.size} fichier
+                  {selectedPaths.size > 1 ? 's' : ''} sélectionné
+                  {selectedPaths.size > 1 ? 's' : ''}
                 </span>
                 {updateFiles.length > 0 && (
                   <span className="ml-2 text-amber-300/80 font-medium">
@@ -545,8 +607,8 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
                         ? 'Mettre à jour et Synchroniser'
                         : 'Enregistrer la sélection'
                       : isFirstSync
-                      ? 'Valider et Synchroniser'
-                      : 'Enregistrer'}
+                        ? 'Valider et Synchroniser'
+                        : 'Enregistrer'}
                   </span>
                 </button>
               </div>

@@ -1,8 +1,16 @@
-import React, { useState } from 'react';
+import { useModalFocus } from '../hooks/useModalFocus';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DeviceCodePayload } from '../types';
 import { open } from '@tauri-apps/plugin-shell';
-import { KeyRound, Copy, Check, ExternalLink, ShieldAlert, X } from 'lucide-react';
+import {
+  KeyRound,
+  Copy,
+  Check,
+  ExternalLink,
+  ShieldAlert,
+  X,
+} from 'lucide-react';
 
 interface MicrosoftDeviceCodeModalProps {
   isOpen: boolean;
@@ -11,20 +19,27 @@ interface MicrosoftDeviceCodeModalProps {
   onClose: () => void;
 }
 
-export const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> = ({
-  isOpen,
-  payload,
-  errorMessage,
-  onClose,
-}) => {
+export const MicrosoftDeviceCodeModal: React.FC<
+  MicrosoftDeviceCodeModalProps
+> = ({ isOpen, payload, errorMessage, onClose }) => {
+  const dialogRef = useModalFocus(isOpen, 30);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  useEffect(() => {
+    setCopied(false);
+  }, [isOpen, payload?.user_code]);
 
   const handleCopyCode = async () => {
     if (!payload?.user_code) return;
     try {
       await navigator.clipboard.writeText(payload.user_code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
     } catch (err) {
       console.error('Failed to copy user code:', err);
     }
@@ -54,6 +69,11 @@ export const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> =
 
           {/* Modal Card */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="microsoft-login-title"
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
@@ -67,8 +87,15 @@ export const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> =
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm tracking-tight text-white">Connexion Microsoft</h3>
-                  <p className="text-white/50 text-xs mt-0.5">Authentification sécurisée OAuth2</p>
+                  <h3
+                    id="microsoft-login-title"
+                    className="font-semibold text-sm tracking-tight text-white"
+                  >
+                    Connexion Microsoft
+                  </h3>
+                  <p className="text-white/50 text-xs mt-0.5">
+                    Authentification sécurisée OAuth2
+                  </p>
                 </div>
               </div>
               <button
@@ -83,7 +110,10 @@ export const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> =
 
             {/* Error Message */}
             {errorMessage && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5">
+              <div
+                role="alert"
+                className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5"
+              >
                 <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-400" />
                 <span>{errorMessage}</span>
               </div>
@@ -110,14 +140,19 @@ export const MicrosoftDeviceCodeModal: React.FC<MicrosoftDeviceCodeModalProps> =
                         : 'bg-white/10 hover:bg-white/20 text-white/90'
                     }`}
                   >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
                     <span>{copied ? 'Copié !' : 'Copier'}</span>
                   </button>
                 </div>
               </div>
 
               <p className="text-xs text-white/60 leading-relaxed">
-                Cliquez ci-dessous pour ouvrir la page officielle Microsoft et valider la connexion avec ce code.
+                Cliquez ci-dessous pour ouvrir la page officielle Microsoft et
+                valider la connexion avec ce code.
               </p>
 
               <button

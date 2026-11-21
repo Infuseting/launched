@@ -1,5 +1,12 @@
 # Project Memory: Minecraft Launcher (Rust + Tauri)
 
+> Current architecture (November 2026): the UI is local React, coordinated by
+> `src/app/launcher-controller.ts`, with typed Tauri services and a reactive state
+> store. The remote HTML/DOM-injection bridge described in the April history below
+> is no longer the active UI architecture. The website lives in the separate
+> `../launched-site` repository. See README.md and CONTRIBUTING.md for setup and
+> current quality checks; DESIGN.md describes the visual direction.
+
 ## 1. Project Context
 This project is a high-performance, multi-session Minecraft launcher built with Rust and Tauri. It aims to be ultra-optimized in terms of startup speed, RAM usage, and disk storage.
 

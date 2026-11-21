@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useModalFocus } from '../hooks/useModalFocus';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Check, X, ShieldAlert } from 'lucide-react';
 
@@ -13,15 +14,14 @@ export const CrackModal: React.FC<CrackModalProps> = ({
   defaultPseudo = '',
   onResolve,
 }) => {
+  const dialogRef = useModalFocus(isOpen, 50);
   const [pseudo, setPseudo] = useState(defaultPseudo);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setPseudo(defaultPseudo);
       setValidationError(null);
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen, defaultPseudo]);
 
@@ -40,7 +40,9 @@ export const CrackModal: React.FC<CrackModalProps> = ({
     }
 
     if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
-      setValidationError('Caractères alphanumériques et underscores uniquement.');
+      setValidationError(
+        'Caractères alphanumériques et underscores uniquement.',
+      );
       return;
     }
 
@@ -66,6 +68,11 @@ export const CrackModal: React.FC<CrackModalProps> = ({
 
           {/* Modal Card */}
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="offline-login-title"
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
@@ -79,8 +86,15 @@ export const CrackModal: React.FC<CrackModalProps> = ({
                   <User className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm tracking-tight text-white">Connexion Hors-Ligne</h3>
-                  <p className="text-white/50 text-xs mt-0.5">Serveur en mode crack / hors-ligne</p>
+                  <h3
+                    id="offline-login-title"
+                    className="font-semibold text-sm tracking-tight text-white"
+                  >
+                    Connexion Hors-Ligne
+                  </h3>
+                  <p className="text-white/50 text-xs mt-0.5">
+                    Serveur en mode crack / hors-ligne
+                  </p>
                 </div>
               </div>
               <button
@@ -95,7 +109,11 @@ export const CrackModal: React.FC<CrackModalProps> = ({
 
             {/* Error banner */}
             {validationError && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5">
+              <div
+                id="offline-login-error"
+                role="alert"
+                className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5"
+              >
                 <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-400" />
                 <span>{validationError}</span>
               </div>
@@ -104,11 +122,19 @@ export const CrackModal: React.FC<CrackModalProps> = ({
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-white/50 uppercase tracking-wider block">
+                <label
+                  htmlFor="offline-pseudo"
+                  className="text-[11px] font-medium text-white/50 uppercase tracking-wider block"
+                >
                   Pseudo Joueur
                 </label>
                 <input
-                  ref={inputRef}
+                  id="offline-pseudo"
+                  data-initial-focus
+                  aria-invalid={!!validationError}
+                  aria-describedby={
+                    validationError ? 'offline-login-error' : undefined
+                  }
                   type="text"
                   value={pseudo}
                   onChange={(e) => {
