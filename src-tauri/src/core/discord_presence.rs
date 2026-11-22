@@ -20,7 +20,7 @@ use tokio::{io::AsyncReadExt, sync::Notify, time::sleep};
 
 const LAUNCHED_APPLICATION_ID: &str = "1552256142317453423";
 const LAUNCHED_LOGO_URL: &str = "https://launched.infuseting.fr/branding/launched-presence-v2.png";
-const LAUNCHED_DISCORD_INVITE: &str = "https://discord.gg/BWaj9JzsX6";
+const LAUNCHED_DISCORD_INVITE: &str = "https://discord.gg/MT2urwnNx";
 const AGENT_JAR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/discord-presence.jar"));
 const WORKER_ENV: &str = "LAUNCHED_DISCORD_WORKER";
 const CONFIG_ENV: &str = "LAUNCHED_DISCORD_PRESENCE";
@@ -547,7 +547,7 @@ mod tests {
                     "large_image": "https://launched.infuseting.fr/branding/launched-presence-v2.png",
                     "small_image": "https://mc-heads.net/avatar/c5ef334745934f398bb12eaa40dd986e/64.png",
                 },
-                "buttons": [{"label": "Discord", "url": "https://discord.gg/BWaj9JzsX6"}],
+                "buttons": [{"label": "Discord", "url": "https://discord.gg/MT2urwnNx"}],
             })
         );
 

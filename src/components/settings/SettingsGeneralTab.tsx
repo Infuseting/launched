@@ -172,7 +172,7 @@ export const SettingsGeneralTab: React.FC<SettingsGeneralTabProps> = ({
         </div>
         <button
           type="button"
-          onClick={() => void open('https://discord.gg/BWaj9JzsX6')}
+          onClick={() => void open('https://discord.gg/MT2urwnNx')}
           className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-white/5 px-3.5 text-xs font-medium text-white/70 transition-colors hover:bg-indigo-400/10 hover:text-indigo-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-300"
         >
           Rejoindre
