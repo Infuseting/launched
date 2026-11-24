@@ -9,6 +9,7 @@ import MicrosoftDeviceCodeModal from './components/MicrosoftDeviceCodeModal';
 import UpdatePromptModal from './components/UpdatePromptModal';
 import CrackModal from './components/CrackModal';
 import { OptionalModsModal } from './components/OptionalModsModal';
+import NoticeModal from './components/NoticeModal';
 import DiscordLoginScreen from './components/DiscordLoginScreen';
 import { LoaderCircle } from 'lucide-react';
 
@@ -23,6 +24,11 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (launcherState.noticeDialog) {
+          e.preventDefault();
+          handlers.handleNoticeDialogResolve(false);
+          return;
+        }
         if (launcherState.deletingSessionName) {
           e.preventDefault();
           return;
@@ -200,6 +206,10 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           />
         </div>
       )}
+      <NoticeModal
+        dialog={launcherState.noticeDialog}
+        onResolve={handlers.handleNoticeDialogResolve}
+      />
     </Layout>
   );
 };

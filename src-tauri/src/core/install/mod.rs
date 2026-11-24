@@ -87,6 +87,14 @@ impl InstallService {
             session,
             &official_mc_path,
         );
+        log::info!(
+            "install_for_session '{}' (mc={}, loader={:?}, official_mc_path={}, assets_dir={})",
+            session.name,
+            session.minecraft,
+            selected,
+            official_mc_path.display(),
+            assets_dir.display()
+        );
 
         // 1. Install Minecraft Base and Assets
         let _ = window.emit(
@@ -99,11 +107,21 @@ impl InstallService {
             },
         );
         mojang::install_version_with_assets(&session.minecraft, Some(&assets_dir), Some(window))
-            .await?;
+            .await
+            .map_err(|e| {
+                log::error!(
+                    "Mojang install_version_with_assets failed for '{}': {}",
+                    session.minecraft,
+                    e
+                );
+                e
+            })?;
+        log::info!("Minecraft {} base & assets ready", session.minecraft);
 
         // 2. Install selected mod loaders using a strategy list.
         for installer in loader_installers() {
             if let Some((_, version)) = selected.filter(|(kind, _)| *kind == installer.kind()) {
+                log::info!("Installing {} {}", installer.loader_name(), version);
                 let _ = window.emit(
                     "sync-progress",
                     crate::core::sync::SyncProgress {
@@ -117,7 +135,16 @@ impl InstallService {
                         percentage: 0.0,
                     },
                 );
-                installer.install(session, version).await?;
+                installer.install(session, version).await.map_err(|e| {
+                    log::error!(
+                        "{} {} installation failed: {}",
+                        installer.loader_name(),
+                        version,
+                        e
+                    );
+                    e
+                })?;
+                log::info!("{} {} installed successfully", installer.loader_name(), version);
             }
         }
 

@@ -18,11 +18,18 @@ pub fn run() {
     let builder = tauri::Builder::default();
     // Forward subsequent protocol activations to the running launcher.
     #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+        log::info!(
+            "Single-instance activation received (cwd={}, args_count={})",
+            cwd,
+            args.len()
+        );
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.unminimize();
             let _ = window.show();
             let _ = window.set_focus();
+        } else {
+            log::warn!("Single-instance activation: 'main' window not found");
         }
     }));
 
@@ -87,62 +94,97 @@ pub fn run() {
             window_minimize,
             window_toggle_maximize,
             window_close,
-            window_is_maximized
+            window_is_maximized,
+            // Logging
+            crate::core::logger::log_frontend
         ])
         .setup(|app| {
+            let log_dir = app
+                .path()
+                .app_log_dir()
+                .or_else(|_| app.path().app_data_dir().map(|d| d.join("logs")))
+                .map_err(|e| format!("Could not resolve log directory: {e}"))?;
+            let latest_log_path = core::logger::init(&log_dir)?;
+
+            log::info!(
+                "=== Launched v{} starting (os={}, arch={}, mode={}, pid={}) ===",
+                env!("CARGO_PKG_VERSION"),
+                std::env::consts::OS,
+                std::env::consts::ARCH,
+                if cfg!(debug_assertions) { "debug" } else { "release" },
+                std::process::id()
+            );
+            if let Ok(exe) = std::env::current_exe() {
+                log::info!("Executable: {}", exe.display());
+            }
+            if let Ok(app_dir) = app.path().app_data_dir() {
+                log::info!("App data dir: {}", app_dir.display());
+            }
+            log::info!("Latest log file: {}", latest_log_path.display());
+
             let handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
-                if let Some(url) = event
-                    .urls()
+                let urls = event.urls();
+                log::info!("Deep link on_open_url triggered ({} url(s))", urls.len());
+                if let Some(url) = urls
                     .iter()
                     .rev()
                     .find(|url| url.scheme() == "launched")
                 {
+                    log::info!("Deep link accepted: {}", url);
                     if let Ok(mut pending) = handle.state::<DeepLinkState>().pending_url.lock() {
                         *pending = Some(url.to_string());
                     }
-                    let _ = handle.emit("deep-link-received", ());
+                    if let Err(e) = handle.emit("deep-link-received", ()) {
+                        log::warn!("Failed to emit deep-link-received event: {}", e);
+                    }
                 }
             });
             if let Some(urls) = app.deep_link().get_current()? {
+                log::info!("Cold-start deep link check found {} url(s)", urls.len());
                 if let Some(url) = urls.iter().rev().find(|url| url.scheme() == "launched") {
+                    log::info!("Cold-start deep link stored: {}", url);
                     *app.state::<DeepLinkState>().pending_url.lock().unwrap() =
                         Some(url.to_string());
                 }
             }
 
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
             let startup_handle = app.handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
+                log::debug!("Running startup blocking tasks (deep-link registration + credential migrations)");
                 // Registry and protected-storage I/O must not hold up the window's event loop.
                 #[cfg(any(windows, target_os = "linux"))]
                 if let Err(error) = startup_handle.deep_link().register_all() {
                     log::warn!("Could not register launched://: {error}");
+                } else {
+                    log::debug!("Registered launched:// protocol handler");
                 }
                 // Commands also migrate on read, serialized by the protected-storage lock.
-                if let Err(error) = auth::secrets::SecretManager::get_all_accounts(&startup_handle)
-                {
-                    log::error!("Minecraft credential migration failed: {error}");
+                match auth::secrets::SecretManager::get_all_accounts(&startup_handle) {
+                    Ok(accounts) => {
+                        log::info!("Loaded {} Microsoft account(s) at startup", accounts.len());
+                    }
+                    Err(error) => {
+                        log::error!("Minecraft credential migration failed: {error}");
+                    }
                 }
                 if let Err(error) = auth::discord::migrate_storage(&startup_handle) {
                     log::error!("Discord credential migration failed: {error}");
+                } else {
+                    log::debug!("Discord credential migration check completed");
                 }
             });
             if let Ok(app_dir) = app.path().app_data_dir() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
+                    log::debug!("Starting Discord Rich Presence launcher loop");
                     if let Err(error) = discord_presence::launcher_presence(&handle, &app_dir).await
                     {
                         log::warn!("Discord Rich Presence unavailable: {error}");
                     }
                 });
             }
+            log::info!("Tauri setup completed");
             Ok(())
         })
         .run(tauri::generate_context!())

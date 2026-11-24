@@ -20,25 +20,39 @@ pub async fn get_local_session_names(
 /// Uninstall only this session's local data; remote access and shared runtimes remain available.
 #[tauri::command]
 pub async fn delete_session(app_handle: tauri::AppHandle, session: Session) -> Result<(), String> {
+    let session_name = session.name.clone();
+    log::info!("delete_session requested for '{}'", session_name);
     let directory =
-        crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name)
+        crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session_name)
             .await?;
+    let task_session_name = session_name.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
         // Serialize with game spawning so files cannot disappear underneath a running game.
         let running = state.running_sessions.lock().unwrap();
         if running.contains_key(&directory) {
+            log::warn!(
+                "delete_session blocked: '{}' is currently running",
+                task_session_name
+            );
             return Err(
                 "Fermez Minecraft pour cette session avant de supprimer ses fichiers.".into(),
             );
         }
         SessionManager::remove_local_files(&directory)?;
         let mut settings = crate::core::settings::SettingsManager::load(&app_handle);
-        settings.sessions.remove(&session.name);
-        crate::core::settings::SettingsManager::save(&app_handle, &settings)
+        settings.sessions.remove(&task_session_name);
+        let res = crate::core::settings::SettingsManager::save(&app_handle, &settings);
+        if res.is_ok() {
+            log::info!("delete_session completed for '{}'", task_session_name);
+        }
+        res
     })
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|error| {
+        log::error!("delete_session task failed for '{}': {}", session_name, error);
+        error.to_string()
+    })?
 }
 
 #[tauri::command]
@@ -66,7 +80,14 @@ pub async fn get_sessions(
             .map_err(|e| e.to_string())?
             .to_string()
     };
-    let sessions = SessionManager::fetch_sessions(&app_handle, &servers_url).await?;
+    log::debug!("Fetching sessions from {}", servers_url);
+    let sessions = SessionManager::fetch_sessions(&app_handle, &servers_url)
+        .await
+        .map_err(|e| {
+            log::error!("get_sessions failed ({}): {}", servers_url, e);
+            e
+        })?;
+    log::info!("Fetched {} session(s) from server", sessions.len());
     {
         let mut active = state.active_session.lock().unwrap();
         if let Some(previous) = active.as_ref() {

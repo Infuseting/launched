@@ -2,6 +2,7 @@ pub mod discord_presence;
 pub mod download;
 pub mod install;
 pub mod launch;
+pub mod logger;
 pub mod meta;
 pub mod optional_files;
 pub mod retry;

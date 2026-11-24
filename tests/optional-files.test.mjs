@@ -194,7 +194,10 @@ test('manifest lookup errors abort launch and report the actual error', async ()
   assert.equal(calls('sync').length, 0);
   assert.equal(calls('launch').length, 0);
   assert.equal(fixture.state.isPreparingLaunch, false);
-  assert.match(calls('alert')[0][1], /Manifeste indisponible/);
+  assert.match(
+    fixture.state.noticeDialog?.message ?? '',
+    /Manifeste indisponible/,
+  );
   fixture.loadError = null;
   configured();
   await handlers.syncAndLoad();

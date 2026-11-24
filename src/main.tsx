@@ -4,8 +4,26 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { MotionConfig } from 'framer-motion';
 import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LauncherController } from './app/launcher-controller';
+import { createLogger, installGlobalLogBridge } from './services/logger';
 import { state } from './state';
+
+installGlobalLogBridge();
+const log = createLogger('main');
+
+window.addEventListener('error', (event) => {
+  log.error(
+    `Uncaught window error at ${event.filename || 'unknown'}:${event.lineno}:${event.colno}: ${event.message}`,
+    event.error,
+  );
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  log.error('Unhandled promise rejection', event.reason);
+});
+
+log.info('Frontend bootstrap starting');
 
 function renderFatalError(root: ReactDOM.Root, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
@@ -53,9 +71,11 @@ const root = ReactDOM.createRoot(appElement);
 
 root.render(
   <React.StrictMode>
-    <MotionConfig reducedMotion="user">
-      <App handlers={controller.getHandlers()} />
-    </MotionConfig>
+    <ErrorBoundary>
+      <MotionConfig reducedMotion="user">
+        <App handlers={controller.getHandlers()} />
+      </MotionConfig>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
 
@@ -96,7 +116,12 @@ if (import.meta.env.DEV) {
   };
 }
 
-controller.initialize().catch((error) => {
-  console.error('Failed to initialize launcher:', error);
-  renderFatalError(root, error);
-});
+controller
+  .initialize()
+  .then(() => {
+    log.info('Frontend controller initialization completed');
+  })
+  .catch((error) => {
+    log.error('Failed to initialize launcher', error);
+    renderFatalError(root, error);
+  });

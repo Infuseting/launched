@@ -78,8 +78,15 @@ pub async fn get_valid_token(app_handle: &tauri::AppHandle) -> Result<String, St
 pub async fn get_minecraft_profile(
     app_handle: tauri::AppHandle,
 ) -> Result<MinecraftProfile, String> {
-    let token = get_valid_token(&app_handle).await?;
-    fetch_minecraft_profile(&token).await
+    log::debug!("get_minecraft_profile requested");
+    let token = get_valid_token(&app_handle).await.map_err(|e| {
+        log::warn!("get_minecraft_profile token error: {}", e);
+        e
+    })?;
+    fetch_minecraft_profile(&token).await.map_err(|e| {
+        log::error!("get_minecraft_profile fetch failed: {}", e);
+        e
+    })
 }
 
 #[tauri::command]

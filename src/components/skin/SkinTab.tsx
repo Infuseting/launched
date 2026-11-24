@@ -6,6 +6,7 @@ import type { SkinEntry, MinecraftProfile } from '../../services/skin';
 import Skin3DViewer from './Skin3DViewer';
 import SkinUploadForm from './SkinUploadForm';
 import SkinLibraryGrid from './SkinLibraryGrid';
+import NoticeModal from '../NoticeModal';
 import {
   Play,
   Pause,
@@ -41,6 +42,7 @@ export const SkinTab: React.FC = () => {
   const [uploadName, setUploadName] = useState('');
   const [uploadB64, setUploadB64] = useState<string | null>(null);
   const [animating, setAnimating] = useState(!reducedMotion);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   const notify = useCallback((type: 'ok' | 'err', msg: string) => {
     if (type === 'ok') {
@@ -208,8 +210,13 @@ export const SkinTab: React.FC = () => {
     }
   };
 
-  const handleReset = async () => {
-    if (!confirm('Réinitialiser au skin Mojang par défaut ?')) return;
+  const handleReset = () => {
+    setConfirmResetOpen(true);
+  };
+
+  const handleConfirmReset = async (confirmed: boolean) => {
+    setConfirmResetOpen(false);
+    if (!confirmed) return;
     try {
       await skinService.resetSkin();
       setCurrentSkinB64(null);
@@ -358,6 +365,21 @@ export const SkinTab: React.FC = () => {
         }
         onApply={handleApply}
         onDelete={handleDelete}
+      />
+
+      <NoticeModal
+        dialog={
+          confirmResetOpen
+            ? {
+                title: 'Réinitialiser le skin',
+                message: 'Réinitialiser au skin Mojang par défaut ?',
+                variant: 'warning',
+                confirmLabel: 'Réinitialiser',
+                cancelLabel: 'Annuler',
+              }
+            : null
+        }
+        onResolve={(confirmed) => void handleConfirmReset(confirmed)}
       />
     </div>
   );

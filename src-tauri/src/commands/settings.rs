@@ -26,7 +26,15 @@ pub async fn save_settings(
     app_handle: tauri::AppHandle,
     settings: AppSettings,
 ) -> Result<(), String> {
-    SettingsManager::save(&app_handle, &settings)
+    log::debug!(
+        "save_settings (sessions_count={}, active_account={:?})",
+        settings.sessions.len(),
+        settings.active_account_uuid
+    );
+    SettingsManager::save(&app_handle, &settings).map_err(|e| {
+        log::error!("save_settings failed: {}", e);
+        e
+    })
 }
 
 #[tauri::command]
@@ -36,8 +44,16 @@ pub async fn ping_service(url: String) -> Result<bool, String> {
             // As long as the server responds (even a 400 for bad path), the infrastructure is up.
             // A 500+ usually means an infrastructure downtime.
             let status = res.status().as_u16();
+            if status >= 500 {
+                log::warn!("ping_service {} returned HTTP {}", url, status);
+            } else {
+                log::debug!("ping_service {} -> HTTP {}", url, status);
+            }
             Ok(status < 500)
         }
-        Err(_) => Ok(false),
+        Err(e) => {
+            log::warn!("ping_service {} failed: {}", url, e);
+            Ok(false)
+        }
     }
 }

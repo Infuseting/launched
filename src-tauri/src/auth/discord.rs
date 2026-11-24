@@ -209,20 +209,36 @@ pub async fn login_discord(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, DiscordState>,
 ) -> Result<DiscordUser, String> {
+    log::info!("login_discord started");
     let _guard = state
         .login
         .try_lock()
-        .map_err(|_| "Une connexion Discord est déjà en cours.")?;
+        .map_err(|_| {
+            log::warn!("login_discord rejected: another Discord login is already in progress");
+            "Une connexion Discord est déjà en cours."
+        })?;
     let result = tokio::select! {
         result = login(&app_handle) => result,
-        _ = state.cancel.notified() => Err("Connexion annulée.".into()),
+        _ = state.cancel.notified() => {
+            log::info!("login_discord cancelled by user");
+            Err("Connexion annulée.".into())
+        }
     };
+    match &result {
+        Ok(user) => log::info!(
+            "login_discord succeeded for user '{}' ({})",
+            user.username,
+            user.discord_id
+        ),
+        Err(e) => log::warn!("login_discord ended with error: {}", e),
+    }
     focus_launcher(&app_handle);
     result
 }
 
 #[tauri::command]
 pub fn cancel_discord_login(state: tauri::State<'_, DiscordState>) {
+    log::info!("cancel_discord_login requested");
     state.cancel.notify_waiters();
 }
 

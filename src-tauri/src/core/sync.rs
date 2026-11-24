@@ -213,7 +213,17 @@ impl SyncService {
         sync_dirs: &str,
         enabled_optional_files: Option<&[String]>,
     ) -> Result<(), String> {
-        let manifest = self.fetch_manifest(app, manifest_url).await?;
+        log::info!(
+            "SyncService::sync starting (manifest_url={}, base_dir={}, sync_dirs={})",
+            manifest_url,
+            base_dir.display(),
+            sync_dirs
+        );
+        let manifest = self.fetch_manifest(app, manifest_url).await.map_err(|e| {
+            log::error!("Failed to fetch/validate manifest from {}: {}", manifest_url, e);
+            e
+        })?;
+        log::info!("Fetched sync manifest with {} entries", manifest.len());
         let sync_dir_list: Vec<&str> = sync_dirs
             .split(',')
             .map(|s| s.trim())

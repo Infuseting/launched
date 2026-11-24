@@ -158,6 +158,15 @@ export interface LauncherStateModel {
   optionalModsModalSession: Session | null;
   optionalModsIsFirstSync: boolean;
   optionalModsHasUpdates: boolean;
+  noticeDialog: NoticeDialogState | null;
+}
+
+export interface NoticeDialogState {
+  title: string;
+  message: string;
+  variant?: 'error' | 'info' | 'warning';
+  confirmLabel?: string;
+  cancelLabel?: string;
 }
 
 export interface AppHandlers {
@@ -184,6 +193,7 @@ export interface AppHandlers {
   handleSessionSelect: (index: number) => Promise<void>;
   handleDeleteSession: (session: Session) => Promise<void>;
   handleCrackModalResolve: (pseudo: string | null) => void;
+  handleNoticeDialogResolve: (confirmed: boolean) => void;
   handleOpenOptionalMods: (session: Session, isFirstSync?: boolean) => void;
   handleCloseOptionalMods: () => void;
   handleSaveOptionalMods: (

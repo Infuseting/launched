@@ -62,6 +62,7 @@ const rawState: LauncherStateModel = {
   optionalModsModalSession: null,
   optionalModsIsFirstSync: false,
   optionalModsHasUpdates: false,
+  noticeDialog: null,
 };
 
 /** Keep previous snapshots immutable while preserving unchanged branch identities. */

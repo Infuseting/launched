@@ -5,6 +5,7 @@ import { state } from '../state';
 import type {
   AppHandlers,
   DeviceCodePayload,
+  NoticeDialogState,
   Session,
   SyncProgress,
   UpdateDownloadEvent,
@@ -63,6 +64,42 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+type ControllerLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+function controllerLog(
+  level: ControllerLogLevel,
+  message: string,
+  error?: unknown,
+): void {
+  const details =
+    error === undefined
+      ? message
+      : `${message}: ${
+          error instanceof Error && error.stack
+            ? `${error.message}\n${error.stack}`
+            : getErrorMessage(error)
+        }`;
+  if (level === 'error') {
+    console.error(`[controller] ${details}`);
+  } else if (level === 'warn') {
+    console.warn(`[controller] ${details}`);
+  } else if (level === 'debug') {
+    console.debug(`[controller] ${details}`);
+  } else {
+    console.info(`[controller] ${details}`);
+  }
+  const bridge = (
+    globalThis as {
+      __launchedLogBridge?: (
+        lvl: ControllerLogLevel,
+        target: string,
+        msg: string,
+      ) => void;
+    }
+  ).__launchedLogBridge;
+  bridge?.(level, 'controller', details);
+}
+
 /**
  * Coordinates launcher workflows (auth, sync, status polling, updates) and
  * exposes an UI-focused handlers contract consumed by React components.
@@ -73,6 +110,8 @@ export class LauncherController {
   private currentCrackModalResolve: ((pseudo: string | null) => void) | null =
     null;
   private currentOptionalModsResolve: ((confirmed: boolean) => void) | null =
+    null;
+  private currentNoticeDialogResolve: ((confirmed: boolean) => void) | null =
     null;
   private optionalModsSaving = false;
   private launchPending = false;
@@ -132,6 +171,13 @@ export class LauncherController {
           this.currentCrackModalResolve(pseudo);
         }
       },
+      handleNoticeDialogResolve: (confirmed: boolean) => {
+        if (this.currentNoticeDialogResolve) {
+          this.currentNoticeDialogResolve(confirmed);
+          this.currentNoticeDialogResolve = null;
+        }
+        state.noticeDialog = null;
+      },
       handleOpenOptionalMods: (session, isFirstSync) => {
         if (
           state.isSyncing ||
@@ -166,9 +212,11 @@ export class LauncherController {
    * Loads startup data and activates background polling/update checks.
    */
   public async initialize(): Promise<void> {
+    controllerLog('info', 'LauncherController.initialize() starting');
     this.registerExternalLinksHandler();
     await this.registerDeepLinkHandler();
     await listen('discord-auth-required', () => {
+      controllerLog('warn', 'Received discord-auth-required event');
       void this.handleDiscordAuthRequired();
     });
     await this.loadInitialData();
@@ -187,10 +235,12 @@ export class LauncherController {
 
     void this.refreshStatuses();
     this.startStatusPolling();
+    controllerLog('info', 'LauncherController.initialize() finished');
   }
 
   private async registerDeepLinkHandler(): Promise<void> {
     await listen('deep-link-received', () => {
+      controllerLog('info', 'Received deep-link-received event');
       this.deepLinkRequested = true;
       return this.loadSessions();
     });
@@ -388,6 +438,7 @@ export class LauncherController {
 
     const session = state.globalSessions[state.activeSessionIndex];
     if (!session) return;
+    controllerLog('info', `syncAndLoad started for session "${session.name}"`);
     this.launchPending = true;
     state.isPreparingLaunch = true;
     state.syncProgress = {
@@ -470,7 +521,9 @@ export class LauncherController {
 
       try {
         if (accessRevision !== this.discordAccessRevision) return;
+        controllerLog('info', `Invoking syncSession for "${session.name}"`);
         await sessionService.syncSession(session);
+        controllerLog('info', `syncSession completed for "${session.name}"`);
       } finally {
         unlistenSyncProgress();
       }
@@ -482,17 +535,23 @@ export class LauncherController {
       const sessionSettings =
         state.currentSettings.sessions[session.name] ??
         state.currentSettings.defaultSettings;
+      controllerLog(
+        'info',
+        `Invoking launchGame for "${session.name}" (showLogs=${sessionSettings.showLogs}, crack=${Boolean(crackPseudo)})`,
+      );
       await sessionService.launchGame(
         session,
         sessionSettings.showLogs,
         crackPseudo,
       );
+      controllerLog('info', `launchGame returned for "${session.name}"`);
 
       setTimeout(() => {
         state.isSyncing = false;
         if (this.deepLinkRequested) void this.loadSessions();
       }, 3000);
     } catch (error) {
+      controllerLog('error', `syncAndLoad failed for "${session.name}"`, error);
       if (accessRevision === this.discordAccessRevision)
         await this.handleLaunchError(error);
       state.isSyncing = false;
@@ -519,20 +578,42 @@ export class LauncherController {
     state.authCache = await this.loginMicrosoftWithModal();
   }
 
+  private showNoticeDialog(dialog: NoticeDialogState): Promise<boolean> {
+    if (this.currentNoticeDialogResolve) {
+      this.currentNoticeDialogResolve(false);
+      this.currentNoticeDialogResolve = null;
+    }
+    state.noticeDialog = dialog;
+    return new Promise<boolean>((resolve) => {
+      this.currentNoticeDialogResolve = resolve;
+    });
+  }
+
   private async handleLaunchError(error: unknown): Promise<void> {
     const errorMessage = getErrorMessage(error);
+    controllerLog('error', `Launch error: ${errorMessage}`);
 
     if (errorMessage.includes('compte invalide a ete supprime')) {
       try {
         const refreshedAuth = await this.loginMicrosoftWithModal();
         state.authCache = refreshedAuth;
         state.allAccounts = await authService.getAllAccounts();
-      } catch (error) {
-        alert(`Reconnexion Microsoft echouee: ${getErrorMessage(error)}`);
+      } catch (reconnectError) {
+        controllerLog('error', 'Microsoft reconnection failed', reconnectError);
+        void this.showNoticeDialog({
+          title: 'Reconnexion Microsoft échouée',
+          message: getErrorMessage(reconnectError),
+          variant: 'error',
+        });
+        return;
       }
     }
 
-    alert(`Failed to launch game: ${errorMessage}`);
+    void this.showNoticeDialog({
+      title: 'Échec du lancement',
+      message: errorMessage,
+      variant: 'error',
+    });
   }
 
   private async fetchPlayerCount(): Promise<void> {
@@ -720,6 +801,10 @@ export class LauncherController {
     state.discordError = null;
     try {
       if (state.currentSettings.discordLoginSkipped === true) {
+        controllerLog(
+          'info',
+          'Discord login skipped by saved preference, activating public access',
+        );
         await this.activatePublicAccess();
         return;
       }
@@ -727,15 +812,23 @@ export class LauncherController {
       if (revision !== this.discordAccessRevision) return;
       state.discordUser = user;
       if (user) {
+        controllerLog('info', `Restored Discord user: ${user.username}`);
         state.discordChecking = false;
         await Promise.all([
           this.rememberDiscordChoice(false),
           this.loadSessions(),
         ]);
       } else if (state.currentSettings.discordLoginSkipped === false) {
+        controllerLog(
+          'info',
+          'No saved Discord session, activating public access',
+        );
         await this.activatePublicAccess();
+      } else {
+        controllerLog('info', 'No Discord session; awaiting user choice');
       }
     } catch (error) {
+      controllerLog('error', 'restoreDiscord failed', error);
       if (revision === this.discordAccessRevision) {
         if (state.currentSettings.discordLoginSkipped !== undefined) {
           await this.activatePublicAccess(false);
@@ -804,15 +897,18 @@ export class LauncherController {
       this.optionalModsSaving
     )
       return;
+    controllerLog('info', 'handleDiscordLogin started');
     state.discordBusy = true;
     state.discordError = null;
     try {
       const user = await authService.loginDiscord();
+      controllerLog('info', `Discord login succeeded: ${user.username}`);
       this.clearDiscordState();
       state.discordUser = user;
       await this.rememberDiscordChoice(false);
       await this.loadSessions();
     } catch (error) {
+      controllerLog('warn', 'handleDiscordLogin failed', error);
       state.discordError = getErrorMessage(error);
     } finally {
       state.discordBusy = false;
@@ -827,13 +923,16 @@ export class LauncherController {
       this.optionalModsSaving
     )
       return;
+    controllerLog('info', 'handleDiscordLogout started');
     state.discordBusy = true;
     state.discordError = null;
     try {
       await authService.logoutDiscord();
       this.clearDiscordState();
       await this.activatePublicAccess();
+      controllerLog('info', 'handleDiscordLogout completed');
     } catch (error) {
+      controllerLog('error', 'handleDiscordLogout failed', error);
       state.discordError = getErrorMessage(error);
     } finally {
       state.discordBusy = false;
@@ -983,7 +1082,7 @@ export class LauncherController {
       }
     } catch (error) {
       state.updateError = getErrorMessage(error);
-      console.error('Failed to check for updates:', error);
+      controllerLog('error', 'Failed to check for updates', error);
     } finally {
       state.isCheckingUpdate = false;
     }
@@ -1016,11 +1115,17 @@ export class LauncherController {
     state.updateError = null;
 
     try {
+      controllerLog(
+        'info',
+        `Installing app update v${this.pendingUpdate.version}`,
+      );
       await this.performUpdate(this.pendingUpdate.install, (pct) => {
         state.updateInstallProgress = Math.min(100, Math.max(0, pct));
       });
       state.updateInstallProgress = 100;
+      controllerLog('info', 'App update installed successfully');
     } catch (error) {
+      controllerLog('error', 'App update installation failed', error);
       state.updateError = getErrorMessage(error);
     } finally {
       state.isInstallingUpdate = false;
@@ -1079,7 +1184,12 @@ export class LauncherController {
       state.authCache = auth;
       state.allAccounts = await authService.getAllAccounts();
     } catch (error) {
-      alert(`Connexion Microsoft echouee: ${getErrorMessage(error)}`);
+      controllerLog('error', 'Microsoft account login failed', error);
+      void this.showNoticeDialog({
+        title: 'Connexion Microsoft échouée',
+        message: getErrorMessage(error),
+        variant: 'error',
+      });
     }
   }
 
@@ -1087,8 +1197,9 @@ export class LauncherController {
     try {
       const settings = toPlainObject(state.currentSettings);
       await settingsService.saveSettingsInternal(settings);
+      controllerLog('debug', 'Settings saved');
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      controllerLog('error', 'Failed to save settings', error);
     }
   }
 
@@ -1107,10 +1218,19 @@ export class LauncherController {
     );
     if (!current) throw new Error('Cette session n’est plus disponible.');
 
+    controllerLog('info', `Deleting local session "${current.name}"`);
     state.deletingSessionName = current.name;
     try {
       await sessionService.deleteSession(toPlainObject(current));
       delete state.currentSettings.sessions[current.name];
+      controllerLog('info', `Deleted local session "${current.name}"`);
+    } catch (error) {
+      controllerLog(
+        'error',
+        `Failed to delete session "${current.name}"`,
+        error,
+      );
+      throw error;
     } finally {
       state.deletingSessionName = null;
       if (this.deepLinkRequested) void this.loadSessions();
