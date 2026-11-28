@@ -210,13 +210,10 @@ pub async fn login_discord(
     state: tauri::State<'_, DiscordState>,
 ) -> Result<DiscordUser, String> {
     log::info!("login_discord started");
-    let _guard = state
-        .login
-        .try_lock()
-        .map_err(|_| {
-            log::warn!("login_discord rejected: another Discord login is already in progress");
-            "Une connexion Discord est déjà en cours."
-        })?;
+    let _guard = state.login.try_lock().map_err(|_| {
+        log::warn!("login_discord rejected: another Discord login is already in progress");
+        "Une connexion Discord est déjà en cours."
+    })?;
     let result = tokio::select! {
         result = login(&app_handle) => result,
         _ = state.cancel.notified() => {

@@ -1,42 +1,17 @@
-# Project Memory: Minecraft Launcher (Rust + Tauri)
+# Project Memory: Launched (React + Tauri / Rust)
 
-> Current architecture (November 2026): the UI is local React, coordinated by
-> `src/app/launcher-controller.ts`, with typed Tauri services and a reactive state
-> store. The remote HTML/DOM-injection bridge described in the April history below
-> is no longer the active UI architecture. The website lives in the separate
-> `../launched-site` repository. See README.md and CONTRIBUTING.md for setup and
-> current quality checks; DESIGN.md describes the visual direction.
+## 1. Architecture actuelle
+- **Frontend local React + TypeScript** (`src/`), sans chargement HTML distant ni pont d'injection DOM.
+- **Orchestration UI** : `src/app/launcher-controller.ts`, état réactif dans `src/state.ts`, contrats typés dans `src/types.ts`, adaptateurs Tauri dans `src/services/`.
+- **Backend Rust / Tauri** (`src-tauri/src/`) :
+  - `commands/` : commandes IPC Tauri (`auth`, `game`, `session`, `settings`, `skin`).
+  - `auth/` : OAuth Discord (PKCE + deep-link `launched://`) et Microsoft Device Code + Xbox Live + Minecraft (`DPAPI` sous Windows / `keyring` sous macOS et Linux).
+  - `core/` : installation Vanilla / Fabric / Forge / NeoForge (`core/install/`), moteur de téléchargement SHA-1/MD5 (`core/download/`), synchronisation MD5 et fichiers optionnels (`core/sync.rs`, `core/optional_files.rs`), construction sécurisée d'arguments JVM/jeu et lancement (`core/launch/`), agent Java Discord Rich Presence (`src-tauri/java/`).
+- **Site & API compagnon** : dépôt `../launched-site` (Next.js 16 + Prisma + PostgreSQL + SFTPGo).
+- **Bot Discord compagnon** : dépôt `../launched-bot` (Node.js 24 + MongoDB).
 
-## 1. Project Context
-This project is a high-performance, multi-session Minecraft launcher built with Rust and Tauri. It aims to be ultra-optimized in terms of startup speed, RAM usage, and disk storage.
-
-## 2. Architectural Decisions
-- **Framework:** Tauri for a lightweight, secure WebView-based UI.
-- **Styling:** Tailwind CSS for all frontend components.
-- **UI Logic:** Remote HTML loading from a session-specific `htmlPath`.
-- **Bridge Pattern:** A Rust-injected JavaScript bridge binds element IDs (e.g., `#playButton`) to Tauri commands.
-- **Storage:** Shared `.minecraft/versions` for common JARs; modpack-specific files are stored separately.
-- **Syncing:** MD5-based file synchronization for folders defined in `syncDir`.
-- **Auth:** Strategy pattern to support multiple authentication methods (Microsoft, SSO, etc.).
-
-## 3. Engineering Standards
-- **Coding:** Rust for the backend, focusing on safety and performance.
-- **Style:** SOLID and KISS principles; Javadoc-style documentation comments (`///` and `/** */`).
-- **Maintainability:** Modular architecture with dedicated services for each core function.
-
-## 4. Current State
-- [2026-04-12] Design document finalized and approved.
-- [2026-04-12] Project memory initialized.
-- [2026-04-12] Project scaffolded (Tauri + Vite + Tailwind CSS v4).
-- [2026-04-12] Session management implemented (fetch `servers.json`).
-- [2026-04-12] Sync service implemented (MD5-based directory sync with cleanup).
-- [2026-04-12] Launch engine implemented (real argument resolution and process management).
-- [2026-04-12] Microsoft authentication implemented (full token exchange flow).
-- [2026-04-12] UI Bridge implemented (dynamic ID-based injection for remote HTML).
-- [2026-04-12] Frontend session selector implemented.
-- [2026-04-12] Core launcher features completed and verified.
-
-## 5. Known Constraints
-- Remote HTML must be reachable or fallback to a local default.
-- `servers.json` is the source of truth for all sessions.
-- Invalid session configurations (e.g., both Forge and Fabric) must be logged and handled gracefully.
+## 2. Règles techniques clés
+- Stockage `.minecraft` partagé (`versions`, `libraries`, `assets`, `runtime`) avec données de session isolées par instance.
+- Les réglages et comptes utilisent des écritures atomiques et ne dégradent jamais des données corrompues en listes vides silencieuses.
+- Toujours valider côté serveur/Rust : versions Minecraft/loaders sans traversée de chemin, archives ZIP via `enclosed_name()`, et filtrage des flags JVM distants dangereux (`-javaagent`, `-agentlib`, etc.).
+- Voir `README.md`, `CONTRIBUTING.md` et `DESIGN.md` pour l'installation, les vérifications qualité et le design.

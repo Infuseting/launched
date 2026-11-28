@@ -1,9 +1,33 @@
 use crate::core::download::{Checksum, DownloadEngine, DownloadTask};
-use crate::core::meta::models::{AssetIndexManifest, AssetIndexReference};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
 const MOJANG_RESOURCES_BASE_URL: &str = "https://resources.download.minecraft.net";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetIndexReference {
+    pub id: String,
+    pub sha1: Option<String>,
+    pub size: Option<u64>,
+    pub url: Option<String>,
+    pub total_size: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetIndexManifest {
+    pub objects: HashMap<String, AssetObject>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetObject {
+    pub hash: String,
+    pub size: u64,
+}
 
 pub struct AssetManager {
     engine: DownloadEngine,
@@ -205,5 +229,87 @@ impl AssetManager {
         }
 
         Ok(())
+    }
+
+    /// Ensures the asset index file exists and contains valid objects, downloading from `url` when needed.
+    pub async fn ensure_index_file_on_disk(
+        assets_dir: &Path,
+        resolved_index_id: &str,
+        manifest_index_id: Option<&str>,
+        url: Option<&str>,
+    ) {
+        let indexes_dir = assets_dir.join("indexes");
+        if let Err(e) = fs::create_dir_all(&indexes_dir).await {
+            log::warn!(
+                "Failed to create asset indexes dir {:?}: {}",
+                indexes_dir,
+                e
+            );
+            return;
+        }
+        let index_path = indexes_dir.join(format!("{}.json", resolved_index_id));
+        let has_url = url.map(str::trim).is_some_and(|u| !u.is_empty());
+
+        let is_corrupted_or_missing = match fs::read_to_string(&index_path).await {
+            Ok(content) if !content.trim().is_empty() => {
+                match serde_json::from_str::<serde_json::Value>(&content) {
+                    Ok(val) if has_url => val
+                        .get("objects")
+                        .and_then(|o| o.as_object())
+                        .map_or(true, |o| o.is_empty()),
+                    Ok(_) => false,
+                    Err(_) => true,
+                }
+            }
+            _ => true,
+        };
+
+        if !is_corrupted_or_missing {
+            return;
+        }
+
+        let mut downloaded = false;
+        if let Some(trimmed_url) = url.map(str::trim).filter(|u| !u.is_empty()) {
+            let engine = DownloadEngine::new(4);
+            let task = DownloadTask {
+                url: trimmed_url.to_string(),
+                dest: index_path.clone(),
+                size: None,
+                checksum: None,
+                is_executable: false,
+                description: Some(format!("Asset Index {}", resolved_index_id)),
+            };
+            if engine.download_single(&task).await.is_ok() {
+                if let Ok(text) = fs::read_to_string(&index_path).await {
+                    if !text.trim().is_empty()
+                        && serde_json::from_str::<serde_json::Value>(&text).is_ok()
+                    {
+                        downloaded = true;
+                        if let Some(manifest_id) = manifest_index_id {
+                            let manifest_index_path =
+                                indexes_dir.join(format!("{}.json", manifest_id));
+                            if manifest_index_path != index_path && !manifest_index_path.exists() {
+                                let _ = fs::write(&manifest_index_path, &text).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !downloaded
+            && fs::read_to_string(&index_path)
+                .await
+                .map(|s| serde_json::from_str::<serde_json::Value>(&s).is_err())
+                .unwrap_or(true)
+        {
+            if let Err(e) = fs::write(&index_path, r#"{"objects":{}}"#).await {
+                log::warn!(
+                    "Failed to write fallback asset index {:?}: {}",
+                    index_path,
+                    e
+                );
+            }
+        }
     }
 }

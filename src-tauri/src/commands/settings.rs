@@ -9,14 +9,6 @@ pub async fn get_system_ram() -> Result<u32, String> {
 }
 
 #[tauri::command]
-pub async fn get_available_ram() -> Result<u32, String> {
-    use sysinfo::System;
-    let mut sys = System::new();
-    sys.refresh_memory();
-    Ok((sys.available_memory() / 1024 / 1024) as u32)
-}
-
-#[tauri::command]
 pub async fn get_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, String> {
     Ok(SettingsManager::load(&app_handle))
 }

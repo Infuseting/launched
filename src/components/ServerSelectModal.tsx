@@ -48,15 +48,17 @@ export const ServerSelectModal: React.FC<ServerSelectModalProps> = ({
   const isDeleting = !!state.deletingSessionName;
   const isBusy = state.isSyncing || state.isPreparingLaunch || isDeleting;
   // Image/asset updates must not restart the local-files check.
-  const sessionNamesKey = JSON.stringify(
-    state.globalSessions.map((session) => session.name),
+  const sessionNames = React.useMemo(
+    () => state.globalSessions.map((session) => session.name),
+    [state.globalSessions],
   );
+  const sessionNamesKey = sessionNames.join('\0');
 
   React.useEffect(() => {
     if (!isOpen || isBusy || state.sessionsLoading) return;
     let cancelled = false;
-    const sessionNames: string[] = JSON.parse(sessionNamesKey);
-    void getLocalSessionNames(sessionNames)
+    const namesToCheck = sessionNamesKey ? sessionNamesKey.split('\0') : [];
+    void getLocalSessionNames(namesToCheck)
       .then((names) => {
         if (!cancelled) setLocalSessionNames(names);
       })

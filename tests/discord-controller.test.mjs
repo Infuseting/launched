@@ -131,10 +131,12 @@ let code = ts.transpileModule(
 const mocks = {
   '@tauri-apps/api/event':
     'export const listen=async(name, callback)=>{globalThis.__discordControllerTest.eventListeners.set(name, callback);return ()=>{};};',
-  '@tauri-apps/plugin-shell': 'export const open=async()=>{};',
-  '../state': 'export const state=globalThis.__discordControllerTest.state;',
+  '../state':
+    'export const state=globalThis.__discordControllerTest.state; export const unwrapState=(v)=>structuredClone(v);',
   '../services/auth':
     'export const { getDiscordAuth, loginDiscord, logoutDiscord, continueWithoutDiscord }=globalThis.__discordControllerTest.auth;',
+  '../services/logger':
+    'export const formatError=(e)=>e instanceof Error?e.message:String(e); export const createLogger=()=>({debug:()=>{},info:()=>{},warn:()=>{},error:()=>{}});',
   '../services/sessions':
     'export const { getSessions, getActiveSessionName, fetchJson, getDeepLinkUrl, extractSessionSlugFromDeepLink, setActiveSession }=globalThis.__discordControllerTest.sessions;',
   '../services/settings':

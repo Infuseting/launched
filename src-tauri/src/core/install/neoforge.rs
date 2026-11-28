@@ -1,5 +1,6 @@
-use crate::core::install::{mojang, runtime::JreManager};
+use crate::core::install::{mojang, resolve_installer_java, run_java_installer};
 use crate::core::launch::models::VersionManifest;
+use crate::core::maven::{maven_coordinate_to_path, validate_relative_path};
 use reqwest::Client;
 use serde_json::Value;
 use std::{io::Read, path::Path};
@@ -70,7 +71,7 @@ pub async fn install_neoforge(mc_version: &str, version: &str) -> Result<(), Str
                 .and_then(|v| v.strip_suffix(']'))
                 .ok_or_else(|| format!("NeoForge installer is missing client output {}", key))?;
             paths.push(
-                crate::core::meta::prism::PrismMetaClient::maven_coordinate_to_path(coordinate)
+                maven_coordinate_to_path(coordinate)
                     .ok_or_else(|| format!("Invalid NeoForge client output {}", coordinate))?,
             );
         }
@@ -106,59 +107,14 @@ pub async fn install_neoforge(mc_version: &str, version: &str) -> Result<(), Str
         .java_version
         .as_ref()
         .or(vanilla.java_version.as_ref());
-    let component = JreManager::resolve_component_name(
+    let java_bin = resolve_installer_java(
+        &mc_path,
         Some(mc_version),
         java.map(|j| j.major_version),
         java.map(|j| j.component.as_str()),
-    );
-    let java_bin = match mojang::download_jre(component).await {
-        Ok(path) => path.join(if cfg!(windows) {
-            "bin/java.exe"
-        } else {
-            "bin/java"
-        }),
-        Err(runtime_error) => {
-            let fallback =
-                crate::core::launch::args::find_java(java.map(|j| j.major_version), &mc_path)
-                    .map_err(|e| {
-                        format!("Failed to prepare Java: {}. Fallback: {}", runtime_error, e)
-                    })?
-                    .1;
-            crate::core::install::runtime::validate_java(&fallback)
-                .await
-                .map_err(|e| {
-                    format!("Failed to prepare Java: {}. Fallback: {}", runtime_error, e)
-                })?;
-            fallback
-        }
-    };
-    let profiles = mc_path.join("launcher_profiles.json");
-    if !profiles.exists() {
-        fs::write(&profiles, "{\"profiles\":{}} ")
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-    let mut command = tokio::process::Command::new(java_bin);
-    command
-        .current_dir(&mc_path)
-        .arg("-Djava.awt.headless=true")
-        .arg("-jar")
-        .arg(&installer)
-        .arg("--installClient")
-        .arg(&mc_path);
-    #[cfg(windows)]
-    command.creation_flags(0x08000000);
-    let output = command
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run NeoForge installer: {}", e))?;
-    if !output.status.success() {
-        return Err(format!(
-            "NeoForge installer failed:\n{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
+    )
+    .await?;
+    run_java_installer(&installer, &mc_path, &java_bin, "NeoForge").await?;
 
     let output_json = mc_path
         .join("versions")
@@ -191,7 +147,9 @@ pub async fn install_neoforge(mc_version: &str, version: &str) -> Result<(), Str
 
 fn validate_generated_libraries(paths: &[String], mc_path: &Path) -> Result<(), String> {
     for relative in paths {
-        let path = mc_path.join("libraries").join(relative);
+        let safe_rel = validate_relative_path(relative)
+            .ok_or_else(|| format!("Invalid NeoForge library path: {}", relative))?;
+        let path = mc_path.join("libraries").join(safe_rel);
         if !path.is_file() || path.metadata().map(|m| m.len() == 0).unwrap_or(true) {
             return Err(format!(
                 "NeoForge client processor output missing or empty: {}",
@@ -220,11 +178,11 @@ fn validate_profile(content: &str, mc_version: &str, mc_path: &Path) -> Result<(
             .as_ref()
             .and_then(|d| d.artifact.as_ref())
             .map(|a| a.path.clone())
-            .or_else(|| {
-                crate::core::meta::prism::PrismMetaClient::maven_coordinate_to_path(&lib.name)
-            })
+            .or_else(|| maven_coordinate_to_path(&lib.name))
             .ok_or_else(|| format!("Invalid NeoForge library: {}", lib.name))?;
-        let path = mc_path.join("libraries").join(relative);
+        let safe_rel = validate_relative_path(&relative)
+            .ok_or_else(|| format!("Unsafe NeoForge library path: {}", relative))?;
+        let path = mc_path.join("libraries").join(safe_rel);
         if !path.is_file() || path.metadata().map(|m| m.len() == 0).unwrap_or(true) {
             return Err(format!(
                 "NeoForge library missing or empty: {}. Re-sync the session.",

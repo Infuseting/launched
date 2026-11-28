@@ -1,154 +1,32 @@
-use app_lib::core::install::assets::AssetManager;
+use app_lib::core::install::assets::{AssetIndexReference, AssetManager};
 use app_lib::core::install::mojang::VersionDetail;
 use app_lib::core::install::runtime::JreManager;
 use app_lib::core::launch::args::LaunchArguments;
 use app_lib::core::launch::models::VersionManifest;
-use app_lib::core::meta::models::*;
-use app_lib::core::meta::prism::PrismMetaClient;
-use app_lib::core::session::{ComponentSpec, Session};
+use app_lib::core::maven::maven_coordinate_to_path;
+use app_lib::core::session::Session;
 use std::path::PathBuf;
 
 #[test]
 fn test_maven_coordinate_resolution() {
     assert_eq!(
-        PrismMetaClient::maven_coordinate_to_path("org.ow2.asm:asm:9.5"),
+        maven_coordinate_to_path("org.ow2.asm:asm:9.5"),
         Some("org/ow2/asm/asm/9.5/asm-9.5.jar".to_string())
     );
 
     assert_eq!(
-        PrismMetaClient::maven_coordinate_to_path(
-            "net.minecraftforge:forge:1.20.1-47.2.0:universal"
-        ),
+        maven_coordinate_to_path("net.minecraftforge:forge:1.20.1-47.2.0:universal"),
         Some(
             "net/minecraftforge/forge/1.20.1-47.2.0/forge-1.20.1-47.2.0-universal.jar".to_string()
         )
     );
 
     assert_eq!(
-        PrismMetaClient::maven_coordinate_to_path("org.lwjgl:lwjgl-jemalloc:3.3.1:natives-windows"),
+        maven_coordinate_to_path("org.lwjgl:lwjgl-jemalloc:3.3.1:natives-windows"),
         Some("org/lwjgl/lwjgl-jemalloc/3.3.1/lwjgl-jemalloc-3.3.1-natives-windows.jar".to_string())
     );
 
-    assert_eq!(
-        PrismMetaClient::maven_coordinate_to_path("invalid_coord"),
-        None
-    );
-}
-
-#[test]
-fn test_session_effective_components_legacy_fallback() {
-    let session_forge = Session {
-        name: "Forge Session".to_string(),
-        slug: None,
-        minecraft: "1.20.1".to_string(),
-        forge: Some("47.2.0".to_string()),
-        neoforge: None,
-        fabric: None,
-        components: None,
-        sync_dir: "mods".to_string(),
-        sync_url: "https://example.com/sync".to_string(),
-        welcome: "Welcome".to_string(),
-        jvm_arg: "".to_string(),
-        credits: "".to_string(),
-        assets_path: None,
-        hostname: None,
-        is_default: false,
-        links: None,
-        crack: None,
-        discord_presence: None,
-    };
-
-    let comps = session_forge.effective_components();
-    assert_eq!(comps.len(), 2);
-    assert_eq!(
-        comps[0],
-        ComponentSpec {
-            uid: "net.minecraft".to_string(),
-            version: "1.20.1".to_string()
-        }
-    );
-    assert_eq!(
-        comps[1],
-        ComponentSpec {
-            uid: "net.minecraftforge".to_string(),
-            version: "47.2.0".to_string()
-        }
-    );
-
-    let session_neoforge = Session {
-        name: "NeoForge Session".to_string(),
-        slug: None,
-        minecraft: "1.20.4".to_string(),
-        forge: None,
-        neoforge: Some("20.4.80".to_string()),
-        fabric: None,
-        components: None,
-        sync_dir: "mods".to_string(),
-        sync_url: "https://example.com/sync".to_string(),
-        welcome: "Welcome".to_string(),
-        jvm_arg: "".to_string(),
-        credits: "".to_string(),
-        assets_path: None,
-        hostname: None,
-        is_default: false,
-        links: None,
-        crack: None,
-        discord_presence: None,
-    };
-
-    let comps_neo = session_neoforge.effective_components();
-    assert_eq!(comps_neo.len(), 2);
-    assert_eq!(
-        comps_neo[0],
-        ComponentSpec {
-            uid: "net.minecraft".to_string(),
-            version: "1.20.4".to_string()
-        }
-    );
-    assert_eq!(
-        comps_neo[1],
-        ComponentSpec {
-            uid: "net.neoforged".to_string(),
-            version: "20.4.80".to_string()
-        }
-    );
-}
-
-#[test]
-fn test_session_custom_components_priority() {
-    let custom_comps = vec![
-        ComponentSpec {
-            uid: "net.minecraft".to_string(),
-            version: "1.20.1".to_string(),
-        },
-        ComponentSpec {
-            uid: "net.fabricmc.fabric-loader".to_string(),
-            version: "0.15.11".to_string(),
-        },
-    ];
-
-    let session = Session {
-        name: "Custom Components".to_string(),
-        slug: None,
-        minecraft: "1.12.2".to_string(),
-        forge: Some("14.23.5.2860".to_string()),
-        neoforge: None,
-        fabric: None,
-        components: Some(custom_comps.clone()),
-        sync_dir: "mods".to_string(),
-        sync_url: "https://example.com/sync".to_string(),
-        welcome: "Welcome".to_string(),
-        jvm_arg: "".to_string(),
-        credits: "".to_string(),
-        assets_path: None,
-        hostname: None,
-        is_default: false,
-        links: None,
-        crack: None,
-        discord_presence: None,
-    };
-
-    assert_eq!(session.effective_components(), custom_comps);
+    assert_eq!(maven_coordinate_to_path("invalid_coord"), None);
 }
 
 #[test]
@@ -203,233 +81,6 @@ fn test_jre_resolution() {
         JreManager::resolve_component_name(Some("1.7.10"), None, None),
         "jre-legacy"
     ); // Java 8
-}
-
-#[test]
-fn test_library_rule_filtering() {
-    let current_os = if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "osx"
-    } else {
-        "linux"
-    };
-
-    let allowed_rules = Some(vec![LibraryRule {
-        action: "allow".to_string(),
-        os: Some(OsCondition {
-            name: Some(current_os.to_string()),
-            version: None,
-            arch: None,
-        }),
-        features: None,
-    }]);
-
-    assert!(PrismMetaClient::is_library_allowed(&allowed_rules));
-
-    let disallowed_rules = Some(vec![
-        LibraryRule {
-            action: "allow".to_string(),
-            os: None,
-            features: None,
-        },
-        LibraryRule {
-            action: "disallow".to_string(),
-            os: Some(OsCondition {
-                name: Some(current_os.to_string()),
-                version: None,
-                arch: None,
-            }),
-            features: None,
-        },
-    ]);
-
-    assert!(!PrismMetaClient::is_library_allowed(&disallowed_rules));
-}
-
-#[tokio::test]
-#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
-async fn test_fetch_real_component_manifest() {
-    let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
-    let manifest = client.get_component("net.minecraft", "1.12.2").await;
-    assert!(
-        manifest.is_ok(),
-        "Failed to fetch 1.12.2 manifest: {:?}",
-        manifest.err()
-    );
-    let _m = manifest.unwrap();
-    let m1201 = client
-        .get_component("net.minecraft", "1.20.1")
-        .await
-        .unwrap();
-    println!(
-        "1.20.1 jvm arguments: {:?}",
-        m1201.arguments.as_ref().map(|a| &a.jvm)
-    );
-    println!("1.20.1 plus_jvm_args: {:?}", m1201.plus_jvm_args);
-    let forge1201 = client
-        .get_component("net.minecraftforge", "47.4.0")
-        .await
-        .unwrap();
-    println!(
-        "Forge 47.4.0 jvm arguments: {:?}",
-        forge1201.arguments.as_ref().map(|a| &a.jvm)
-    );
-    println!("Forge 47.4.0 plus_jvm_args: {:?}", forge1201.plus_jvm_args);
-}
-
-#[tokio::test]
-#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
-async fn test_fetch_all_servers_json_versions() {
-    let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
-
-    // 1.12.2 Forge 14.23.5.2847
-    let v2847 = client
-        .get_component("net.minecraftforge", "14.23.5.2847")
-        .await;
-    println!(
-        "Forge 14.23.5.2847 result: {:?}",
-        v2847.as_ref().map(|m| &m.main_class)
-    );
-    assert!(v2847.is_ok(), "Failed 14.23.5.2847: {:?}", v2847.err());
-
-    // 1.12.2 Forge 14.23.5.2859
-    let v2859 = client
-        .get_component("net.minecraftforge", "14.23.5.2859")
-        .await;
-    println!(
-        "Forge 14.23.5.2859 result: {:?}",
-        v2859.as_ref().map(|m| &m.main_class)
-    );
-    assert!(v2859.is_ok(), "Failed 14.23.5.2859: {:?}", v2859.err());
-
-    // 1.20.1 Forge 47.4.0
-    let v4740 = client.get_component("net.minecraftforge", "47.4.0").await;
-    assert!(v4740.is_ok(), "Failed 47.4.0: {:?}", v4740.err());
-    let m4740 = v4740.unwrap();
-    assert_eq!(
-        m4740.main_class.as_deref(),
-        Some("io.github.zekerzhayard.forgewrapper.installer.Main")
-    );
-    assert!(
-        m4740
-            .maven_files
-            .as_ref()
-            .unwrap()
-            .iter()
-            .any(|f| f.name.contains(":installer")),
-        "Installer jar must be in mavenFiles"
-    );
-
-    if let Some(libs) = &m4740.libraries {
-        for l in libs {
-            println!("Forge 47.4.0 lib: {} -> MMC-hint: {:?}", l.name, l.mmc_hint);
-        }
-    }
-
-    let fab = client
-        .get_component("net.fabricmc.fabric-loader", "0.15.11")
-        .await
-        .unwrap();
-    println!("Fabric Loader 0.15.11 requires: {:?}", fab.requires);
-}
-
-#[tokio::test]
-#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
-async fn test_resolve_fabric_components() {
-    let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
-    let initial = vec![
-        ComponentSpec {
-            uid: "net.minecraft".to_string(),
-            version: "1.20.1".to_string(),
-        },
-        ComponentSpec {
-            uid: "net.fabricmc.fabric-loader".to_string(),
-            version: "0.15.11".to_string(),
-        },
-    ];
-
-    let manifests = client.resolve_all_components(&initial).await.unwrap();
-    println!("Resolved {} manifests for 1.20.1 Fabric:", manifests.len());
-    for m in &manifests {
-        println!(" - Component: {:?}", m.uid);
-    }
-
-    assert!(
-        manifests
-            .iter()
-            .any(|m| m.uid.as_deref() == Some("net.fabricmc.intermediary")),
-        "net.fabricmc.intermediary must be resolved"
-    );
-    let intermediary = manifests
-        .iter()
-        .find(|m| m.uid.as_deref() == Some("net.fabricmc.intermediary"))
-        .unwrap();
-    assert_eq!(
-        intermediary.version.as_deref(),
-        Some("1.20.1"),
-        "Intermediary must use Minecraft version 1.20.1"
-    );
-}
-
-#[tokio::test]
-#[ignore = "requires the public Prism metadata service; run explicitly with --ignored"]
-async fn test_resolve_all_components_includes_lwjgl() {
-    let client = PrismMetaClient::new(std::env::temp_dir().join("test_mc"));
-    let initial = vec![
-        ComponentSpec {
-            uid: "net.minecraft".to_string(),
-            version: "1.12.2".to_string(),
-        },
-        ComponentSpec {
-            uid: "net.minecraftforge".to_string(),
-            version: "14.23.5.2847".to_string(),
-        },
-    ];
-
-    let manifests = client.resolve_all_components(&initial).await.unwrap();
-    println!("Resolved {} manifests for 1.12.2 Forge:", manifests.len());
-    for m in &manifests {
-        println!(" - Component: {:?}", m.uid);
-    }
-
-    assert!(
-        manifests
-            .iter()
-            .any(|m| m.uid.as_deref() == Some("org.lwjgl")),
-        "org.lwjgl must be resolved for 1.12.2"
-    );
-    assert!(
-        manifests
-            .iter()
-            .any(|m| m.uid.as_deref() == Some("net.minecraft")),
-        "net.minecraft must be resolved"
-    );
-    assert!(
-        manifests
-            .iter()
-            .any(|m| m.uid.as_deref() == Some("net.minecraftforge")),
-        "net.minecraftforge must be resolved"
-    );
-
-    let lwjgl_m = manifests
-        .iter()
-        .find(|m| m.uid.as_deref() == Some("org.lwjgl"))
-        .unwrap();
-    println!(
-        "org.lwjgl libraries count: {:?}",
-        lwjgl_m.libraries.as_ref().map(|l| l.len())
-    );
-    for lib in lwjgl_m.libraries.as_ref().unwrap() {
-        println!(
-            " - lib: {} natives: {:?} downloads: {:?}",
-            lib.name,
-            lib.natives,
-            lib.downloads.is_some()
-        );
-        let urls = PrismMetaClient::resolve_library_urls(lib);
-        println!("   resolved urls: {:?}", urls);
-    }
 }
 
 #[test]
@@ -552,7 +203,6 @@ fn test_session_assets_path_customization_and_fallback() {
         forge: None,
         fabric: None,
         neoforge: None,
-        components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
         welcome: "Welcome".to_string(),
@@ -577,7 +227,6 @@ fn test_session_assets_path_customization_and_fallback() {
         forge: None,
         fabric: None,
         neoforge: None,
-        components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
         welcome: "Welcome".to_string(),
@@ -602,7 +251,6 @@ fn test_session_assets_path_customization_and_fallback() {
         forge: None,
         fabric: None,
         neoforge: None,
-        components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
         welcome: "Welcome".to_string(),
@@ -627,7 +275,6 @@ fn test_session_assets_path_customization_and_fallback() {
         forge: None,
         fabric: None,
         neoforge: None,
-        components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
         welcome: "Welcome".to_string(),
@@ -652,7 +299,6 @@ fn test_session_assets_path_customization_and_fallback() {
         forge: None,
         fabric: None,
         neoforge: None,
-        components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
         welcome: "Welcome".to_string(),
@@ -677,7 +323,6 @@ fn test_session_assets_path_customization_and_fallback() {
         forge: None,
         fabric: None,
         neoforge: None,
-        components: None,
         sync_dir: "mods".to_string(),
         sync_url: "https://example.com/sync".to_string(),
         welcome: "Welcome".to_string(),

@@ -17,7 +17,9 @@ export const SocialLinks: React.FC<SocialLinksProps> = ({
 
   const handleLinkClick = async (url: string) => {
     try {
-      await open(url);
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+      await open(parsed.toString());
     } catch (err) {
       console.error('Failed to open link:', err);
     }
@@ -60,7 +62,7 @@ export const SocialLinks: React.FC<SocialLinksProps> = ({
                 alt={link.name}
                 className="w-4.5 h-4.5 object-contain brightness-0 invert opacity-70 group-hover:opacity-100 transition-opacity"
                 onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
+                  e.currentTarget.style.display = 'none';
                 }}
               />
             ) : isDiscord ? (

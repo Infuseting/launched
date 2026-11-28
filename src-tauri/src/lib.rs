@@ -36,7 +36,6 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
@@ -64,7 +63,6 @@ pub fn run() {
             // Microsoft Auth
             login_microsoft,
             get_auth,
-            has_auth,
             logout,
             get_all_accounts,
             set_active_account,
@@ -73,28 +71,19 @@ pub fn run() {
             // Game & Sync
             sync_session,
             launch_game,
-            open_session_switcher,
             // Settings & System
             get_settings,
             save_settings,
             ping_service,
             get_system_ram,
-            get_available_ram,
             // Skin
             get_minecraft_profile,
             get_skin_history,
-            upload_skin,
             apply_skin_from_history,
             reset_skin,
             delete_skin_from_history,
             save_skin_to_library,
-            get_skin_token,
             upload_skin_raw,
-            // Window controls
-            window_minimize,
-            window_toggle_maximize,
-            window_close,
-            window_is_maximized,
             // Logging
             crate::core::logger::log_frontend
         ])
@@ -144,8 +133,9 @@ pub fn run() {
                 log::info!("Cold-start deep link check found {} url(s)", urls.len());
                 if let Some(url) = urls.iter().rev().find(|url| url.scheme() == "launched") {
                     log::info!("Cold-start deep link stored: {}", url);
-                    *app.state::<DeepLinkState>().pending_url.lock().unwrap() =
-                        Some(url.to_string());
+                    if let Ok(mut pending) = app.state::<DeepLinkState>().pending_url.lock() {
+                        *pending = Some(url.to_string());
+                    }
                 }
             }
 

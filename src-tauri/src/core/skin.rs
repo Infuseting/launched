@@ -40,20 +40,46 @@ struct MojangSkin {
     state: Option<String>,
 }
 
-fn skin_history_path(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
+const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+const MAX_SKIN_PNG_BYTES: usize = 2 * 1024 * 1024;
+
+pub fn validate_skin_variant(variant: &str) -> Result<&'static str, String> {
+    match variant.trim().to_ascii_lowercase().as_str() {
+        "classic" => Ok("classic"),
+        "slim" => Ok("slim"),
+        other => Err(format!("Unsupported skin variant '{}'", other)),
+    }
+}
+
+pub fn decode_validated_skin_png(texture_b64: &str) -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(texture_b64.trim())
+        .map_err(|e| format!("Base64 decode error: {}", e))?;
+    if bytes.is_empty() || bytes.len() > MAX_SKIN_PNG_BYTES {
+        return Err("Skin PNG size is invalid".to_string());
+    }
+    if !bytes.starts_with(PNG_SIGNATURE) {
+        return Err("Skin file must be a valid PNG image".to_string());
+    }
+    Ok(bytes)
+}
+
+fn skin_history_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app_handle
         .path()
         .app_data_dir()
-        .unwrap()
-        .join("skin_history.json")
+        .map(|d| d.join("skin_history.json"))
+        .map_err(|e| format!("Failed to resolve skin history directory: {}", e))
 }
 
-pub fn load_skin_history(app_handle: &tauri::AppHandle) -> Vec<SkinEntry> {
-    let path = skin_history_path(app_handle);
-    if let Ok(content) = std::fs::read_to_string(&path) {
-        serde_json::from_str::<Vec<SkinEntry>>(&content).unwrap_or_default()
-    } else {
-        vec![]
+pub fn load_skin_history(app_handle: &tauri::AppHandle) -> Result<Vec<SkinEntry>, String> {
+    let path = skin_history_path(app_handle)?;
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str::<Vec<SkinEntry>>(&content)
+            .map_err(|e| format!("Failed to parse skin_history.json: {}", e)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("Failed to read skin_history.json: {}", e)),
     }
 }
 
@@ -61,12 +87,17 @@ pub fn save_skin_history(
     app_handle: &tauri::AppHandle,
     history: &[SkinEntry],
 ) -> Result<(), String> {
-    let path = skin_history_path(app_handle);
+    let path = skin_history_path(app_handle)?;
     if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(history).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    let tmp_path = path.with_extension("json.tmp");
+    std::fs::write(&tmp_path, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp_path);
+        e.to_string()
+    })
 }
 
 /// Fetches the current Minecraft profile & active skin info from Mojang API.
@@ -103,20 +134,15 @@ pub async fn fetch_minecraft_profile(access_token: &str) -> Result<MinecraftProf
     })
 }
 
-/// Uploads a new skin PNG (base64-encoded) to Mojang API.
-/// Uses ureq (HTTP/1.1-only, no HTTP/2) via spawn_blocking to avoid
-/// any ALPN negotiation issues that caused reqwest to fail.
+/// Uploads a new skin PNG (base64-encoded) to Mojang API using HTTP/1.1
+/// to avoid HTTP/2 ALPN negotiation failures against minecraftservices.
 pub async fn upload_skin_to_mojang(
     access_token: &str,
     texture_b64: &str,
     variant: &str,
 ) -> Result<(), String> {
-    use base64::Engine;
-    let png_bytes = base64::engine::general_purpose::STANDARD
-        .decode(texture_b64)
-        .map_err(|e| format!("Base64 decode error: {}", e))?;
-
-    let variant_upper = variant.to_uppercase();
+    let png_bytes = decode_validated_skin_png(texture_b64)?;
+    let variant_upper = validate_skin_variant(variant)?.to_uppercase();
 
     // Build multipart body manually
     let boundary = "LaunchedMCSkinBoundary";

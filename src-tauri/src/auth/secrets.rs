@@ -64,16 +64,6 @@ impl SecretManager {
         accounts.retain(|a| a.uuid != uuid);
         Self::save_all_accounts(app_handle, &accounts)
     }
-
-    /**
-     * Deletes all authentication responses from the local file.
-     */
-    pub fn clear_all(app_handle: &tauri::AppHandle) -> Result<(), String> {
-        let path = Self::local_path(app_handle)?;
-        super::secure_storage::clear(&path)?;
-        crate::core::discord_presence::notify_account_change(app_handle);
-        Ok(())
-    }
 }
 
 /// Accept the legacy single-account format, but never reinterpret corrupt data

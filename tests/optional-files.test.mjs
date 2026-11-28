@@ -27,7 +27,6 @@ const optional = {
   hasUpdate: false,
 };
 globalThis.__optionalControllerTest = fixture;
-globalThis.alert = (message) => fixture.calls.push(['alert', message]);
 fixture.sessions = {
   getSessionOptionalFiles: async (value) => {
     fixture.calls.push(['inspect', value]);
@@ -63,9 +62,11 @@ let code = ts.transpileModule(
 ).outputText;
 const mocks = {
   '@tauri-apps/api/event': 'export const listen=async()=>()=>{};',
-  '@tauri-apps/plugin-shell': 'export const open=async()=>{};',
-  '../state': 'export const state=globalThis.__optionalControllerTest.state;',
+  '../state':
+    'export const state=globalThis.__optionalControllerTest.state; export const unwrapState=(v)=>structuredClone(v);',
   '../services/auth': 'export const unused=true;',
+  '../services/logger':
+    'export const formatError=(e)=>e instanceof Error?e.message:String(e); export const createLogger=()=>({debug:()=>{},info:()=>{},warn:()=>{},error:()=>{}});',
   '../services/sessions':
     'export const { getSessionOptionalFiles,setSessionOptionalFiles,syncSession,launchGame }=globalThis.__optionalControllerTest.sessions;',
   '../services/settings':

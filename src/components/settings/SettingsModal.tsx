@@ -2,7 +2,12 @@ import { useModalFocus } from '../../hooks/useModalFocus';
 import React, { Suspense, lazy, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { state as sourceState, type LauncherState } from '../../state';
-import type { AppHandlers, AppSettings, SessionSettings } from '../../types';
+import type {
+  AppHandlers,
+  AppSettings,
+  SessionSettings,
+  SettingsTabId,
+} from '../../types';
 import AccountsTab from './AccountsTab';
 import SettingsGeneralTab from './SettingsGeneralTab';
 import SettingsAdvancedTab from './SettingsAdvancedTab';
@@ -204,7 +209,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     updateSetting('wrapperCommand', val);
   };
 
-  const tabs = [
+  const tabs: {
+    id: SettingsTabId;
+    label: string;
+    icon: typeof Users;
+    desc: string;
+  }[] = [
     {
       id: 'account',
       label: 'Comptes',

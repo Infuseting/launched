@@ -1,112 +1,50 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { invoke } from '@tauri-apps/api/core';
 
 interface TitleBarProps {
   isMaximized: boolean;
-  onToggleMaximize?: () => void;
+  onMaximizedChange?: (maximized: boolean) => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
-  isMaximized: propIsMaximized,
-  onToggleMaximize,
+  isMaximized,
+  onMaximizedChange,
 }) => {
-  const [isMaximized, setIsMaximized] = useState<boolean>(propIsMaximized);
-
-  // Sync state with Tauri window
-  const syncMaximizedState = useCallback(async () => {
-    try {
-      const win = getCurrentWindow();
-      const maximized = await win.isMaximized();
-      setIsMaximized(maximized);
-    } catch {
-      try {
-        const maximized = await invoke<boolean>('window_is_maximized');
-        setIsMaximized(maximized);
-      } catch {
-        // Fallback to prop
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    setIsMaximized(propIsMaximized);
-  }, [propIsMaximized]);
-
-  useEffect(() => {
-    syncMaximizedState();
-
-    let unlisten: (() => void) | undefined;
-    let disposed = false;
-    try {
-      const win = getCurrentWindow();
-      win
-        .onResized(() => {
-          syncMaximizedState();
-        })
-        .then((fn) => {
-          if (disposed) fn();
-          else unlisten = fn;
-        })
-        .catch(() => {
-          // Ignore if unsupported
-        });
-    } catch {
-      // Ignore
-    }
-
-    return () => {
-      disposed = true;
-      if (unlisten) unlisten();
-    };
-  }, [syncMaximizedState]);
-
   const handleMinimize = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const win = getCurrentWindow();
-      await win.minimize();
+      await getCurrentWindow().minimize();
     } catch {
-      await invoke('window_minimize');
+      // Unavailable in browser preview.
     }
   };
 
   const handleToggleMaximize = async (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+    e?.stopPropagation();
     try {
       const win = getCurrentWindow();
       await win.toggleMaximize();
-      const maximized = await win.isMaximized();
-      setIsMaximized(maximized);
-      if (onToggleMaximize) onToggleMaximize();
+      onMaximizedChange?.(await win.isMaximized());
     } catch {
-      try {
-        const maximized = await invoke<boolean>('window_toggle_maximize');
-        setIsMaximized(maximized);
-        if (onToggleMaximize) onToggleMaximize();
-      } catch {
-        // ignore
-      }
+      // Unavailable in browser preview.
     }
   };
 
   const handleClose = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const win = getCurrentWindow();
-      await win.close();
+      await getCurrentWindow().close();
     } catch {
-      await invoke('window_close');
+      // Unavailable in browser preview.
     }
   };
 
   return (
     <div
       data-tauri-drag-region
-      onDoubleClick={() => handleToggleMaximize()}
+      onDoubleClick={() => void handleToggleMaximize()}
       className="relative z-[100] h-8 w-full bg-neutral-950/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between select-none flex-shrink-0"
     >
-      {/* Left: App Branding (Draggable) */}
       <div
         data-tauri-drag-region
         className="flex items-center gap-2.5 px-3 h-full pointer-events-auto"
@@ -126,15 +64,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         </span>
       </div>
 
-      {/* Center: Draggable empty space */}
       <div data-tauri-drag-region className="flex-1 h-full cursor-default" />
 
-      {/* Right: Window Controls Trio (Not Draggable) */}
       <div className="flex items-center h-full no-drag">
-        {/* Minimize Button */}
         <button
           type="button"
-          onClick={handleMinimize}
+          onClick={(e) => void handleMinimize(e)}
           title="Réduire"
           aria-label="Réduire"
           className="w-11 h-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors cursor-default"
@@ -144,16 +79,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           </svg>
         </button>
 
-        {/* Maximize / Restore Button */}
         <button
           type="button"
-          onClick={handleToggleMaximize}
+          onClick={(e) => void handleToggleMaximize(e)}
           title={isMaximized ? 'Niveau inf.' : 'Agrandir'}
           aria-label={isMaximized ? 'Niveau inf.' : 'Agrandir'}
           className="w-11 h-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors cursor-default"
         >
           {isMaximized ? (
-            /* Restore icon (overlapping squares) */
             <svg
               width="10"
               height="10"
@@ -167,7 +100,6 @@ export const TitleBar: React.FC<TitleBarProps> = ({
               <rect x="2.5" y="2.5" width="6.5" height="6.5" rx="0.5" />
             </svg>
           ) : (
-            /* Maximize icon (single square) */
             <svg
               width="10"
               height="10"
@@ -181,10 +113,9 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           )}
         </button>
 
-        {/* Close Button */}
         <button
           type="button"
-          onClick={handleClose}
+          onClick={(e) => void handleClose(e)}
           title="Fermer"
           aria-label="Fermer"
           className="w-11 h-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-red-500 active:bg-red-600 transition-colors cursor-default"

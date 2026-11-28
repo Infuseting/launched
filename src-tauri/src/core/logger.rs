@@ -74,8 +74,13 @@ impl Log for LatestLogger {
 /// Rotates any existing `latest.log` into a timestamped archive, prunes old archives,
 /// and opens a fresh `latest.log` for the current launcher run.
 pub fn prepare_latest_log_file(log_dir: &Path) -> Result<PathBuf, String> {
-    fs::create_dir_all(log_dir)
-        .map_err(|e| format!("Failed to create log directory {}: {}", log_dir.display(), e))?;
+    fs::create_dir_all(log_dir).map_err(|e| {
+        format!(
+            "Failed to create log directory {}: {}",
+            log_dir.display(),
+            e
+        )
+    })?;
 
     let latest_path = log_dir.join(LATEST_LOG_NAME);
     if latest_path.exists() {
@@ -133,7 +138,7 @@ fn prune_old_archives(log_dir: &Path, max_keep: usize) {
         return;
     }
 
-    archives.sort_by(|a, b| b.0.cmp(&a.0));
+    archives.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     for (_, path) in archives.into_iter().skip(max_keep) {
         let _ = fs::remove_file(path);
     }
@@ -190,10 +195,6 @@ fn install_panic_hook() {
 
         previous(info);
     }));
-}
-
-pub fn latest_log_path() -> Option<&'static PathBuf> {
-    LATEST_LOG_PATH.get()
 }
 
 pub fn log_frontend_message(level: &str, target: &str, message: &str) {

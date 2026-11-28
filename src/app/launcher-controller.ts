@@ -1,17 +1,20 @@
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-shell';
+import type { Update } from '@tauri-apps/plugin-updater';
 
-import { state } from '../state';
+import { state, unwrapState } from '../state';
 import type {
   AppHandlers,
   DeviceCodePayload,
   NoticeDialogState,
+  OptionalFileItem,
   Session,
+  SettingsTabId,
   SyncProgress,
   UpdateDownloadEvent,
 } from '../types';
 
 import * as authService from '../services/auth';
+import { createLogger, formatError } from '../services/logger';
 import * as sessionService from '../services/sessions';
 import * as settingsService from '../services/settings';
 import * as statusService from '../services/status';
@@ -24,80 +27,12 @@ const STARTUP_UPDATE_RETRY_DELAYS_MS = [2_500, 7_500];
 const DEFAULT_SYSTEM_RAM_MB = 8192;
 const DEFAULT_APP_VERSION = '1.0.0';
 
-interface RuntimeUpdateManifest {
-  version: string;
-  body?: string;
-  notes?: string;
-  downloadAndInstall: (
-    onEvent: (event: UpdateDownloadEvent) => void,
-  ) => Promise<void>;
-}
+const log = createLogger('controller');
 
 interface PendingUpdate {
   version: string;
   body?: string;
   install: (onEvent: (event: UpdateDownloadEvent) => void) => Promise<void>;
-}
-
-/**
- * Creates a plain serializable copy for Tauri invokes.
- */
-function toPlainObject<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-/**
- * Converts unknown errors to user-facing string messages.
- */
-function getErrorMessage(error: unknown): string {
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string') {
-      return message;
-    }
-  }
-
-  return String(error);
-}
-
-type ControllerLogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-function controllerLog(
-  level: ControllerLogLevel,
-  message: string,
-  error?: unknown,
-): void {
-  const details =
-    error === undefined
-      ? message
-      : `${message}: ${
-          error instanceof Error && error.stack
-            ? `${error.message}\n${error.stack}`
-            : getErrorMessage(error)
-        }`;
-  if (level === 'error') {
-    console.error(`[controller] ${details}`);
-  } else if (level === 'warn') {
-    console.warn(`[controller] ${details}`);
-  } else if (level === 'debug') {
-    console.debug(`[controller] ${details}`);
-  } else {
-    console.info(`[controller] ${details}`);
-  }
-  const bridge = (
-    globalThis as {
-      __launchedLogBridge?: (
-        lvl: ControllerLogLevel,
-        target: string,
-        msg: string,
-      ) => void;
-    }
-  ).__launchedLogBridge;
-  bridge?.(level, 'controller', details);
 }
 
 /**
@@ -143,7 +78,7 @@ export class LauncherController {
       handleCheckUpdate: () => this.checkForUpdates(true),
       handleInstallUpdate: () => this.handleInstallUpdate(),
       handleDismissUpdatePrompt: () => this.dismissUpdatePrompt(),
-      handleTabChange: (tabId: string) => {
+      handleTabChange: (tabId: SettingsTabId) => {
         state.activeSettingsTab = tabId;
       },
       handleSettingsToggle: (show: boolean) => {
@@ -187,6 +122,7 @@ export class LauncherController {
         )
           return;
         state.optionalModsModalSession = session;
+        state.optionalModsPrefetchedFiles = null;
         state.optionalModsIsFirstSync = !!isFirstSync;
         state.optionalModsHasUpdates = false;
         state.optionalModsModalOpen = true;
@@ -212,11 +148,10 @@ export class LauncherController {
    * Loads startup data and activates background polling/update checks.
    */
   public async initialize(): Promise<void> {
-    controllerLog('info', 'LauncherController.initialize() starting');
-    this.registerExternalLinksHandler();
+    log.info('LauncherController.initialize() starting');
     await this.registerDeepLinkHandler();
     await listen('discord-auth-required', () => {
-      controllerLog('warn', 'Received discord-auth-required event');
+      log.warn('Received discord-auth-required event');
       void this.handleDiscordAuthRequired();
     });
     await this.loadInitialData();
@@ -235,12 +170,12 @@ export class LauncherController {
 
     void this.refreshStatuses();
     this.startStatusPolling();
-    controllerLog('info', 'LauncherController.initialize() finished');
+    log.info('LauncherController.initialize() finished');
   }
 
   private async registerDeepLinkHandler(): Promise<void> {
     await listen('deep-link-received', () => {
-      controllerLog('info', 'Received deep-link-received event');
+      log.info('Received deep-link-received event');
       this.deepLinkRequested = true;
       return this.loadSessions();
     });
@@ -260,22 +195,6 @@ export class LauncherController {
         void this.checkForUpdates(true);
       }, delayMs);
     }
-  }
-
-  private registerExternalLinksHandler(): void {
-    document.addEventListener('click', (event) => {
-      const target = (event.target as HTMLElement).closest(
-        '.externalLink',
-      ) as HTMLElement | null;
-      if (!target) {
-        return;
-      }
-
-      const url = target.getAttribute('data-url');
-      if (url) {
-        void open(url);
-      }
-    });
   }
 
   /**
@@ -316,7 +235,7 @@ export class LauncherController {
       state.deviceCodeError = null;
       return auth;
     } catch (error) {
-      state.deviceCodeError = getErrorMessage(error);
+      state.deviceCodeError = formatError(error);
       throw error;
     } finally {
       unlistenCode();
@@ -342,8 +261,10 @@ export class LauncherController {
     session: Session,
     isFirstSync = false,
     hasUpdates = false,
+    prefetchedFiles: OptionalFileItem[] | null = null,
   ): Promise<boolean> {
     state.optionalModsModalSession = session;
+    state.optionalModsPrefetchedFiles = prefetchedFiles;
     state.optionalModsIsFirstSync = isFirstSync;
     state.optionalModsHasUpdates = hasUpdates;
     state.optionalModsModalOpen = true;
@@ -352,6 +273,7 @@ export class LauncherController {
       this.currentOptionalModsResolve = (confirmed: boolean) => {
         state.optionalModsModalOpen = false;
         state.optionalModsModalSession = null;
+        state.optionalModsPrefetchedFiles = null;
         state.optionalModsHasUpdates = false;
         this.currentOptionalModsResolve = null;
         resolve(confirmed);
@@ -363,6 +285,7 @@ export class LauncherController {
     if (this.optionalModsSaving) return;
     state.optionalModsModalOpen = false;
     state.optionalModsModalSession = null;
+    state.optionalModsPrefetchedFiles = null;
     state.optionalModsHasUpdates = false;
     if (this.currentOptionalModsResolve) {
       this.currentOptionalModsResolve(false);
@@ -382,7 +305,7 @@ export class LauncherController {
     this.optionalModsSaving = true;
     try {
       await sessionService.setSessionOptionalFiles(
-        toPlainObject(session),
+        unwrapState(session),
         enabledFiles,
         allOptionalFiles,
       );
@@ -398,6 +321,7 @@ export class LauncherController {
       // The backend already persisted this selection. Avoid overwriting it with stale settings.
       state.optionalModsModalOpen = false;
       state.optionalModsModalSession = null;
+      state.optionalModsPrefetchedFiles = null;
       state.optionalModsHasUpdates = false;
       this.currentOptionalModsResolve?.(true);
     } finally {
@@ -417,7 +341,7 @@ export class LauncherController {
     state.currentSettings.sessions[sessionName].enabledOptionalFiles = [];
     state.currentSettings.sessions[sessionName].optionalFilesConfigured = true;
     await settingsService.saveSettingsInternal(
-      toPlainObject(state.currentSettings),
+      unwrapState(state.currentSettings),
     );
   }
 
@@ -438,7 +362,7 @@ export class LauncherController {
 
     const session = state.globalSessions[state.activeSessionIndex];
     if (!session) return;
-    controllerLog('info', `syncAndLoad started for session "${session.name}"`);
+    log.info(`syncAndLoad started for session "${session.name}"`);
     this.launchPending = true;
     state.isPreparingLaunch = true;
     state.syncProgress = {
@@ -480,7 +404,7 @@ export class LauncherController {
         state.syncProgress.current_file =
           'Vérification des fichiers optionnels...';
         const optionalFiles = await sessionService.getSessionOptionalFiles(
-          toPlainObject(session),
+          unwrapState(session),
         );
         if (accessRevision !== this.discordAccessRevision) return;
         if (optionalFiles && optionalFiles.length > 0) {
@@ -492,6 +416,7 @@ export class LauncherController {
               session,
               !isConfigured,
               hasUpdates,
+              optionalFiles,
             );
             if (!confirmed || accessRevision !== this.discordAccessRevision) {
               return;
@@ -521,9 +446,9 @@ export class LauncherController {
 
       try {
         if (accessRevision !== this.discordAccessRevision) return;
-        controllerLog('info', `Invoking syncSession for "${session.name}"`);
+        log.info(`Invoking syncSession for "${session.name}"`);
         await sessionService.syncSession(session);
-        controllerLog('info', `syncSession completed for "${session.name}"`);
+        log.info(`syncSession completed for "${session.name}"`);
       } finally {
         unlistenSyncProgress();
       }
@@ -535,8 +460,7 @@ export class LauncherController {
       const sessionSettings =
         state.currentSettings.sessions[session.name] ??
         state.currentSettings.defaultSettings;
-      controllerLog(
-        'info',
+      log.info(
         `Invoking launchGame for "${session.name}" (showLogs=${sessionSettings.showLogs}, crack=${Boolean(crackPseudo)})`,
       );
       await sessionService.launchGame(
@@ -544,14 +468,14 @@ export class LauncherController {
         sessionSettings.showLogs,
         crackPseudo,
       );
-      controllerLog('info', `launchGame returned for "${session.name}"`);
+      log.info(`launchGame returned for "${session.name}"`);
 
       setTimeout(() => {
         state.isSyncing = false;
         if (this.deepLinkRequested) void this.loadSessions();
       }, 3000);
     } catch (error) {
-      controllerLog('error', `syncAndLoad failed for "${session.name}"`, error);
+      log.error(`syncAndLoad failed for "${session.name}"`, error);
       if (accessRevision === this.discordAccessRevision)
         await this.handleLaunchError(error);
       state.isSyncing = false;
@@ -590,19 +514,20 @@ export class LauncherController {
   }
 
   private async handleLaunchError(error: unknown): Promise<void> {
-    const errorMessage = getErrorMessage(error);
-    controllerLog('error', `Launch error: ${errorMessage}`);
+    const errorMessage = formatError(error);
+    log.error(`Launch error: ${errorMessage}`);
 
     if (errorMessage.includes('compte invalide a ete supprime')) {
       try {
         const refreshedAuth = await this.loginMicrosoftWithModal();
         state.authCache = refreshedAuth;
         state.allAccounts = await authService.getAllAccounts();
+        return;
       } catch (reconnectError) {
-        controllerLog('error', 'Microsoft reconnection failed', reconnectError);
+        log.error('Microsoft reconnection failed', reconnectError);
         void this.showNoticeDialog({
           title: 'Reconnexion Microsoft échouée',
-          message: getErrorMessage(reconnectError),
+          message: formatError(reconnectError),
           variant: 'error',
         });
         return;
@@ -639,7 +564,7 @@ export class LauncherController {
       }
     } catch (error) {
       if (revision === this.playerCountRevision) state.serverStatus = null;
-      console.error('Failed to fetch player count:', error);
+      log.error('Failed to fetch player count', error);
     }
   }
 
@@ -653,7 +578,7 @@ export class LauncherController {
 
       state.mojangStatus = { auth, session, api };
     } catch (error) {
-      console.error('Failed to fetch Mojang services status:', error);
+      log.error('Failed to fetch Mojang services status', error);
     }
   }
 
@@ -706,7 +631,7 @@ export class LauncherController {
       } catch (error) {
         const target = currentSession();
         if (target) target.assetsLoadFailed = true;
-        console.error(`Failed to fetch assets for ${session.name}:`, error);
+        log.error(`Failed to fetch assets for ${session.name}`, error);
       }
     })();
     this.assetRequests.set(requestKey, request);
@@ -750,7 +675,7 @@ export class LauncherController {
           state.authCache = auth;
         })
         .catch((error: unknown) => {
-          console.error('Failed to get auth:', error);
+          log.error('Failed to get auth', error);
         }),
       settingsService
         .getSystemRam()
@@ -777,6 +702,7 @@ export class LauncherController {
     this.currentOptionalModsResolve?.(false);
     state.optionalModsModalOpen = false;
     state.optionalModsModalSession = null;
+    state.optionalModsPrefetchedFiles = null;
     state.optionalModsHasUpdates = false;
     this.discordAccessRevision++;
     this.assetPreloadRevision++;
@@ -801,8 +727,7 @@ export class LauncherController {
     state.discordError = null;
     try {
       if (state.currentSettings.discordLoginSkipped === true) {
-        controllerLog(
-          'info',
+        log.info(
           'Discord login skipped by saved preference, activating public access',
         );
         await this.activatePublicAccess();
@@ -812,28 +737,30 @@ export class LauncherController {
       if (revision !== this.discordAccessRevision) return;
       state.discordUser = user;
       if (user) {
-        controllerLog('info', `Restored Discord user: ${user.username}`);
+        log.info(`Restored Discord user: ${user.username}`);
         state.discordChecking = false;
         await Promise.all([
           this.rememberDiscordChoice(false),
           this.loadSessions(),
         ]);
       } else if (state.currentSettings.discordLoginSkipped === false) {
-        controllerLog(
-          'info',
-          'No saved Discord session, activating public access',
-        );
+        log.info('No saved Discord session, activating public access');
         await this.activatePublicAccess();
       } else {
-        controllerLog('info', 'No Discord session; awaiting user choice');
+        log.info('No Discord session; awaiting user choice');
       }
     } catch (error) {
-      controllerLog('error', 'restoreDiscord failed', error);
+      const message = formatError(error);
+      log.error('restoreDiscord failed', error);
       if (revision === this.discordAccessRevision) {
         if (state.currentSettings.discordLoginSkipped !== undefined) {
-          await this.activatePublicAccess(false);
+          try {
+            await this.activatePublicAccess(false);
+          } catch (fallbackError) {
+            log.error('activatePublicAccess fallback failed', fallbackError);
+          }
         }
-        state.discordError = getErrorMessage(error);
+        state.discordError = message;
       }
     } finally {
       if (revision === this.discordAccessRevision)
@@ -864,7 +791,7 @@ export class LauncherController {
     try {
       await this.activatePublicAccess();
     } catch (error) {
-      state.discordError = getErrorMessage(error);
+      state.discordError = formatError(error);
     }
   }
 
@@ -882,7 +809,7 @@ export class LauncherController {
     try {
       await this.activatePublicAccess();
     } catch (error) {
-      state.discordError = getErrorMessage(error);
+      state.discordError = formatError(error);
     } finally {
       state.discordChecking = false;
       state.discordBusy = false;
@@ -897,19 +824,19 @@ export class LauncherController {
       this.optionalModsSaving
     )
       return;
-    controllerLog('info', 'handleDiscordLogin started');
+    log.info('handleDiscordLogin started');
     state.discordBusy = true;
     state.discordError = null;
     try {
       const user = await authService.loginDiscord();
-      controllerLog('info', `Discord login succeeded: ${user.username}`);
+      log.info(`Discord login succeeded: ${user.username}`);
       this.clearDiscordState();
       state.discordUser = user;
       await this.rememberDiscordChoice(false);
       await this.loadSessions();
     } catch (error) {
-      controllerLog('warn', 'handleDiscordLogin failed', error);
-      state.discordError = getErrorMessage(error);
+      log.warn('handleDiscordLogin failed', error);
+      state.discordError = formatError(error);
     } finally {
       state.discordBusy = false;
     }
@@ -923,17 +850,17 @@ export class LauncherController {
       this.optionalModsSaving
     )
       return;
-    controllerLog('info', 'handleDiscordLogout started');
+    log.info('handleDiscordLogout started');
     state.discordBusy = true;
     state.discordError = null;
     try {
       await authService.logoutDiscord();
       this.clearDiscordState();
       await this.activatePublicAccess();
-      controllerLog('info', 'handleDiscordLogout completed');
+      log.info('handleDiscordLogout completed');
     } catch (error) {
-      controllerLog('error', 'handleDiscordLogout failed', error);
-      state.discordError = getErrorMessage(error);
+      log.error('handleDiscordLogout failed', error);
+      state.discordError = formatError(error);
     } finally {
       state.discordBusy = false;
     }
@@ -1022,7 +949,7 @@ export class LauncherController {
     } catch (error) {
       if (revision !== this.discordAccessRevision) return;
       state.globalSessions = [];
-      state.sessionsError = getErrorMessage(error);
+      state.sessionsError = formatError(error);
     } finally {
       if (revision === this.discordAccessRevision)
         state.sessionsLoading = false;
@@ -1041,10 +968,10 @@ export class LauncherController {
         state.allAccounts = state.allAccounts.map((a) =>
           a.uuid === refreshed.uuid ? refreshed : a,
         );
-        console.log('[auth] Token refreshed silently for', refreshed.name);
+        log.info(`Token refreshed silently for ${refreshed.name}`);
       })
       .catch((err) => {
-        console.debug('[auth] Silent refresh skipped:', err);
+        log.debug('Silent refresh skipped', err);
       });
   }
 
@@ -1054,13 +981,12 @@ export class LauncherController {
     state.updateError = null;
 
     try {
-      const update =
-        (await updaterService.checkForAppUpdates()) as RuntimeUpdateManifest | null;
+      const update: Update | null = await updaterService.checkForAppUpdates();
 
       this.pendingUpdate = update
         ? {
             version: update.version,
-            body: update.body ?? update.notes,
+            body: update.body,
             // Bind keeps the plugin Update instance context required by private fields.
             install: update.downloadAndInstall.bind(update),
           }
@@ -1081,8 +1007,8 @@ export class LauncherController {
         state.dismissedUpdateVersion = null;
       }
     } catch (error) {
-      state.updateError = getErrorMessage(error);
-      controllerLog('error', 'Failed to check for updates', error);
+      state.updateError = formatError(error);
+      log.error('Failed to check for updates', error);
     } finally {
       state.isCheckingUpdate = false;
     }
@@ -1115,18 +1041,15 @@ export class LauncherController {
     state.updateError = null;
 
     try {
-      controllerLog(
-        'info',
-        `Installing app update v${this.pendingUpdate.version}`,
-      );
+      log.info(`Installing app update v${this.pendingUpdate.version}`);
       await this.performUpdate(this.pendingUpdate.install, (pct) => {
         state.updateInstallProgress = Math.min(100, Math.max(0, pct));
       });
       state.updateInstallProgress = 100;
-      controllerLog('info', 'App update installed successfully');
+      log.info('App update installed successfully');
     } catch (error) {
-      controllerLog('error', 'App update installation failed', error);
-      state.updateError = getErrorMessage(error);
+      log.error('App update installation failed', error);
+      state.updateError = formatError(error);
     } finally {
       state.isInstallingUpdate = false;
     }
@@ -1142,11 +1065,8 @@ export class LauncherController {
     await install((event) => {
       if (event.event === 'Started') {
         contentLength = event.data.contentLength ?? 0;
-        return;
-      }
-
-      if (event.event === 'Progress') {
-        downloaded += event.data.chunkLength ?? 0;
+      } else if (event.event === 'Progress') {
+        downloaded += event.data.chunkLength;
         if (contentLength > 0 && onProgress) {
           onProgress((downloaded / contentLength) * 100);
         }
@@ -1161,20 +1081,38 @@ export class LauncherController {
   }
 
   private async handleAccountSwap(uuid: string): Promise<void> {
-    await authService.setActiveAccount(uuid);
-    state.authCache =
-      state.allAccounts.find((account) => account.uuid === uuid) ?? null;
+    try {
+      await authService.setActiveAccount(uuid);
+      state.authCache =
+        state.allAccounts.find((account) => account.uuid === uuid) ?? null;
+    } catch (error) {
+      log.error('Failed to swap Minecraft account', error);
+      void this.showNoticeDialog({
+        title: 'Changement de compte impossible',
+        message: formatError(error),
+        variant: 'error',
+      });
+    }
   }
 
   private async handleAccountRemove(uuid: string): Promise<void> {
-    await authService.removeAccount(uuid);
-    state.allAccounts = state.allAccounts.filter(
-      (account) => account.uuid !== uuid,
-    );
+    try {
+      await authService.removeAccount(uuid);
+      state.allAccounts = state.allAccounts.filter(
+        (account) => account.uuid !== uuid,
+      );
 
-    if (state.authCache?.uuid === uuid) {
-      state.authCache = null;
-      await authService.logout();
+      if (state.authCache?.uuid === uuid) {
+        state.authCache = null;
+        await authService.logout();
+      }
+    } catch (error) {
+      log.error('Failed to remove Minecraft account', error);
+      void this.showNoticeDialog({
+        title: 'Suppression du compte impossible',
+        message: formatError(error),
+        variant: 'error',
+      });
     }
   }
 
@@ -1184,10 +1122,10 @@ export class LauncherController {
       state.authCache = auth;
       state.allAccounts = await authService.getAllAccounts();
     } catch (error) {
-      controllerLog('error', 'Microsoft account login failed', error);
+      log.error('Microsoft account login failed', error);
       void this.showNoticeDialog({
         title: 'Connexion Microsoft échouée',
-        message: getErrorMessage(error),
+        message: formatError(error),
         variant: 'error',
       });
     }
@@ -1195,11 +1133,11 @@ export class LauncherController {
 
   private async saveSettings(): Promise<void> {
     try {
-      const settings = toPlainObject(state.currentSettings);
+      const settings = unwrapState(state.currentSettings);
       await settingsService.saveSettingsInternal(settings);
-      controllerLog('debug', 'Settings saved');
+      log.debug('Settings saved');
     } catch (error) {
-      controllerLog('error', 'Failed to save settings', error);
+      log.error('Failed to save settings', error);
     }
   }
 
@@ -1218,18 +1156,14 @@ export class LauncherController {
     );
     if (!current) throw new Error('Cette session n’est plus disponible.');
 
-    controllerLog('info', `Deleting local session "${current.name}"`);
+    log.info(`Deleting local session "${current.name}"`);
     state.deletingSessionName = current.name;
     try {
-      await sessionService.deleteSession(toPlainObject(current));
+      await sessionService.deleteSession(unwrapState(current));
       delete state.currentSettings.sessions[current.name];
-      controllerLog('info', `Deleted local session "${current.name}"`);
+      log.info(`Deleted local session "${current.name}"`);
     } catch (error) {
-      controllerLog(
-        'error',
-        `Failed to delete session "${current.name}"`,
-        error,
-      );
+      log.error(`Failed to delete session "${current.name}"`, error);
       throw error;
     } finally {
       state.deletingSessionName = null;

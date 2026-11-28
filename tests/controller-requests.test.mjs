@@ -43,9 +43,11 @@ let code = ts.transpileModule(
 ).outputText;
 const mocks = {
   '@tauri-apps/api/event': 'export const listen = async () => () => {};',
-  '@tauri-apps/plugin-shell': 'export const open = async () => {};',
-  '../state': 'export const state = globalThis.__requestControllerTest.state;',
+  '../state':
+    'export const state = globalThis.__requestControllerTest.state; export const unwrapState = (v) => structuredClone(v);',
   '../services/auth': 'export const unused = true;',
+  '../services/logger':
+    'export const formatError = (e) => (e instanceof Error ? e.message : String(e)); export const createLogger = () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} });',
   '../services/sessions':
     'export const fetchJson = globalThis.__requestControllerTest.fetchJson; export const setActiveSession = async () => {};',
   '../services/settings': 'export const unused = true;',

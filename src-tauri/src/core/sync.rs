@@ -220,7 +220,11 @@ impl SyncService {
             sync_dirs
         );
         let manifest = self.fetch_manifest(app, manifest_url).await.map_err(|e| {
-            log::error!("Failed to fetch/validate manifest from {}: {}", manifest_url, e);
+            log::error!(
+                "Failed to fetch/validate manifest from {}: {}",
+                manifest_url,
+                e
+            );
             e
         })?;
         log::info!("Fetched sync manifest with {} entries", manifest.len());

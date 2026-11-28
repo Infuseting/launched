@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TitleBar from './TitleBar';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { invoke } from '@tauri-apps/api/core';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,43 +10,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
-    const checkState = async () => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+
+    const syncMaximized = async () => {
       try {
-        const win = getCurrentWindow();
-        const max = await win.isMaximized();
-        setIsMaximized(max);
+        const maximized = await getCurrentWindow().isMaximized();
+        if (!disposed) setIsMaximized(maximized);
       } catch {
-        try {
-          const max = await invoke<boolean>('window_is_maximized');
-          setIsMaximized(max);
-        } catch {
-          // ignore
-        }
+        // Window APIs are unavailable when previewing the UI in a browser.
       }
     };
 
-    checkState();
+    void syncMaximized();
 
-    let unlisten: (() => void) | undefined;
-    let disposed = false;
     try {
-      const win = getCurrentWindow();
-      win
+      getCurrentWindow()
         .onResized(() => {
-          checkState();
+          void syncMaximized();
         })
         .then((fn) => {
           if (disposed) fn();
           else unlisten = fn;
         })
-        .catch(() => {});
+        .catch(() => {
+          // Ignore when running outside Tauri.
+        });
     } catch {
-      // Window APIs are unavailable when previewing the UI in a browser.
+      // Ignore when running outside Tauri.
     }
 
     return () => {
       disposed = true;
-      if (unlisten) unlisten();
+      unlisten?.();
     };
   }, []);
 
@@ -59,10 +54,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           : 'rounded-xl border border-white/10 shadow-2xl'
       }`}
     >
-      <TitleBar
-        isMaximized={isMaximized}
-        onToggleMaximize={() => setIsMaximized((prev) => !prev)}
-      />
+      <TitleBar isMaximized={isMaximized} onMaximizedChange={setIsMaximized} />
       <main className="flex-1 relative overflow-hidden flex flex-col">
         {children}
       </main>

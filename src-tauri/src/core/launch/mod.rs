@@ -45,11 +45,10 @@ impl LaunchService {
         let log_file_path = args.game_dir.join("launcher_debug.log");
         log::info!("Game logs will be written to: {:?}", log_file_path);
 
-        let mut cmd = if !args.wrapper_command.is_empty() {
-            let mut parts = args.wrapper_command.split_whitespace();
-            let wrapper_cmd = parts.next().unwrap();
+        let mut wrapper_parts = args.wrapper_command.split_whitespace();
+        let mut cmd = if let Some(wrapper_cmd) = wrapper_parts.next() {
             let mut c = Command::new(wrapper_cmd);
-            c.args(parts);
+            c.args(wrapper_parts);
             c.arg(&args.java_path);
             c
         } else {
@@ -103,7 +102,10 @@ impl LaunchService {
 
         let game_dir = args.game_dir.clone();
         let state = app_handle.state::<crate::state::AppState>();
-        let mut running = state.running_sessions.lock().unwrap();
+        let mut running = state
+            .running_sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         match cmd.spawn() {
             Ok(mut child) => {
                 *running.entry(game_dir.clone()).or_default() += 1;
@@ -112,56 +114,33 @@ impl LaunchService {
                     child.id()
                 );
 
-                let stdout = child.stdout.take().unwrap();
-                let stderr = child.stderr.take().unwrap();
-                let handle_out = app_handle.clone();
-                let handle_err = app_handle.clone();
-                let log_file_path_out = log_file_path.clone();
-                let log_file_path_err = log_file_path.clone();
+                let log_writer = std::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(&log_file_path)
+                    .ok()
+                    .map(|f| {
+                        std::sync::Arc::new(std::sync::Mutex::new(std::io::BufWriter::new(f)))
+                    });
 
-                // Thread for STDOUT
-                std::thread::spawn(move || {
-                    use std::fs::OpenOptions;
-                    use std::io::{BufRead, BufReader, Write};
-                    use tauri::Emitter;
-                    let mut file: Option<std::fs::File> = OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open(&log_file_path_out)
-                        .ok();
-                    let reader = BufReader::new(stdout);
-                    for l in reader.lines().map_while(Result::ok) {
-                        if show_logs {
-                            let _ = handle_out.emit("game-log", &l);
-                        }
-                        if let Some(f) = file.as_mut() {
-                            let _ = writeln!(f, "{}", l);
-                            let _ = f.flush();
-                        }
-                    }
-                });
-
-                // Thread for STDERR
-                std::thread::spawn(move || {
-                    use std::fs::OpenOptions;
-                    use std::io::{BufRead, BufReader, Write};
-                    use tauri::Emitter;
-                    let mut file: Option<std::fs::File> = OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open(&log_file_path_err)
-                        .ok();
-                    let reader = BufReader::new(stderr);
-                    for l in reader.lines().map_while(Result::ok) {
-                        if show_logs {
-                            let _ = handle_err.emit("game-log", format!("[ERROR] {}", l));
-                        }
-                        if let Some(f) = file.as_mut() {
-                            let _ = writeln!(f, "[ERROR] {}", l);
-                            let _ = f.flush();
-                        }
-                    }
-                });
+                if let Some(stdout) = child.stdout.take() {
+                    spawn_log_stream(
+                        stdout,
+                        "",
+                        show_logs,
+                        app_handle.clone(),
+                        log_writer.clone(),
+                    );
+                }
+                if let Some(stderr) = child.stderr.take() {
+                    spawn_log_stream(
+                        stderr,
+                        "[ERROR] ",
+                        show_logs,
+                        app_handle.clone(),
+                        log_writer,
+                    );
+                }
 
                 let app_handle_wait = app_handle.clone();
                 // Thread to wait for process exit
@@ -178,7 +157,10 @@ impl LaunchService {
                         Err(e) => log::error!("Error waiting for game process: {}", e),
                     }
                     let state = app_handle_wait.state::<crate::state::AppState>();
-                    let mut running = state.running_sessions.lock().unwrap();
+                    let mut running = state
+                        .running_sessions
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     if let Some(count) = running.get_mut(&game_dir) {
                         *count -= 1;
                         if *count == 0 {
@@ -199,4 +181,50 @@ impl LaunchService {
             }
         }
     }
+}
+
+fn spawn_log_stream<R: std::io::Read + Send + 'static>(
+    stream: R,
+    prefix: &'static str,
+    show_logs: bool,
+    app_handle: tauri::AppHandle,
+    log_writer: Option<std::sync::Arc<std::sync::Mutex<std::io::BufWriter<std::fs::File>>>>,
+) {
+    std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader, Write};
+        use tauri::Emitter;
+
+        let mut reader = BufReader::new(stream);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => {
+                    while matches!(buf.last(), Some(b'\n' | b'\r')) {
+                        buf.pop();
+                    }
+                    let line = String::from_utf8_lossy(&buf);
+                    let formatted = if prefix.is_empty() {
+                        line.into_owned()
+                    } else {
+                        format!("{}{}", prefix, line)
+                    };
+                    if show_logs {
+                        let _ = app_handle.emit("game-log", &formatted);
+                    }
+                    if let Some(writer) = log_writer.as_ref() {
+                        if let Ok(mut guard) = writer.lock() {
+                            let _ = writeln!(guard, "{}", formatted);
+                            let _ = guard.flush();
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Error reading game output stream: {}", e);
+                    break;
+                }
+            }
+        }
+    });
 }

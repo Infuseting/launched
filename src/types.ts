@@ -39,13 +39,24 @@ export interface ServerStatus {
   players?: ServerPlayers;
 }
 
-export interface UpdateDownloadEvent {
-  event: 'Started' | 'Progress' | string;
-  data: {
-    contentLength?: number;
-    chunkLength?: number;
-  };
-}
+export type SettingsTabId = 'account' | 'skin' | 'general' | 'advanced';
+
+export type UpdateDownloadEvent =
+  | {
+      event: 'Started';
+      data: {
+        contentLength?: number;
+      };
+    }
+  | {
+      event: 'Progress';
+      data: {
+        chunkLength: number;
+      };
+    }
+  | {
+      event: 'Finished';
+    };
 
 export interface UpdateManifest {
   version: string;
@@ -136,7 +147,7 @@ export interface LauncherStateModel {
   deviceCodeError: string | null;
   isSettingsOpen: boolean;
   isServerSelectOpen: boolean;
-  activeSettingsTab: string;
+  activeSettingsTab: SettingsTabId;
   maxSystemRam: number;
   isSyncing: boolean;
   isPreparingLaunch: boolean;
@@ -156,6 +167,7 @@ export interface LauncherStateModel {
   crackModalDefaultPseudo: string;
   optionalModsModalOpen: boolean;
   optionalModsModalSession: Session | null;
+  optionalModsPrefetchedFiles: OptionalFileItem[] | null;
   optionalModsIsFirstSync: boolean;
   optionalModsHasUpdates: boolean;
   noticeDialog: NoticeDialogState | null;
@@ -186,7 +198,7 @@ export interface AppHandlers {
   handleCheckUpdate: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
   handleDismissUpdatePrompt: () => void;
-  handleTabChange: (tabId: string) => void;
+  handleTabChange: (tabId: SettingsTabId) => void;
   handleSettingsToggle: (show: boolean) => void;
   handleServerSelectToggle: (show: boolean) => void;
   handleDeviceCodeModalToggle: (show: boolean) => void;

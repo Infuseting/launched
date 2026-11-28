@@ -285,18 +285,19 @@ impl MicrosoftAuth {
             ("device_code", &device_code.device_code),
         ];
 
-        let interval = Duration::from_secs(device_code.interval as u64);
-        let mut total_waited = 0;
+        let mut interval_secs = (device_code.interval as u64).max(1);
+        let mut total_waited = 0u64;
+        let expires_in = device_code.expires_in as u64;
 
         log::info!(
             "Polling for Microsoft token every {}s (expires in {}s)...",
-            device_code.interval,
-            device_code.expires_in
+            interval_secs,
+            expires_in
         );
 
-        while total_waited < device_code.expires_in {
-            sleep(interval).await;
-            total_waited += device_code.interval;
+        while total_waited < expires_in {
+            sleep(Duration::from_secs(interval_secs)).await;
+            total_waited += interval_secs;
 
             let response = client
                 .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
@@ -319,14 +320,13 @@ impl MicrosoftAuth {
                     )
                 })?;
 
-                if let Some(error) = error_resp.get("error").and_then(|v| v.as_str()) {
-                    if error == "authorization_pending" {
+                match error_resp.get("error").and_then(|v| v.as_str()) {
+                    Some("authorization_pending") => continue,
+                    Some("slow_down") => {
+                        interval_secs += 5;
                         continue;
-                    } else if error == "slow_down" {
-                        // Double the interval if requested
-                        sleep(interval).await;
-                        continue;
-                    } else {
+                    }
+                    Some(error) => {
                         return Err(format!(
                             "Microsoft Token API error: {} ({})",
                             error,
@@ -334,6 +334,12 @@ impl MicrosoftAuth {
                                 .get("error_description")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("no description")
+                        ));
+                    }
+                    None => {
+                        return Err(format!(
+                            "Microsoft Token API failed with status {} and no error field",
+                            status
                         ));
                     }
                 }

@@ -68,16 +68,3 @@ a:focus-visible {
   background: rgba(52, 211, 153, 0.3);
   color: #ffffff;
 }
-
-/* Glow effects */
-.glow-emerald {
-  box-shadow: 0 0 35px -5px rgba(16, 185, 129, 0.35);
-}
-
-.glow-emerald-lg {
-  box-shadow: 0 0 50px -5px rgba(16, 185, 129, 0.5);
-}
-
-.glow-white-sm {
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
-}

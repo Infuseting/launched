@@ -50,7 +50,11 @@ pub async fn delete_session(app_handle: tauri::AppHandle, session: Session) -> R
     })
     .await
     .map_err(|error| {
-        log::error!("delete_session task failed for '{}': {}", session_name, error);
+        log::error!(
+            "delete_session task failed for '{}': {}",
+            session_name,
+            error
+        );
         error.to_string()
     })?
 }

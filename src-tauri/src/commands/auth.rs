@@ -37,10 +37,66 @@ pub async fn remove_account(app_handle: tauri::AppHandle, uuid: String) -> Resul
     SecretManager::remove_account(&app_handle, &uuid)
 }
 
-#[tauri::command]
-pub async fn has_auth(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    let accounts = SecretManager::get_all_accounts(&app_handle)?;
-    Ok(!accounts.is_empty())
+/// Returns the active account with a validated (silently refreshed if expired) Minecraft token.
+pub(crate) async fn get_valid_active_account(
+    app_handle: &tauri::AppHandle,
+) -> Result<AuthResponse, String> {
+    let mut settings = SettingsManager::load(app_handle);
+    let auth =
+        SecretManager::get_active_account(app_handle, settings.active_account_uuid.as_deref())?
+            .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
+
+    if MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {
+        return Ok(auth);
+    }
+
+    log::warn!(
+        "Stored Minecraft token is invalid/expired for account {}, attempting silent refresh…",
+        auth.name
+    );
+
+    if let Some(refresh_token) = auth.refresh_token.clone() {
+        match MicrosoftAuth.refresh_auth(&refresh_token).await {
+            Ok(refreshed) => {
+                log::info!(
+                    "Successfully refreshed Minecraft auth for {}",
+                    refreshed.name
+                );
+                SecretManager::add_account(app_handle, refreshed.clone())?;
+                settings.active_account_uuid = Some(refreshed.uuid.clone());
+                let _ = SettingsManager::save(app_handle, &settings);
+                return Ok(refreshed);
+            }
+            Err(e) => {
+                log::warn!("Failed to refresh Minecraft auth: {}", e);
+                if e.contains("invalid_grant") || e.contains("invalid_request") {
+                    let _ = SecretManager::remove_account(app_handle, &auth.uuid);
+                    if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
+                        settings.active_account_uuid = None;
+                        let _ = SettingsManager::save(app_handle, &settings);
+                    }
+                    return Err(
+                        "Session Minecraft expirée. Le compte a été supprimé, merci de vous reconnecter avec Microsoft."
+                            .to_string(),
+                    );
+                }
+                return Err(format!(
+                    "Erreur lors de l'authentification Minecraft: {}",
+                    e
+                ));
+            }
+        }
+    }
+
+    let _ = SecretManager::remove_account(app_handle, &auth.uuid);
+    if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
+        settings.active_account_uuid = None;
+        let _ = SettingsManager::save(app_handle, &settings);
+    }
+    Err(
+        "Session Minecraft expirée. Le compte invalide a été supprimé, merci de vous reconnecter avec Microsoft."
+            .to_string(),
+    )
 }
 
 #[tauri::command]
@@ -56,7 +112,11 @@ pub async fn login_microsoft(
     })?;
 
     SecretManager::add_account(&app_handle, response.clone()).map_err(|e| {
-        log::error!("login_microsoft failed to store account {}: {}", response.name, e);
+        log::error!(
+            "login_microsoft failed to store account {}: {}",
+            response.name,
+            e
+        );
         e
     })?;
 
@@ -64,7 +124,11 @@ pub async fn login_microsoft(
     settings.active_account_uuid = Some(response.uuid.clone());
     let _ = SettingsManager::save(&app_handle, &settings);
 
-    log::info!("login_microsoft succeeded for {} ({})", response.name, response.uuid);
+    log::info!(
+        "login_microsoft succeeded for {} ({})",
+        response.name,
+        response.uuid
+    );
     Ok(response)
 }
 

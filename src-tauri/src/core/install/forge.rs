@@ -1,5 +1,7 @@
 use crate::core::install::mojang::get_official_mc_path;
+use crate::core::install::{resolve_installer_java, run_java_installer};
 use crate::core::launch::models::{Library, VersionManifest};
+use crate::core::maven::{join_maven_url, maven_coordinate_to_path, validate_relative_path};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -72,11 +74,15 @@ pub async fn install_forge(mc_version: &str, forge_version: &str) -> Result<(), 
             "Forge {} already installed, validating and repairing missing libraries if needed",
             ctx.forge_id
         );
-        if ensure_existing_installation(&client, &ctx).await.is_ok() {
-            return Ok(());
-        } else {
-            log::warn!("Existing Forge installation is corrupted or missing critical files. Re-installing...");
-            let _ = tokio_fs::remove_file(&ctx.installed_json).await;
+        match ensure_existing_installation(&client, &ctx).await {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                log::warn!(
+                    "Existing Forge installation is corrupted or incomplete ({}). Re-installing...",
+                    e
+                );
+                let _ = tokio_fs::remove_file(&ctx.installed_json).await;
+            }
         }
     }
 
@@ -225,10 +231,13 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
             if let Some(entry_name) = found_entry_name {
                 if let Ok(mut jar_entry) = archive.by_name(&entry_name) {
                     let mut bytes = Vec::new();
-                    if jar_entry.read_to_end(&mut bytes).is_ok() {
-                        let _ = fs::write(&dest_jar, &bytes);
-                        let _ = fs::write(&dest_universal_jar, &bytes);
-                    }
+                    jar_entry
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| format!("Failed to read bundled Forge jar: {}", e))?;
+                    fs::write(&dest_jar, &bytes)
+                        .map_err(|e| format!("Failed to write {:?}: {}", dest_jar, e))?;
+                    fs::write(&dest_universal_jar, &bytes)
+                        .map_err(|e| format!("Failed to write {:?}: {}", dest_universal_jar, e))?;
                 }
             }
         }
@@ -242,17 +251,33 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
                 format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{0}/forge-{0}-universal.jar", ctx.forge_version),
             ];
 
+            let mut downloaded_maven = false;
             for url in &download_urls {
                 if let Ok(resp) = client.get(url).send().await {
                     if resp.status().is_success() {
                         if let Ok(bytes) = resp.bytes().await {
-                            let _ = tokio_fs::create_dir_all(&lib_dir).await;
-                            let _ = tokio_fs::write(&dest_jar, &bytes).await;
-                            let _ = tokio_fs::write(&dest_universal_jar, &bytes).await;
+                            tokio_fs::create_dir_all(&lib_dir).await.map_err(|e| {
+                                format!("Failed to create lib dir {:?}: {}", lib_dir, e)
+                            })?;
+                            tokio_fs::write(&dest_jar, &bytes)
+                                .await
+                                .map_err(|e| format!("Failed to write {:?}: {}", dest_jar, e))?;
+                            tokio_fs::write(&dest_universal_jar, &bytes)
+                                .await
+                                .map_err(|e| {
+                                    format!("Failed to write {:?}: {}", dest_universal_jar, e)
+                                })?;
+                            downloaded_maven = true;
                             break;
                         }
                     }
                 }
+            }
+            if !downloaded_maven {
+                return Err(format!(
+                    "Failed to locate or download Forge universal jar for {}",
+                    ctx.forge_id
+                ));
             }
         }
 
@@ -298,11 +323,11 @@ impl ForgeVersionInstallStrategy for LegacyForgeInstallStrategy {
         write_version_json(&ctx.installed_json, &final_version_info)?;
 
         if let Ok(manifest) = serde_json::from_value::<VersionManifest>(final_version_info) {
-            let _ = ensure_manifest_libraries(client, &ctx.mc_path, &manifest).await;
+            ensure_manifest_libraries(client, &ctx.mc_path, &manifest).await?;
         }
 
         if !profile_libraries.is_empty() {
-            let _ = ensure_profile_libraries(client, &ctx.mc_path, profile_libraries).await;
+            ensure_profile_libraries(client, &ctx.mc_path, profile_libraries).await?;
         }
 
         log::info!("Forge {} installed with legacy strategy", ctx.forge_id);
@@ -323,6 +348,7 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             .join(format!("{}.json", ctx.mc_version));
 
         let mut comp_from_json = None;
+        let mut major_from_json = None;
         if vanilla_json_path.exists() {
             if let Ok(content) = fs::read_to_string(&vanilla_json_path) {
                 if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
@@ -333,95 +359,29 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
                     {
                         comp_from_json = Some(comp.to_string());
                     }
+                    major_from_json = parsed
+                        .get("javaVersion")
+                        .and_then(|j| j.get("majorVersion"))
+                        .and_then(|m| m.as_u64())
+                        .and_then(|m| u8::try_from(m).ok());
                 }
             }
         }
 
-        let java_component = crate::core::install::runtime::JreManager::resolve_component_name(
+        let java_bin = resolve_installer_java(
+            &ctx.mc_path,
             Some(&ctx.mc_version),
-            None,
+            major_from_json,
             comp_from_json.as_deref(),
-        );
-
-        let required_major = match java_component {
-            "java-runtime-delta" => 21u8,
-            "java-runtime-gamma" => 17u8,
-            "java-runtime-beta" => 17u8,
-            "java-runtime-alpha" => 16u8,
-            _ => 8u8,
-        };
-
-        // 2. Download/Ensure JRE is available or fall back to system Java
-        let mut resolved_java_bin = None;
-        if let Ok(jre_path) = crate::core::install::mojang::download_jre(java_component).await {
-            let bin = if cfg!(windows) {
-                jre_path.join("bin/java.exe")
-            } else {
-                jre_path.join("bin/java")
-            };
-            if bin.exists() {
-                resolved_java_bin = Some(bin);
-            }
-        }
-
-        let java_bin = if let Some(bin) = resolved_java_bin {
-            bin
-        } else {
-            log::info!(
-                "Mojang JRE not available for component {}, finding system JVM for major {}",
-                java_component,
-                required_major
-            );
-            let (_, bin, _) =
-                crate::core::launch::args::find_java(Some(required_major), &ctx.mc_path)?;
-            bin
-        };
-
-        // 3. Ensure launcher_profiles.json exists (Forge installer requires it)
-        let profiles_path = ctx.mc_path.join("launcher_profiles.json");
-        let needs_profile = if profiles_path.exists() {
-            match fs::read_to_string(&profiles_path) {
-                Ok(c) => c.trim().is_empty() || serde_json::from_str::<Value>(&c).is_err(),
-                Err(_) => true,
-            }
-        } else {
-            true
-        };
-        if needs_profile {
-            let _ = fs::write(&profiles_path, "{\n  \"profiles\": {}\n}\n");
-        }
+        )
+        .await?;
 
         log::info!(
             "Running Forge Installer natively using java: {:?}",
             java_bin
         );
 
-        // 4. Execute Forge Installer headlessly (asynchronously via tokio process)
-        let mut cmd = tokio::process::Command::new(&java_bin);
-        cmd.current_dir(&ctx.mc_path)
-            .arg("-jar")
-            .arg(&ctx.installer_path)
-            .arg("--installClient")
-            .arg(&ctx.mc_path);
-
-        #[cfg(windows)]
-        {
-            cmd.creation_flags(0x08000000);
-        }
-
-        let output = cmd
-            .output()
-            .await
-            .map_err(|e| format!("Failed to execute Forge installer: {}", e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Forge installer failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
+        run_java_installer(&ctx.installer_path, &ctx.mc_path, &java_bin, "Forge").await?;
 
         // 5. Ensure version.json is available in the expected location
         if !ctx.installed_json.exists() {
@@ -495,7 +455,7 @@ impl ForgeVersionInstallStrategy for ModernForgeInstallStrategy {
             if let Ok(content) = fs::read_to_string(&ctx.installed_json) {
                 if let Ok(mut parsed) = serde_json::from_str::<Value>(&content) {
                     if set_json_id(&mut parsed, &ctx.forge_id).is_ok() {
-                        let _ = write_version_json(&ctx.installed_json, &parsed);
+                        write_version_json(&ctx.installed_json, &parsed)?;
                     }
                 }
             }
@@ -636,19 +596,25 @@ fn extract_maven_entries(
     archive: &mut zip::ZipArchive<fs::File>,
     mc_path: &Path,
 ) -> Result<(), String> {
+    let libraries_dir = mc_path.join("libraries");
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| format!("Failed to read installer archive entry {}: {}", i, e))?;
-        let entry_name = entry.name().to_string();
-
-        if !entry_name.starts_with("maven/") || entry_name.ends_with('/') {
+        let Some(enclosed) = entry.enclosed_name() else {
+            continue;
+        };
+        let Ok(stripped) = enclosed.strip_prefix("maven") else {
+            continue;
+        };
+        if entry.is_dir() {
             continue;
         }
+        let Some(safe_rel) = stripped.to_str().and_then(validate_relative_path) else {
+            return Err(format!("Unsafe archive entry path: {}", entry.name()));
+        };
 
-        let rel = entry_name.trim_start_matches("maven/");
-        let dest = mc_path.join("libraries").join(rel);
-
+        let dest = libraries_dir.join(safe_rel);
         if dest.exists() {
             continue;
         }
@@ -782,7 +748,7 @@ async fn ensure_library_from_coordinates(
     coordinates: &str,
     base_url: Option<&str>,
 ) -> Result<(), String> {
-    let maven_path = maven_path_from_name(coordinates)
+    let maven_path = maven_coordinate_to_path(coordinates)
         .ok_or_else(|| format!("Invalid maven coordinates: {}", coordinates))?;
 
     let dest = mc_path.join("libraries").join(&maven_path);
@@ -792,59 +758,6 @@ async fn ensure_library_from_coordinates(
 
     let url = join_maven_url(base_url.unwrap_or(DEFAULT_MAVEN_BASE), &maven_path);
     download_file_stream(client, &url, &dest).await
-}
-
-fn maven_path_from_name(name: &str) -> Option<String> {
-    let parts: Vec<&str> = name.split(':').collect();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let group = parts[0].replace('.', "/");
-    let artifact = parts[1];
-
-    let (version, explicit_ext) = if let Some((v, ext)) = parts[2].split_once('@') {
-        (v, Some(ext))
-    } else {
-        (parts[2], None)
-    };
-
-    let classifier = if parts.len() >= 4 {
-        let raw = parts[3];
-        if let Some((c, _)) = raw.split_once('@') {
-            Some(c)
-        } else {
-            Some(raw)
-        }
-    } else {
-        None
-    };
-
-    let extension = if parts.len() >= 4 {
-        if let Some((_, ext)) = parts[3].split_once('@') {
-            ext
-        } else {
-            explicit_ext.unwrap_or("jar")
-        }
-    } else {
-        explicit_ext.unwrap_or("jar")
-    };
-
-    let filename = if let Some(classifier) = classifier {
-        format!("{}-{}-{}.{}", artifact, version, classifier, extension)
-    } else {
-        format!("{}-{}.{}", artifact, version, extension)
-    };
-
-    Some(format!("{}/{}/{}/{}", group, artifact, version, filename))
-}
-
-fn join_maven_url(base: &str, path: &str) -> String {
-    if base.ends_with('/') {
-        format!("{}{}", base, path)
-    } else {
-        format!("{}/{}", base, path)
-    }
 }
 
 async fn download_file_stream(
@@ -891,50 +804,6 @@ async fn download_file_stream(
     }
 
     Ok(())
-}
-
-pub async fn is_forge_installed(mc_version: &str, forge_version: &str) -> bool {
-    if let Ok(mc_path) = get_official_mc_path().await {
-        let forge_id = format!("{}-forge-{}", mc_version, forge_version);
-        let json_exists = mc_path
-            .join("versions")
-            .join(&forge_id)
-            .join(format!("{}.json", forge_id))
-            .exists();
-
-        if !json_exists {
-            return false;
-        }
-
-        if is_legacy_forge_layout(mc_version) {
-            let lib_dir = mc_path
-                .join("libraries")
-                .join("net")
-                .join("minecraftforge")
-                .join("forge")
-                .join(format!("{}-{}", mc_version, forge_version));
-            lib_dir
-                .join(format!("forge-{}-{}.jar", mc_version, forge_version))
-                .exists()
-                || lib_dir
-                    .join(format!(
-                        "forge-{}-{}-universal.jar",
-                        mc_version, forge_version
-                    ))
-                    .exists()
-        } else {
-            let client_jar = mc_path
-                .join("libraries")
-                .join("net")
-                .join("minecraftforge")
-                .join("forge")
-                .join(format!("{}-{}", mc_version, forge_version))
-                .join(format!("forge-{}-{}-client.jar", mc_version, forge_version));
-            client_jar.exists()
-        }
-    } else {
-        false
-    }
 }
 
 async fn ensure_existing_installation(
@@ -1105,11 +974,5 @@ mod tests {
             extract_mcp_version(&manifest),
             Some("20230612.114412".to_string())
         );
-    }
-
-    #[tokio::test]
-    async fn test_is_forge_installed_returns_false_for_missing() {
-        let installed = is_forge_installed("1.20.1", "99.99.99").await;
-        assert!(!installed);
     }
 }

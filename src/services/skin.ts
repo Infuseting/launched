@@ -23,11 +23,6 @@ export async function getSkinHistory(): Promise<SkinEntry[]> {
   return invoke<SkinEntry[]>('get_skin_history');
 }
 
-/** Returns a valid (auto-refreshed) Minecraft token for use in frontend HTTP calls. */
-export async function getSkinToken(): Promise<string> {
-  return invoke<string>('get_skin_token');
-}
-
 /** Serialize once in the browser; Rust sends the bytes to Mojang without CORS restrictions. */
 async function uploadTexture(
   textureB64: string,
@@ -45,7 +40,7 @@ async function uploadTexture(
   });
   const contentType = request.headers.get('content-type');
   if (!contentType)
-    throw new Error('Impossible de pr�parer le fichier de skin.');
+    throw new Error('Impossible de préparer le fichier de skin.');
   const body = Array.from(new Uint8Array(await request.arrayBuffer()));
   await invoke('upload_skin_raw', { contentType, body });
 }
@@ -69,12 +64,8 @@ export async function applySkinFromHistory(
   entry?: SkinEntry,
 ): Promise<void> {
   if (entry) {
-    try {
-      await uploadTexture(entry.textureB64, entry.variant);
-      return;
-    } catch {
-      // Older library entries can still be applied through the backend path.
-    }
+    await uploadTexture(entry.textureB64, entry.variant);
+    return;
   }
   return invoke<void>('apply_skin_from_history', { skinId });
 }

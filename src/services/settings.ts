@@ -14,7 +14,3 @@ export async function saveSettingsInternal(
 export async function getSystemRam(): Promise<number> {
   return await invoke<number>('get_system_ram');
 }
-
-export async function getAvailableRam(): Promise<number> {
-  return await invoke<number>('get_available_ram');
-}

@@ -23,7 +23,7 @@ fn build_discord_agent() {
         .arg(&output)
         .arg(source)
         .status()
-        .expect("A JDK (Java 17 or newer) is required to build Launched's Discord agent");
+        .expect("A JDK (Java 9 or newer) is required to build Launched's Discord agent");
     assert!(status.success(), "Could not compile the Discord agent");
 
     let status = java_tool("jar")

@@ -1,4 +1,5 @@
 use crate::core::discord_presence::DiscordPresence;
+use crate::core::maven::is_safe_version_segment;
 use serde::{Deserialize, Serialize};
 
 /**
@@ -10,13 +11,6 @@ pub struct SessionLink {
     pub name: String,
     pub url: String,
     pub icon: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ComponentSpec {
-    pub uid: String,
-    pub version: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +29,6 @@ pub struct Session {
     pub forge: Option<String>,
     pub fabric: Option<String>,
     pub neoforge: Option<String>,
-    pub components: Option<Vec<ComponentSpec>>,
     pub sync_dir: String,
     pub sync_url: String,
     pub welcome: String,
@@ -58,9 +51,13 @@ pub struct Session {
 }
 
 impl Session {
-    /// Resolve one loader consistently for installation and launch. Ambiguity must
-    /// be corrected in the dashboard rather than silently launching the wrong one.
+    /// Resolve one loader consistently for installation and launch. Ambiguity or unsafe
+    /// version identifiers must be corrected before installing or launching.
     pub fn selected_loader(&self) -> Result<Option<(LoaderKind, &str)>, String> {
+        let mc_trimmed = self.minecraft.trim();
+        if !is_safe_version_segment(mc_trimmed) {
+            return Err("Version Minecraft invalide dans la configuration de session.".to_string());
+        }
         let mut selected = None;
         for (kind, version) in [
             (LoaderKind::Forge, &self.forge),
@@ -68,6 +65,12 @@ impl Session {
             (LoaderKind::NeoForge, &self.neoforge),
         ] {
             if let Some(version) = version.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+                if !is_safe_version_segment(version) {
+                    return Err(
+                        "Version de modloader invalide dans la configuration de session."
+                            .to_string(),
+                    );
+                }
                 if selected.is_some() {
                     return Err("Plusieurs modloaders sont configurés. Sélectionnez un seul loader et enregistrez la session dans le tableau de bord.".to_string());
                 }
@@ -78,46 +81,15 @@ impl Session {
     }
 
     pub fn installed_version_id(&self) -> Result<String, String> {
+        let mc = self.minecraft.trim();
         Ok(match self.selected_loader()? {
-            Some((LoaderKind::Forge, version)) => format!("{}-forge-{}", self.minecraft, version),
+            Some((LoaderKind::Forge, version)) => format!("{}-forge-{}", mc, version),
             Some((LoaderKind::Fabric, version)) => {
-                format!("fabric-loader-{}-{}", version, self.minecraft)
+                format!("fabric-loader-{}-{}", version, mc)
             }
             Some((LoaderKind::NeoForge, version)) => format!("neoforge-{}", version),
-            None => self.minecraft.clone(),
+            None => mc.to_string(),
         })
-    }
-
-    pub fn effective_components(&self) -> Vec<ComponentSpec> {
-        if let Some(custom) = &self.components {
-            return custom.clone();
-        }
-
-        let mut components = vec![ComponentSpec {
-            uid: "net.minecraft".to_string(),
-            version: self.minecraft.clone(),
-        }];
-
-        if let Some(forge_ver) = &self.forge.as_deref().filter(|v| !v.trim().is_empty()) {
-            components.push(ComponentSpec {
-                uid: "net.minecraftforge".to_string(),
-                version: forge_ver.to_string(),
-            });
-        } else if let Some(neoforge_ver) =
-            &self.neoforge.as_deref().filter(|v| !v.trim().is_empty())
-        {
-            components.push(ComponentSpec {
-                uid: "net.neoforged".to_string(),
-                version: neoforge_ver.to_string(),
-            });
-        } else if let Some(fabric_ver) = &self.fabric.as_deref().filter(|v| !v.trim().is_empty()) {
-            components.push(ComponentSpec {
-                uid: "net.fabricmc.fabric-loader".to_string(),
-                version: fabric_ver.to_string(),
-            });
-        }
-
-        components
     }
 }
 
@@ -437,25 +409,10 @@ mod tests {
 
     #[test]
     fn installation_and_launch_select_each_loader_consistently() {
-        for (kind, version, id, uid) in [
-            (
-                LoaderKind::Forge,
-                "52.0.28",
-                "1.21.1-forge-52.0.28",
-                "net.minecraftforge",
-            ),
-            (
-                LoaderKind::Fabric,
-                "0.16.9",
-                "fabric-loader-0.16.9-1.21.1",
-                "net.fabricmc.fabric-loader",
-            ),
-            (
-                LoaderKind::NeoForge,
-                "21.1.80",
-                "neoforge-21.1.80",
-                "net.neoforged",
-            ),
+        for (kind, version, id) in [
+            (LoaderKind::Forge, "52.0.28", "1.21.1-forge-52.0.28"),
+            (LoaderKind::Fabric, "0.16.9", "fabric-loader-0.16.9-1.21.1"),
+            (LoaderKind::NeoForge, "21.1.80", "neoforge-21.1.80"),
         ] {
             let mut session = session();
             match kind {
@@ -465,7 +422,6 @@ mod tests {
             }
             assert_eq!(session.selected_loader().unwrap(), Some((kind, version)));
             assert_eq!(session.installed_version_id().unwrap(), id);
-            assert_eq!(session.effective_components()[1].uid, uid);
         }
     }
 

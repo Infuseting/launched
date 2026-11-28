@@ -1,11 +1,10 @@
+use crate::core::download::{Checksum, DownloadEngine, DownloadTask};
+use crate::core::install::assets::AssetIndexReference;
 use crate::core::install::assets::AssetManager;
-use crate::core::meta::models::AssetIndexReference;
-use crate::core::retry::retry_with_backoff;
-use reqwest::Client;
+use crate::core::maven::validate_relative_path;
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 
@@ -39,50 +38,6 @@ pub struct JavaVersionRequirement {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct JreManifestIndex {
-    #[serde(flatten)]
-    pub platforms:
-        std::collections::HashMap<String, std::collections::HashMap<String, Vec<JrePlatformEntry>>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JrePlatformEntry {
-    pub manifest: JreManifestInfo,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JreManifestInfo {
-    pub url: String,
-    pub sha1: String,
-    pub size: u64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JreComponentManifest {
-    pub files: std::collections::HashMap<String, JreFile>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JreFile {
-    pub r#type: String,
-    pub downloads: Option<JreFileDownloads>,
-    pub executable: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JreFileDownloads {
-    pub raw: Option<JreDownloadInfo>,
-    pub lzma: Option<JreDownloadInfo>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct JreDownloadInfo {
-    pub url: String,
-    pub sha1: String,
-    pub size: u64,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct VersionDownloads {
     pub client: DownloadInfo,
 }
@@ -112,6 +67,8 @@ pub struct InstallLibraryDownloads {
 pub struct LibraryArtifact {
     pub path: String,
     pub url: String,
+    #[serde(default)]
+    pub sha1: Option<String>,
     pub size: Option<u64>,
 }
 
@@ -127,15 +84,10 @@ pub struct OsCondition {
 }
 
 pub async fn get_official_mc_path() -> Result<PathBuf, String> {
-    if cfg!(windows) {
-        Ok(PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join(".minecraft"))
-    } else {
-        let home = std::env::var("HOME").map_err(|_| "Could not find HOME directory")?;
-        Ok(PathBuf::from(home).join(".minecraft"))
-    }
+    crate::core::install::official_mc_path()
 }
 
-/// Returns the current OS name as Minecraft knows it ("windows", "osx", "linux")
+/// Returns the current OS name as Minecraft knows it ("windows", "osx", "linux").
 fn current_os_name() -> &'static str {
     if cfg!(target_os = "windows") {
         "windows"
@@ -168,76 +120,13 @@ fn library_allowed(rules: &Option<Vec<LibraryRule>>) -> bool {
     allowed
 }
 
-async fn download_file(client: &Client, url: &str, path: &Path) -> Result<bool, String> {
-    if path.exists() {
-        return Ok(false); // Already present
-    }
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| format!("Failed to create dir {:?}: {}", parent, e))?;
-    }
-
-    let url = url.to_string();
-    let path = path.to_path_buf();
-    let client = client.clone();
-
-    retry_with_backoff(|| async {
-        let mut response = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to download {}: {}", url, e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("HTTP {} for {}", response.status(), url));
-        }
-
-        let mut file = fs::File::create(&path)
-            .await
-            .map_err(|e| format!("Failed to create file {:?}: {}", path, e))?;
-
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|e| format!("Chunk error from {}: {}", url, e))?
-        {
-            file.write_all(&chunk)
-                .await
-                .map_err(|e| format!("Write error: {}", e))?;
-        }
-
-        Ok(())
-    })
-    .await?;
-
-    Ok(true) // Downloaded new file
-}
-
-/// Checks if the Minecraft version is already installed (JAR and JSON exist).
-pub async fn is_installed(version: &str) -> bool {
-    if let Ok(mc_path) = get_official_mc_path().await {
-        let version_dir = mc_path.join("versions").join(version);
-        version_dir.join(format!("{}.json", version)).exists()
-            && version_dir.join(format!("{}.jar", version)).exists()
-    } else {
-        false
-    }
-}
-
-/// Installs Minecraft version: JSON, client JAR, all required libraries, JRE, and game assets.
-pub async fn install_version(version: &str) -> Result<(), String> {
-    install_version_with_assets(version, None, None).await
-}
-
-/// Installs Minecraft version with explicit assets directory and optional progress window.
+/// Installs a Minecraft version with an explicit assets directory and optional progress window.
 pub async fn install_version_with_assets(
     version: &str,
     assets_dir: Option<&std::path::Path>,
     window: Option<&tauri::Window>,
 ) -> Result<(), String> {
-    let client = Client::new();
+    let engine = DownloadEngine::new(24);
     let mc_path = get_official_mc_path().await?;
     let version_dir = mc_path.join("versions").join(version);
     let version_json_path = version_dir.join(format!("{}.json", version));
@@ -247,154 +136,116 @@ pub async fn install_version_with_assets(
         .await
         .map_err(|e| format!("Failed to create version directory: {}", e))?;
 
-    // ── Step 1: Fetch version manifest index ───────────────────────────────────
-    let manifest: VersionManifestIndex = retry_with_backoff(|| async {
-        client
-            .get(VERSION_MANIFEST_URL)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch version manifest: {}", e))?
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse version manifest: {}", e))
-    })
-    .await?;
-
+    // 1. Fetch version manifest index
+    let manifest: VersionManifestIndex = engine.fetch_json(VERSION_MANIFEST_URL).await?;
     let version_info = manifest
         .versions
         .iter()
         .find(|v| v.id == version)
         .ok_or_else(|| format!("Version {} not found in Mojang manifest", version))?;
 
-    // ── Step 2: Download version JSON ─────────────────────────────────────────
-    if !version_json_path.exists() {
+    // 2. Download version JSON if missing or invalid JSON
+    let json_valid = match fs::read_to_string(&version_json_path).await {
+        Ok(content) => serde_json::from_str::<VersionDetail>(&content).is_ok(),
+        Err(_) => false,
+    };
+    if !json_valid {
         log::info!("Downloading version JSON for {}...", version);
-        let content = retry_with_backoff(|| async {
-            client
-                .get(&version_info.url)
-                .send()
-                .await
-                .map_err(|e| format!("Failed to fetch version JSON: {}", e))?
-                .text()
-                .await
-                .map_err(|e| format!("Failed to read version JSON: {}", e))
-        })
-        .await?;
-
-        fs::write(&version_json_path, &content)
-            .await
-            .map_err(|e| format!("Failed to save version JSON: {}", e))?;
+        let task = DownloadTask {
+            url: version_info.url.clone(),
+            dest: version_json_path.clone(),
+            size: None,
+            checksum: None,
+            is_executable: false,
+            description: Some(format!("Minecraft {} JSON", version)),
+        };
+        engine.download_single(&task).await?;
     }
 
-    // ── Step 3: Parse version JSON ────────────────────────────────────────────
+    // 3. Parse version JSON
     let content = fs::read_to_string(&version_json_path)
         .await
         .map_err(|e| format!("Failed to read version JSON: {}", e))?;
-
     let detail: VersionDetail = serde_json::from_str(&content)
         .map_err(|e| format!("Failed to parse version detail: {}", e))?;
 
-    // ── Step 4: Download client JAR ───────────────────────────────────────────
-    if !version_jar_path.exists() {
-        log::info!("Downloading Minecraft {} client JAR...", version);
-        let jar_url = detail.downloads.client.url.clone();
-        let jar_path = version_jar_path.clone();
+    // 4. Download and verify client JAR
+    let jar_task = DownloadTask {
+        url: detail.downloads.client.url.clone(),
+        dest: version_jar_path,
+        size: Some(detail.downloads.client.size),
+        checksum: Some(Checksum::Sha1(detail.downloads.client.sha1)),
+        is_executable: false,
+        description: Some(format!("Minecraft {} client JAR", version)),
+    };
+    engine.download_single(&jar_task).await?;
 
-        retry_with_backoff(|| async {
-            let mut response = client
-                .get(&jar_url)
-                .send()
-                .await
-                .map_err(|e| format!("Failed to start JAR download: {}", e))?;
-
-            let mut file = fs::File::create(&jar_path)
-                .await
-                .map_err(|e| format!("Failed to create JAR file: {}", e))?;
-
-            while let Some(chunk) = response
-                .chunk()
-                .await
-                .map_err(|e| format!("JAR download chunk error: {}", e))?
-            {
-                file.write_all(&chunk)
-                    .await
-                    .map_err(|e| format!("JAR write error: {}", e))?;
-            }
-            Ok(())
-        })
-        .await?;
-        log::info!("Minecraft {} JAR downloaded.", version);
-    }
-
-    // ── Step 5: Download libraries ────────────────────────────────────────────
+    // 5. Download and verify all required libraries
     if let Some(libraries) = detail.libraries {
         let os = current_os_name();
         let lib_base = mc_path.join("libraries");
-        let mut downloaded = 0usize;
-        let mut already_present = 0usize;
-        let mut failed = 0usize;
+        let mut tasks = Vec::new();
 
         for lib in &libraries {
             if !library_allowed(&lib.rules) {
                 continue;
             }
-
             if let Some(dl) = &lib.downloads {
-                // Main artifact
                 if let Some(artifact) = &dl.artifact {
-                    let dest = lib_base.join(&artifact.path);
-                    match download_file(&client, &artifact.url, &dest).await {
-                        Ok(true) => downloaded += 1,
-                        Ok(false) => already_present += 1,
-                        Err(e) => {
-                            log::warn!("Lib {} artifact failed: {}", lib.name, e);
-                            failed += 1;
-                        }
-                    }
+                    let safe_rel = validate_relative_path(&artifact.path).ok_or_else(|| {
+                        format!("Unsafe library artifact path: {}", artifact.path)
+                    })?;
+                    tasks.push(DownloadTask {
+                        url: artifact.url.clone(),
+                        dest: lib_base.join(safe_rel),
+                        size: artifact.size,
+                        checksum: artifact.sha1.clone().map(Checksum::Sha1),
+                        is_executable: false,
+                        description: Some(lib.name.clone()),
+                    });
                 }
 
-                // Native for current OS
                 if let (Some(natives_map), Some(classifiers)) = (&lib.natives, &dl.classifiers) {
                     if let Some(native_key) = natives_map.get(os) {
                         if let Some(native_art) = classifiers.get(native_key) {
-                            let dest = lib_base.join(&native_art.path);
-                            match download_file(&client, &native_art.url, &dest).await {
-                                Ok(true) => downloaded += 1,
-                                Ok(false) => already_present += 1,
-                                Err(e) => {
-                                    log::warn!(
-                                        "Native {} for {} failed: {}",
-                                        native_key,
-                                        lib.name,
-                                        e
-                                    );
-                                    failed += 1;
-                                }
-                            }
+                            let safe_rel =
+                                validate_relative_path(&native_art.path).ok_or_else(|| {
+                                    format!("Unsafe native artifact path: {}", native_art.path)
+                                })?;
+                            tasks.push(DownloadTask {
+                                url: native_art.url.clone(),
+                                dest: lib_base.join(safe_rel),
+                                size: native_art.size,
+                                checksum: native_art.sha1.clone().map(Checksum::Sha1),
+                                is_executable: false,
+                                description: Some(format!("{} ({})", lib.name, native_key)),
+                            });
                         }
                     }
                 }
             }
         }
 
-        log::info!(
-            "Libraries for {}: {} newly downloaded, {} already present, {} failed.",
-            version,
-            downloaded,
-            already_present,
-            failed
-        );
+        if !tasks.is_empty() {
+            engine
+                .download_all(
+                    window,
+                    tasks,
+                    &format!("Downloading Minecraft {} libraries", version),
+                )
+                .await?;
+        }
     }
 
-    // ── Step 6: Ensure required Java runtime is downloaded ───────────────────
-    if let Some(req) = detail.java_version {
-        download_jre(&req.component).await?;
-    } else {
-        // Default to jre-legacy (Java 8) for older versions if not specified
-        download_jre("jre-legacy").await?;
-    }
+    // 6. Ensure required Java runtime is downloaded
+    let component = detail
+        .java_version
+        .as_ref()
+        .map(|req| req.component.as_str())
+        .unwrap_or("jre-legacy");
+    download_jre(component).await?;
 
-    // ── Step 7: Ensure game assets and asset index are downloaded ───────────────
+    // 7. Ensure game assets and asset index are downloaded
     let effective_assets_dir = match assets_dir {
         Some(dir) => {
             let str_val = dir.to_string_lossy();
@@ -418,8 +269,12 @@ pub async fn install_version_with_assets(
                 effective_assets_dir, e
             )
         })?;
-    let _ = fs::create_dir_all(effective_assets_dir.join("indexes")).await;
-    let _ = fs::create_dir_all(effective_assets_dir.join("objects")).await;
+    fs::create_dir_all(effective_assets_dir.join("indexes"))
+        .await
+        .map_err(|e| format!("Failed to create asset indexes directory: {}", e))?;
+    fs::create_dir_all(effective_assets_dir.join("objects"))
+        .await
+        .map_err(|e| format!("Failed to create asset objects directory: {}", e))?;
 
     if let Some(ref asset_index_ref) = detail.asset_index {
         log::info!(
@@ -428,25 +283,10 @@ pub async fn install_version_with_assets(
             asset_index_ref.id,
             effective_assets_dir
         );
-
         let asset_manager = AssetManager::new_with_assets_dir(effective_assets_dir);
         asset_manager.ensure_assets(window, asset_index_ref).await?;
     } else {
-        let default_index = effective_assets_dir
-            .join("indexes")
-            .join(format!("{}.json", version));
-        let needs_fallback = !default_index.exists()
-            || fs::metadata(&default_index)
-                .await
-                .map(|m| m.len() == 0)
-                .unwrap_or(true)
-            || fs::read_to_string(&default_index)
-                .await
-                .map(|s| serde_json::from_str::<serde_json::Value>(&s).is_err())
-                .unwrap_or(true);
-        if needs_fallback {
-            let _ = fs::write(&default_index, r#"{"objects":{}}"#).await;
-        }
+        AssetManager::ensure_index_file_on_disk(&effective_assets_dir, version, None, None).await;
     }
 
     Ok(())

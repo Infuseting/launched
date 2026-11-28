@@ -77,17 +77,31 @@ impl Default for AppSettings {
 pub struct SettingsManager;
 
 impl SettingsManager {
-    fn get_path(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
+    fn get_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
         app_handle
             .path()
             .app_data_dir()
-            .unwrap()
-            .join("settings.json")
+            .map(|d| d.join("settings.json"))
+            .map_err(|e| format!("Failed to resolve settings directory: {}", e))
     }
 
     pub fn load(app_handle: &tauri::AppHandle) -> AppSettings {
-        let path = Self::get_path(app_handle);
-        if let Ok(content) = std::fs::read_to_string(&path) {
+        let path = match Self::get_path(app_handle) {
+            Ok(p) => p,
+            Err(e) => {
+                log::warn!("Could not resolve settings path: {}", e);
+                return AppSettings::default();
+            }
+        };
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return AppSettings::default(),
+            Err(e) => {
+                log::warn!("Failed to read settings file {:?}: {}", path, e);
+                return AppSettings::default();
+            }
+        };
+        {
             // Check if it's already the new format by looking for "sessions" key
             let is_new_format = content.contains("\"sessions\"");
 
@@ -138,13 +152,14 @@ impl SettingsManager {
             }
         }
 
+        log::warn!("Failed to parse settings file {:?}; using defaults", path);
         AppSettings::default()
     }
 
     pub fn save(app_handle: &tauri::AppHandle, settings: &AppSettings) -> Result<(), String> {
-        let path = Self::get_path(app_handle);
+        let path = Self::get_path(app_handle)?;
         if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
         std::fs::write(&path, json).map_err(|e| e.to_string())?;

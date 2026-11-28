@@ -1,8 +1,8 @@
+use super::auth::get_valid_active_account;
 use super::session::authorized_session;
-use crate::auth::microsoft::MicrosoftAuth;
-use crate::auth::secrets::SecretManager;
 use crate::auth::AuthResponse;
 use crate::core::discord_presence::DiscordPresence;
+use crate::core::install::assets::AssetManager;
 use crate::core::install::InstallService;
 use crate::core::launch::args::LaunchArguments;
 use crate::core::launch::LaunchService;
@@ -11,6 +11,16 @@ use crate::core::settings::SettingsManager;
 use crate::core::sync::SyncService;
 use crate::state::{load_prefs, save_prefs, AppState};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+fn is_valid_crack_pseudo(pseudo: &str) -> bool {
+    let trimmed = pseudo.trim();
+    !trimmed.is_empty()
+        && trimmed.len() <= 16
+        && trimmed == pseudo
+        && trimmed
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
 
 #[tauri::command]
 pub async fn sync_session(
@@ -25,23 +35,36 @@ pub async fn sync_session(
         session.minecraft,
         session.selected_loader().ok().flatten()
     );
-    let session = authorized_session(&app_handle, &session).await.map_err(|e| {
-        log::error!("sync_session authorization failed for '{}': {}", session.name, e);
-        e
-    })?;
+    let session = authorized_session(&app_handle, &session)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "sync_session authorization failed for '{}': {}",
+                session.name,
+                e
+            );
+            e
+        })?;
     let install_service = InstallService;
     let sync_service = SyncService;
     let session_dir =
         crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name)
             .await
             .map_err(|e| {
-                log::error!("sync_session failed to resolve session_dir for '{}': {}", session.name, e);
+                log::error!(
+                    "sync_session failed to resolve session_dir for '{}': {}",
+                    session.name,
+                    e
+                );
                 e
             })?;
 
     // Save as active session
     {
-        let mut active = state.active_session.lock().unwrap();
+        let mut active = state
+            .active_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *active = Some(session.clone());
     }
 
@@ -63,7 +86,11 @@ pub async fn sync_session(
 
     // 2. Sync session-specific files
     std::fs::create_dir_all(&session_dir).map_err(|e| {
-        log::error!("Failed to create session dir {}: {}", session_dir.display(), e);
+        log::error!(
+            "Failed to create session dir {}: {}",
+            session_dir.display(),
+            e
+        );
         e.to_string()
     })?;
 
@@ -93,7 +120,11 @@ pub async fn sync_session(
         .await;
     match &res {
         Ok(()) => log::info!("sync_session completed successfully for '{}'", session.name),
-        Err(e) => log::error!("sync_session failed during sync for '{}': {}", session.name, e),
+        Err(e) => log::error!(
+            "sync_session failed during sync for '{}': {}",
+            session.name,
+            e
+        ),
     }
     res
 }
@@ -115,17 +146,32 @@ pub async fn launch_game(
     let launch_service = LaunchService;
     // Use provided session or fallback to active session in state
     let session = session
-        .or_else(|| state.active_session.lock().unwrap().clone())
+        .or_else(|| {
+            state
+                .active_session
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+        })
         .ok_or_else(|| {
             log::error!("launch_game failed: no session selected");
             "No session selected".to_string()
         })?;
-    let session = authorized_session(&app_handle, &session).await.map_err(|e| {
-        log::error!("launch_game authorization failed for '{}': {}", session.name, e);
-        e
-    })?;
+    let session = authorized_session(&app_handle, &session)
+        .await
+        .map_err(|e| {
+            log::error!(
+                "launch_game authorization failed for '{}': {}",
+                session.name,
+                e
+            );
+            e
+        })?;
     if crack_pseudo.is_some() && !session.crack.unwrap_or(false) {
-        log::warn!("launch_game rejected crack mode for non-crack session '{}'", session.name);
+        log::warn!(
+            "launch_game rejected crack mode for non-crack session '{}'",
+            session.name
+        );
         return Err("Cette session requiert un compte Minecraft.".into());
     }
 
@@ -133,12 +179,21 @@ pub async fn launch_game(
         crate::core::optional_files::OptionalFilesManager::session_dir(&app_handle, &session.name)
             .await
             .map_err(|e| {
-                log::error!("launch_game failed to resolve session_dir for '{}': {}", session.name, e);
+                log::error!(
+                    "launch_game failed to resolve session_dir for '{}': {}",
+                    session.name,
+                    e
+                );
                 e
             })?;
 
-    // Get auth: try keychain first
+    // Resolve player auth (offline crack pseudo or validated Microsoft account)
     let auth = if let Some(pseudo) = crack_pseudo {
+        if !is_valid_crack_pseudo(&pseudo) {
+            return Err(
+                "Pseudo crack invalide (1 à 16 caractères : lettres, chiffres ou _).".to_string(),
+            );
+        }
         log::info!("Launching in crack mode with pseudo: {}", pseudo);
         AuthResponse {
             uuid: "00000000-0000-0000-0000-000000000000".to_string(),
@@ -147,76 +202,32 @@ pub async fn launch_game(
             refresh_token: None,
         }
     } else {
-        let mut settings = SettingsManager::load(&app_handle);
-        let mut auth = SecretManager::get_active_account(
-            &app_handle,
-            settings.active_account_uuid.as_deref(),
-        )?
-        .ok_or_else(|| "Not authenticated. Please login first.".to_string())?;
-
-        // Validate token before launch; if expired, try refresh_token once.
-        if !MicrosoftAuth::is_mc_token_valid(&auth.access_token).await {
-            log::warn!(
-                "Stored Minecraft token is invalid/expired for account {}",
-                auth.name
-            );
-
-            if let Some(refresh_token) = auth.refresh_token.clone() {
-                match MicrosoftAuth.refresh_auth(&refresh_token).await {
-                    Ok(refreshed) => {
-                        log::info!(
-                            "Successfully refreshed Minecraft auth for {}",
-                            refreshed.name
-                        );
-                        SecretManager::add_account(&app_handle, refreshed.clone())
-                            .map_err(|e| e.to_string())?;
-
-                        settings.active_account_uuid = Some(refreshed.uuid.clone());
-                        let _ = SettingsManager::save(&app_handle, &settings);
-
-                        auth = refreshed;
-                    }
-                    Err(e) => {
-                        log::warn!("Failed to refresh Minecraft auth: {}", e);
-                        if e.contains("invalid_grant") || e.contains("invalid_request") {
-                            let _ = SecretManager::remove_account(&app_handle, &auth.uuid);
-                            if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
-                                settings.active_account_uuid = None;
-                                let _ = SettingsManager::save(&app_handle, &settings);
-                            }
-                            return Err(
-                                "Session Minecraft expiree. Le compte a ete supprime, merci de vous reconnecter avec Microsoft."
-                                    .to_string(),
-                            );
-                        } else {
-                            return Err(format!(
-                                "Erreur lors de l'authentification Minecraft: {}",
-                                e
-                            ));
-                        }
-                    }
-                }
-            } else {
-                let _ = SecretManager::remove_account(&app_handle, &auth.uuid);
-                if settings.active_account_uuid.as_deref() == Some(auth.uuid.as_str()) {
-                    settings.active_account_uuid = None;
-                    let _ = SettingsManager::save(&app_handle, &settings);
-                }
-                return Err(
-                    "Session Minecraft expiree. Le compte invalide a ete supprime, merci de vous reconnecter avec Microsoft."
-                        .to_string(),
-                );
-            }
-        }
-        auth
+        get_valid_active_account(&app_handle).await?
     };
 
     // Generate arguments
     let settings = SettingsManager::load(&app_handle);
-    let args = LaunchArguments::from_session(&session, &session_dir, &auth, &settings).map_err(|e| {
-        log::error!("Failed to build launch arguments for '{}': {}", session.name, e);
-        e
-    })?;
+    let args =
+        LaunchArguments::from_session(&session, &session_dir, &auth, &settings).map_err(|e| {
+            log::error!(
+                "Failed to build launch arguments for '{}': {}",
+                session.name,
+                e
+            );
+            e
+        })?;
+    if let (Some(assets_dir), Some(resolved_id)) = (
+        LaunchArguments::extract_assets_dir(&args.minecraft_args),
+        LaunchArguments::extract_asset_index_id(&args.minecraft_args),
+    ) {
+        AssetManager::ensure_index_file_on_disk(
+            &assets_dir,
+            &resolved_id,
+            args.manifest_asset_index_id.as_deref(),
+            args.manifest_asset_index_url.as_deref(),
+        )
+        .await;
+    }
     log::info!(
         "Built launch args for '{}' (player={}, java={})",
         session.name,
@@ -255,11 +266,4 @@ pub async fn launch_game(
         .unwrap_or_else(|| DiscordPresence::launched(Some(&session.name), Some(&auth.uuid)))
         .with_session_button(session.slug.as_deref(), &crate::auth::discord::site_url()?);
     launch_service.launch(args, show_logs, &app_handle, &presence)
-}
-
-#[tauri::command]
-pub async fn open_session_switcher(window: tauri::WebviewWindow) -> Result<(), String> {
-    window
-        .eval("window.location.href = '/'")
-        .map_err(|e| e.to_string())
 }

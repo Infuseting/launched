@@ -79,15 +79,19 @@ root.render(
   </React.StrictMode>,
 );
 
-if (import.meta.env.DEV) {
-  (
-    window as unknown as {
-      testUpdateModal: (isInstalling?: boolean) => void;
-      launcherState: typeof state;
-    }
-  ).launcherState = state;
+declare global {
+  interface Window {
+    launcherState?: typeof state;
+    testUpdateModal?: (isInstalling?: boolean) => void;
+    testCrackModal?: () => void;
+    testDeviceCodeModal?: () => void;
+  }
+}
 
-  const triggerTestUpdate = (isInstalling = false) => {
+if (import.meta.env.DEV) {
+  window.launcherState = state;
+
+  window.testUpdateModal = (isInstalling = false) => {
     state.updateManifest = {
       version: '1.5.0',
       body: '## Nouveautés\n- Refonte complète du design de la mise à jour\n- Nouvelle jauge de progression technique\n- Amélioration de la fluidité et des animations\n\n## Correctifs\n- Correction des styles résiduels\n- Optimisation du chargement des sessions',
@@ -97,16 +101,12 @@ if (import.meta.env.DEV) {
     state.updateInstallProgress = isInstalling ? 45 : 0;
   };
 
-  const win = window as unknown as Record<string, unknown>;
-  win.testUpdateModal = triggerTestUpdate;
-  win.testUpdateAllow = triggerTestUpdate;
-
-  win.testCrackModal = () => {
+  window.testCrackModal = () => {
     state.crackModalOpen = true;
     state.crackModalDefaultPseudo = 'Steve';
   };
 
-  win.testDeviceCodeModal = () => {
+  window.testDeviceCodeModal = () => {
     state.deviceCodeModalOpen = true;
     state.deviceCodePayload = {
       user_code: 'WD7K-9P2M',

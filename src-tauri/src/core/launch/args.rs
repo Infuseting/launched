@@ -18,6 +18,8 @@ pub struct LaunchArguments {
     pub main_class: String,
     pub minecraft_args: Vec<String>,
     pub wrapper_command: String,
+    pub manifest_asset_index_id: Option<String>,
+    pub manifest_asset_index_url: Option<String>,
 }
 
 impl LaunchArguments {
@@ -120,13 +122,7 @@ impl LaunchArguments {
     ) -> Result<Self, String> {
         let version_id_owned = session.installed_version_id()?;
 
-        // Resolve official .minecraft path
-        let official_mc_path = if cfg!(windows) {
-            PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join(".minecraft")
-        } else {
-            let home = std::env::var("HOME").map_err(|_| "Could not find HOME directory")?;
-            PathBuf::from(home).join(".minecraft")
-        };
+        let official_mc_path = crate::core::install::official_mc_path()?;
 
         // Guarantee assets directory
         let assets_dir = Self::resolve_assets_dir(session, &official_mc_path);
@@ -255,11 +251,6 @@ impl LaunchArguments {
             .sessions
             .get(&session.name)
             .unwrap_or(&settings.default_settings);
-        let custom_jvm = if !session_settings.jvm_args.is_empty() {
-            &session_settings.jvm_args
-        } else {
-            &session.jvm_arg
-        };
 
         let is_forge_or_neoforge = matches!(
             session.selected_loader()?,
@@ -267,10 +258,15 @@ impl LaunchArguments {
         );
 
         let manifest_jvm = manifest.arguments.as_ref().map(|a| a.jvm.clone());
-        let jvm_args = JvmArgsBuilder::new(natives_dir, official_mc_path.join("libraries"))
+        let jvm_builder = JvmArgsBuilder::new(natives_dir, official_mc_path.join("libraries"))
             .with_manifest_args(manifest_jvm)
-            .with_ram(session_settings.min_ram, session_settings.max_ram)
-            .with_custom_args(custom_jvm)
+            .with_ram(session_settings.min_ram, session_settings.max_ram);
+        let jvm_builder = if !session_settings.jvm_args.trim().is_empty() {
+            jvm_builder.with_custom_args(&session_settings.jvm_args)
+        } else {
+            jvm_builder.with_remote_args(&session.jvm_arg)
+        };
+        let jvm_args = jvm_builder
             .with_java_major(java_major)
             .with_forge_loader(is_forge_or_neoforge)
             .build();
@@ -308,7 +304,7 @@ impl LaunchArguments {
             Self::extract_assets_dir(&minecraft_args).unwrap_or_else(|| assets_dir.clone());
         Self::guarantee_assets_dir_and_subdirs(&effective_assets_dir)?;
 
-        // Ensure asset index file on disk
+        // Ensure asset index file on disk exists as valid JSON (online repair runs async in launch_game)
         let resolved_index_id = Self::extract_asset_index_id(&minecraft_args)
             .or_else(|| manifest.asset_index.as_ref().map(|a| a.id.clone()))
             .unwrap_or_else(|| {
@@ -322,80 +318,14 @@ impl LaunchArguments {
         let index_path = effective_assets_dir
             .join("indexes")
             .join(format!("{}.json", resolved_index_id));
-
-        let is_corrupted_or_missing = !index_path.exists()
-            || fs::metadata(&index_path)
-                .map(|m| m.len() == 0)
-                .unwrap_or(true)
-            || match fs::read_to_string(&index_path) {
-                Ok(content) => match serde_json::from_str::<Value>(&content) {
-                    Ok(val) => {
-                        if manifest
-                            .asset_index
-                            .as_ref()
-                            .and_then(|a| a.url.as_deref())
-                            .is_some_and(|u| !u.trim().is_empty())
-                        {
-                            val.get("objects")
-                                .and_then(|o| o.as_object())
-                                .map_or(true, |o| o.is_empty())
-                        } else {
-                            false
-                        }
-                    }
-                    Err(_) => true,
-                },
-                Err(_) => true,
-            };
-
-        if is_corrupted_or_missing {
+        let index_invalid = fs::read_to_string(&index_path)
+            .map(|s| s.trim().is_empty() || serde_json::from_str::<Value>(&s).is_err())
+            .unwrap_or(true);
+        if index_invalid {
             if let Some(parent) = index_path.parent() {
                 let _ = fs::create_dir_all(parent);
             }
-
-            let mut downloaded = false;
-            if let Some(ref asset_index) = manifest.asset_index {
-                if let Some(ref url) = asset_index.url {
-                    let trimmed_url = url.trim();
-                    if !trimmed_url.is_empty() {
-                        if let Ok(resp) = ureq::get(trimmed_url)
-                            .timeout(std::time::Duration::from_secs(10))
-                            .call()
-                        {
-                            if resp.status() == 200 {
-                                if let Ok(text) = resp.into_string() {
-                                    if !text.trim().is_empty()
-                                        && serde_json::from_str::<Value>(&text).is_ok()
-                                        && fs::write(&index_path, &text).is_ok()
-                                    {
-                                        downloaded = true;
-                                        let manifest_index_path = effective_assets_dir
-                                            .join("indexes")
-                                            .join(format!("{}.json", asset_index.id));
-                                        if manifest_index_path != index_path
-                                            && !manifest_index_path.exists()
-                                        {
-                                            let _ = fs::write(&manifest_index_path, &text);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !downloaded
-                && (!index_path.exists()
-                    || fs::metadata(&index_path)
-                        .map(|m| m.len() == 0)
-                        .unwrap_or(true)
-                    || fs::read_to_string(&index_path)
-                        .map(|s| serde_json::from_str::<Value>(&s).is_err())
-                        .unwrap_or(true))
-            {
-                let _ = fs::write(&index_path, r#"{"objects":{}}"#);
-            }
+            let _ = fs::write(&index_path, r#"{"objects":{}}"#);
         }
 
         Ok(LaunchArguments {
@@ -407,6 +337,8 @@ impl LaunchArguments {
             main_class: manifest.main_class,
             minecraft_args,
             wrapper_command: session_settings.wrapper_command.clone(),
+            manifest_asset_index_id: manifest.asset_index.as_ref().map(|a| a.id.clone()),
+            manifest_asset_index_url: manifest.asset_index.and_then(|a| a.url),
         })
     }
 

@@ -19,12 +19,9 @@ pub(crate) fn find_java(
                         if let Ok(variants) = std::fs::read_dir(platform.path()) {
                             for variant in variants.flatten() {
                                 let java_home = variant.path();
-                                let java_bin = if cfg!(windows) {
-                                    java_home.join("bin/java.exe")
-                                } else {
-                                    java_home.join("bin/java")
-                                };
-                                if java_bin.exists() {
+                                if crate::core::install::runtime::get_java_binary(&java_home)
+                                    .exists()
+                                {
                                     search_paths.push(java_home);
                                 }
                             }
@@ -72,34 +69,8 @@ pub(crate) fn find_java(
         } else if let Some(n) = name.split('-').nth(1).and_then(|s| s.parse::<u8>().ok()) {
             n
         } else {
-            let java_bin = if cfg!(windows) {
-                path.join("bin/java.exe")
-            } else {
-                path.join("bin/java")
-            };
-            let mut cmd = std::process::Command::new(&java_bin);
-            cmd.arg("-version");
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x08000000);
-            }
-            if let Ok(output) = cmd.output() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if stderr.contains("1.8.0") || stderr.contains("\"1.8") {
-                    8u8
-                } else if stderr.contains("version \"21") {
-                    21u8
-                } else if stderr.contains("version \"17") {
-                    17u8
-                } else if stderr.contains("version \"25") {
-                    25u8
-                } else {
-                    0
-                }
-            } else {
-                0
-            }
+            let java_bin = crate::core::install::runtime::get_java_binary(&path);
+            probe_java_major(&java_bin).unwrap_or(0)
         };
         candidates.push((major, path));
     }
@@ -148,28 +119,7 @@ pub(crate) fn find_java(
     let java_bin = which("java")
         .map_err(|_| "Java binary not found in PATH. Please install Java.".to_string())?;
 
-    let mut detected_major = 0u8;
-    let mut cmd = std::process::Command::new(&java_bin);
-    cmd.arg("-version");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to check java version: {}", e))?;
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if stderr.contains("1.8.0") || stderr.contains("\"1.8") {
-        detected_major = 8;
-    } else if stderr.contains("version \"17") {
-        detected_major = 17;
-    } else if stderr.contains("version \"21") {
-        detected_major = 21;
-    } else if stderr.contains("version \"25") {
-        detected_major = 25;
-    }
+    let detected_major = probe_java_major(&java_bin)?;
 
     if let Some(required) = required_major {
         if required == 8 && detected_major != 8 {
@@ -182,4 +132,33 @@ pub(crate) fn find_java(
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf());
     Ok((detected_major, java_bin, java_home))
+}
+
+fn probe_java_major(java_bin: &Path) -> Result<u8, String> {
+    let mut cmd = std::process::Command::new(java_bin);
+    cmd.arg("-version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to check java version: {}", e))?;
+    let combined = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+    if combined.contains("1.8.0") || combined.contains("\"1.8") {
+        return Ok(8);
+    }
+    if let Some(after) = combined.split("version \"").nth(1) {
+        if let Some(token) = after.split(['.', '"', '-', '_']).next() {
+            if let Ok(major) = token.parse::<u8>() {
+                return Ok(major);
+            }
+        }
+    }
+    Ok(0)
 }

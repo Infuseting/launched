@@ -235,10 +235,14 @@ impl JreManager {
         let mut tasks = Vec::new();
 
         for (rel_path, file) in component_manifest.files {
-            let dest_path = jre_base_path.join(&rel_path);
+            let safe_rel = crate::core::maven::validate_relative_path(&rel_path)
+                .ok_or_else(|| format!("Unsafe runtime relative path in manifest: {}", rel_path))?;
+            let dest_path = jre_base_path.join(&safe_rel);
 
             if file.r#type == "directory" {
-                let _ = fs::create_dir_all(&dest_path).await;
+                fs::create_dir_all(&dest_path)
+                    .await
+                    .map_err(|e| format!("Failed to create JRE dir {:?}: {}", dest_path, e))?;
                 continue;
             }
 

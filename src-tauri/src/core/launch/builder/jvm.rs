@@ -54,6 +54,32 @@ impl JvmArgsBuilder {
         self
     }
 
+    /// Applies remote session JVM flags after rejecting code-loading / command-exec flags.
+    pub fn with_remote_args(mut self, remote: &str) -> Self {
+        if !remote.trim().is_empty() {
+            let mut filtered = Vec::new();
+            let mut skip_next = false;
+            for arg in remote.split_whitespace() {
+                if skip_next {
+                    skip_next = false;
+                    continue;
+                }
+                if arg == "-cp" || arg == "--class-path" || arg == "--patch-module" {
+                    log::warn!("Rejected remote JVM flag requiring value: {}", arg);
+                    skip_next = true;
+                    continue;
+                }
+                if is_safe_remote_jvm_arg(arg) {
+                    filtered.push(arg.to_string());
+                } else {
+                    log::warn!("Rejected unsafe remote JVM flag: {}", arg);
+                }
+            }
+            self.custom_args = filtered;
+        }
+        self
+    }
+
     pub fn with_java_major(mut self, major: u8) -> Self {
         self.java_major = major;
         self
@@ -126,4 +152,22 @@ impl JvmArgsBuilder {
 
         jvm_args
     }
+}
+
+fn is_safe_remote_jvm_arg(arg: &str) -> bool {
+    if !arg.starts_with('-') || arg.starts_with("-Xmx") || arg.starts_with("-Xms") {
+        return false;
+    }
+    let lower = arg.to_ascii_lowercase();
+    !lower.starts_with("-javaagent")
+        && !lower.starts_with("-agentlib")
+        && !lower.starts_with("-agentpath")
+        && !lower.starts_with("-xbootclasspath")
+        && !lower.starts_with("-xrun")
+        && !lower.starts_with("--patch-module")
+        && !lower.starts_with("-xx:onoutofmemoryerror")
+        && !lower.starts_with("-xx:onerror")
+        && !lower.starts_with("-xx:heapdumppath")
+        && !lower.starts_with("-xx:errorfile")
+        && !lower.starts_with("-djava.library.path=")
 }

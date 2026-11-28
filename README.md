@@ -84,7 +84,5 @@ les exécuter. Un build réussi ne remplace pas un essai en jeu.
 
 Lire [CONTRIBUTING.md](CONTRIBUTING.md) pour les conventions et
 [DESIGN.md](DESIGN.md) pour la direction visuelle existante.
-Le [kit de marque](branding/README.md) contient le logo source et la commande pour
-régénérer les icônes du launcher, du site et de la présence Discord.
 Le [rapport de nettoyage](docs/QUALITY.md) détaille les corrections, les
 vérifications et les limites constatées sur les deux dépôts.

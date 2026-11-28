@@ -22,9 +22,9 @@ let code = ts.transpileModule(
 ).outputText;
 for (const specifier of [
   '@tauri-apps/api/event',
-  '@tauri-apps/plugin-shell',
   '../state',
   '../services/auth',
+  '../services/logger',
   '../services/sessions',
   '../services/settings',
   '../services/status',
@@ -32,15 +32,17 @@ for (const specifier of [
 ]) {
   const source =
     specifier === '../state'
-      ? 'export const state=globalThis.__sessionDeleteTest.state;'
-      : specifier === '../services/sessions'
-        ? `export async function deleteSession(session) {
+      ? 'export const state=globalThis.__sessionDeleteTest.state; export const unwrapState=(v)=>structuredClone(v);'
+      : specifier === '../services/logger'
+        ? 'export const formatError=(e)=>e instanceof Error?e.message:String(e); export const createLogger=()=>({debug:()=>{},info:()=>{},warn:()=>{},error:()=>{}});'
+        : specifier === '../services/sessions'
+          ? `export async function deleteSession(session) {
             const fixture=globalThis.__sessionDeleteTest;
             fixture.calls.push(session);
             if (fixture.pending) await fixture.pending;
             if (fixture.error) throw fixture.error;
           }`
-        : 'export const unused=true; export const listen=async()=>()=>{}; export const open=async()=>{};';
+          : 'export const unused=true; export const listen=async()=>()=>{};';
   code = code.replaceAll(`from '${specifier}'`, `from '${virtual(source)}'`);
 }
 const { LauncherController } = await import(virtual(code));

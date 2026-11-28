@@ -26,7 +26,6 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewerRef = useRef<skinview3d.SkinViewer | null>(null);
 
-  // Initialize and dispose the Three.js viewer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -38,7 +37,7 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
       canvas,
       width,
       height,
-      zoom: 0.95, // Player fills the full height
+      zoom: 0.95,
       fov: 48,
     });
 
@@ -57,7 +56,6 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
     };
   }, [width, height]);
 
-  // Update animation when animate prop changes
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -71,26 +69,32 @@ export const Skin3DViewer: React.FC<Skin3DViewerProps> = ({
     }
   }, [animate, width, height]);
 
-  // Update skin texture when textureB64, skinUrl, or variant changes
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
 
+    let cancelled = false;
     const modelType = variant === 'slim' ? 'slim' : 'default';
     const source = textureB64
       ? `data:image/png;base64,${textureB64}`
       : skinUrl ||
         (variant === 'slim' ? DEFAULT_ALEX_SKIN : DEFAULT_STEVE_SKIN);
     void viewer.loadSkin(source, { model: modelType }).catch((error) => {
-      console.error('Failed to load skin preview:', error);
+      if (!cancelled) {
+        console.error('Failed to load skin preview:', error);
+      }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [textureB64, skinUrl, variant, width, height]);
 
   return (
     <canvas
       ref={canvasRef}
       role="img"
-      aria-label="Aper�u 3D du skin Minecraft"
+      aria-label="Aperçu 3D du skin Minecraft"
       width={width}
       height={height}
       className="cursor-grab active:cursor-grabbing outline-none block"

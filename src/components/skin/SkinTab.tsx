@@ -64,36 +64,46 @@ export const SkinTab: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [error]);
 
-  const syncProfileFromMojang = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const prof = await skinService.getMinecraftProfile();
-      if (signal?.aborted) return;
-      setProfile(prof);
-      if (prof.skinUrl) {
-        const secureUrl = prof.skinUrl.replace(/^http:\/\//i, 'https://');
-        const resp = await fetch(secureUrl, { signal });
-        if (!resp.ok)
-          throw new Error('Impossible de récupérer le skin Minecraft.');
-        const blob = await resp.blob();
-        const b64 = await new Promise<string>((res, reject) => {
-          const r = new FileReader();
-          r.onload = () => res((r.result as string).split(',')[1]);
-          r.onerror = () => reject(r.error);
-          r.readAsDataURL(blob);
-        });
+  const syncProfileFromMojang = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const prof = await skinService.getMinecraftProfile();
         if (signal?.aborted) return;
-        setCurrentSkinB64(b64);
-      } else {
-        setCurrentSkinB64(null);
+        setProfile(prof);
+        if (prof.skinUrl) {
+          const secureUrl = prof.skinUrl.replace(/^http:\/\//i, 'https://');
+          const resp = await fetch(secureUrl, { signal });
+          if (!resp.ok)
+            throw new Error('Impossible de récupérer le skin Minecraft.');
+          const blob = await resp.blob();
+          const b64 = await new Promise<string>((res, reject) => {
+            const r = new FileReader();
+            r.onload = () => {
+              if (typeof r.result === 'string' && r.result.includes(',')) {
+                res(r.result.split(',')[1]);
+              } else {
+                reject(new Error('Format de skin invalide.'));
+              }
+            };
+            r.onerror = () =>
+              reject(r.error ?? new Error('Lecture du skin impossible.'));
+            r.readAsDataURL(blob);
+          });
+          if (signal?.aborted) return;
+          setCurrentSkinB64(b64);
+        } else {
+          setCurrentSkinB64(null);
+        }
+        setCurrentVariant(
+          prof.skinVariant?.toLowerCase() === 'slim' ? 'slim' : 'classic',
+        );
+      } catch (e) {
+        if (signal?.aborted) return;
+        notify('err', e instanceof Error ? e.message : String(e));
       }
-      setCurrentVariant(
-        prof.skinVariant?.toLowerCase() === 'slim' ? 'slim' : 'classic',
-      );
-    } catch (e) {
-      if (signal?.aborted) return;
-      console.error('Failed to sync profile from Mojang:', e);
-    }
-  }, []);
+    },
+    [notify],
+  );
 
   const loadData = useCallback(
     async (signal: AbortSignal) => {
@@ -135,7 +145,11 @@ export const SkinTab: React.FC = () => {
     const r = new FileReader();
     r.onerror = () => notify('err', 'Impossible de lire le fichier PNG.');
     r.onload = () => {
-      const dataUrl = r.result as string;
+      if (typeof r.result !== 'string' || !r.result.includes(',')) {
+        notify('err', 'Impossible de lire le fichier PNG.');
+        return;
+      }
+      const dataUrl = r.result;
       const b64 = dataUrl.split(',')[1];
 
       const img = new Image();

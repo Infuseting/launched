@@ -199,6 +199,7 @@ export const App: React.FC<AppProps> = ({ handlers }) => {
           <OptionalModsModal
             isOpen={launcherState.optionalModsModalOpen}
             session={launcherState.optionalModsModalSession}
+            prefetchedFiles={launcherState.optionalModsPrefetchedFiles}
             isFirstSync={launcherState.optionalModsIsFirstSync}
             hasUpdates={launcherState.optionalModsHasUpdates}
             onClose={handlers.handleCloseOptionalMods}

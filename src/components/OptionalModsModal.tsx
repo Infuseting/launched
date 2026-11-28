@@ -24,6 +24,7 @@ import { getSessionOptionalFiles } from '../services/sessions';
 interface OptionalModsModalProps {
   isOpen: boolean;
   session: Session | null;
+  prefetchedFiles?: OptionalFileItem[] | null;
   isFirstSync?: boolean;
   hasUpdates?: boolean;
   onClose: () => void;
@@ -54,6 +55,7 @@ function getFolderIcon(folder: string) {
 export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
   isOpen,
   session,
+  prefetchedFiles = null,
   isFirstSync = false,
   hasUpdates = false,
   onClose,
@@ -68,30 +70,37 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Load files when modal opens
+  // Load files when modal opens (reusing prefetched manifest from preflight when present)
   useEffect(() => {
     if (!isOpen || !session) return;
+
+    const applyFiles = (data: OptionalFileItem[]) => {
+      setFiles(data);
+      setLoaded(true);
+      setSelectedPaths(
+        new Set(data.filter((f) => f.isEnabled).map((f) => f.destPath)),
+      );
+    };
+
+    setError(null);
+    setSearchQuery('');
+
+    if (prefetchedFiles) {
+      setLoading(false);
+      applyFiles(prefetchedFiles);
+      return;
+    }
 
     let isMounted = true;
     setLoading(true);
     setLoaded(false);
     setFiles([]);
     setSelectedPaths(new Set());
-    setError(null);
-    setSearchQuery('');
 
     getSessionOptionalFiles(session)
       .then((data) => {
         if (!isMounted) return;
-        setFiles(data);
-        setLoaded(true);
-        const initialSelected = new Set<string>();
-        data.forEach((f) => {
-          if (f.isEnabled) {
-            initialSelected.add(f.destPath);
-          }
-        });
-        setSelectedPaths(initialSelected);
+        applyFiles(data);
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -109,7 +118,7 @@ export const OptionalModsModal: React.FC<OptionalModsModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, session]);
+  }, [isOpen, session, prefetchedFiles]);
 
   // Group files by folder
   const groupedFiles = useMemo(() => {

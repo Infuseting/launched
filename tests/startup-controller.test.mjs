@@ -41,8 +41,10 @@ globalThis.__startupControllerTest = fixture;
 globalThis.document = { addEventListener: () => {} };
 const modules = {
   '@tauri-apps/api/event': 'export const listen = async () => () => {};',
-  '@tauri-apps/plugin-shell': 'export const open = async () => {};',
-  '../state': 'export const state = globalThis.__startupControllerTest.state;',
+  '../state':
+    'export const state = globalThis.__startupControllerTest.state; export const unwrapState = (v) => structuredClone(v);',
+  '../services/logger':
+    'export const formatError = (e) => (e instanceof Error ? e.message : String(e)); export const createLogger = () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} });',
   '../services/auth': `
     const f = globalThis.__startupControllerTest;
     export const getDiscordAuth = async () => ({discordId:'verified', username:'Player', avatar:null});

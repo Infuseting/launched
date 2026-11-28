@@ -60,6 +60,7 @@ const rawState: LauncherStateModel = {
   crackModalDefaultPseudo: '',
   optionalModsModalOpen: false,
   optionalModsModalSession: null,
+  optionalModsPrefetchedFiles: null,
   optionalModsIsFirstSync: false,
   optionalModsHasUpdates: false,
   noticeDialog: null,
@@ -142,6 +143,26 @@ function createRecursiveProxy<T extends object>(obj: T): T {
   proxyCache.set(obj, proxy);
   rawObjects.set(proxy, obj);
   return proxy as T;
+}
+
+/**
+ * Unwraps reactive state proxies into plain objects suitable for Tauri IPC.
+ */
+export function unwrapState<T>(value: T): T {
+  const raw: unknown = isObject(value)
+    ? (rawObjects.get(value) ?? value)
+    : value;
+  if (!isObject(raw)) return raw as T;
+  if (Array.isArray(raw)) {
+    return raw.map((item) => unwrapState(item)) as T;
+  }
+  const plain: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(raw)) {
+    if (entry !== undefined) {
+      plain[key] = unwrapState(entry);
+    }
+  }
+  return plain as T;
 }
 
 /**
