@@ -1,47 +1,47 @@
 {
-  "version": "26.1.4",
+  "version": "26.1.5",
   "notes": "See the assets to download this version and install.",
-  "pub_date": "2026-11-24T20:51:39.759Z",
+  "pub_date": "2026-11-28T18:47:51.153Z",
   "platforms": {
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplc3daT2JWWXBPeDJwODVOWmZ6WU9UZ2g1U1hZeHVNQVo3SWdwUlRlZUEvZEY0b1pPNStSODZMeUVZdkZpUXg5dHExVWZMbHAxNmVvV3BRaUppanYycWdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzMTE5CWZpbGU6TGF1bmNoZWRfMjYuMS40X2FtZDY0LkFwcEltYWdlCXZlcnNpb246MjYuMS40Cm1PUHkxMlNmNlRJV3RqbHN5Zk4wL2hEY3ZlTkM1c3BoNGpVaW1YbXdaN282dTRKZWx3ZHcwT3VNaEN6cTdieGxIbUtjQ2l0R0RQc2VPcGhzR05zSUNBPT0K",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_26.1.4_amd64.AppImage"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplcytyMmRzaUNsUXROM3lxUFBJK3hQcGZOQWxrSmhhZzdVMWpKNWF0bTJrdVcwbDJSRUNkbWo2ZHVrTWJ5RUI3V2xIdXlWdXhMZm0xWFpxL1NGKzU2YXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNDUyCWZpbGU6TGF1bmNoZWRfMjYuMS41X2FtZDY0LkFwcEltYWdlCXZlcnNpb246MjYuMS41CldYemtDNEJUWG51QjdqN1pYK3RidEdZWXMzeG5UTlJrUVVtM2VWbmplUmQ5bERaZERYNGhrQ082UmVncFVyM1BDWmtoalF6Qi9KSUNyZCtiRm03bkRnPT0K",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_26.1.5_amd64.AppImage"
     },
     "linux-x86_64-appimage": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplc3daT2JWWXBPeDJwODVOWmZ6WU9UZ2g1U1hZeHVNQVo3SWdwUlRlZUEvZEY0b1pPNStSODZMeUVZdkZpUXg5dHExVWZMbHAxNmVvV3BRaUppanYycWdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzMTE5CWZpbGU6TGF1bmNoZWRfMjYuMS40X2FtZDY0LkFwcEltYWdlCXZlcnNpb246MjYuMS40Cm1PUHkxMlNmNlRJV3RqbHN5Zk4wL2hEY3ZlTkM1c3BoNGpVaW1YbXdaN282dTRKZWx3ZHcwT3VNaEN6cTdieGxIbUtjQ2l0R0RQc2VPcGhzR05zSUNBPT0K",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_26.1.4_amd64.AppImage"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplcytyMmRzaUNsUXROM3lxUFBJK3hQcGZOQWxrSmhhZzdVMWpKNWF0bTJrdVcwbDJSRUNkbWo2ZHVrTWJ5RUI3V2xIdXlWdXhMZm0xWFpxL1NGKzU2YXdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNDUyCWZpbGU6TGF1bmNoZWRfMjYuMS41X2FtZDY0LkFwcEltYWdlCXZlcnNpb246MjYuMS41CldYemtDNEJUWG51QjdqN1pYK3RidEdZWXMzeG5UTlJrUVVtM2VWbmplUmQ5bERaZERYNGhrQ082UmVncFVyM1BDWmtoalF6Qi9KSUNyZCtiRm03bkRnPT0K",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_26.1.5_amd64.AppImage"
     },
     "linux-x86_64-deb": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplcytsRnVPSVBqVUtsWnNrVjBwZGFWMGE2NHIwb0ZLelJCU3BIS0ZQWU96VjNybSsvV2VaTEd3Q2hXTzFyWDRPNklvbnNoamIyWk1wMURwNlgrbHlDQ0FJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzMTE5CWZpbGU6TGF1bmNoZWRfMjYuMS40X2FtZDY0LmRlYgl2ZXJzaW9uOjI2LjEuNApya2xHZGJnNWNTWG5yQjBkM09uMi9xMGFLWXFrVGwwNlRnbjlTVmVsbGNEYWVaeEpZY09XeGlyeGFGckRMZkk2VE54ekdPaGRIbHMxcVJINS8rSm9BQT09Cg==",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_26.1.4_amd64.deb"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczd5bUh0M0FNNTdnZkoveUxsMXd1QjZmWTVIWStrYTJBQXdoTFUxdkdLR1h2NkxpNnN4OTlWaVRwb0hiQlgxQk03KzJmSSsrdUR1b3hOUFBDSDJPbEFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNDUyCWZpbGU6TGF1bmNoZWRfMjYuMS41X2FtZDY0LmRlYgl2ZXJzaW9uOjI2LjEuNQp1cmdxNUpvalBEMWRpSCtSZ3RoY3E1dDZucnhhZ0xqR2Zrc1QySDRSSUd2U2tJTndnZEkwOWgwUWRYTHYwVDNqL2xyOHh3YnFubk1LTlNDYjBoREtDQT09Cg==",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_26.1.5_amd64.deb"
     },
     "linux-x86_64-rpm": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplc3lBdXVXTTkxVnBjYVlTTHg4NmxFVTR4NUtYTTVzcjBwUHhET1k0R0pRYlcrSUlQK25DM1g4eGNZVE5nQjJ3aEd4cXhEUU1ITnNGa2M4QmpqYm1salFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzMTE5CWZpbGU6TGF1bmNoZWQtMjYuMS40LTEueDg2XzY0LnJwbQl2ZXJzaW9uOjI2LjEuNAp3R2ZvM3o5a1BMUHpuK0hOb0dEdVhTVW9IVFQweExJbU5YTHFjV0w3L3lPVG45SHFKK2pTTHZLeGFqdmZEazdGNDlhSDNJaFJsOWx0bnBRTW0vbkJDQT09Cg==",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched-26.1.4-1.x86_64.rpm"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplc3p2MHFTYzlHOVQ4OWd2UDdKYVNHNld3UGo1bW9jOUFvN1FENHU0eEphYUxRUFRibU5EQXpock91UFNBZS93Q0c2RHhyYmI5OTdUSGdJOTFPaVI1TXdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNDUyCWZpbGU6TGF1bmNoZWQtMjYuMS41LTEueDg2XzY0LnJwbQl2ZXJzaW9uOjI2LjEuNQpsL2czUkcwWGFBOVExV3Z2NDQ0ZlZpTVJoV3BoZXFFcm1GcUkwMnhWQkhiUEwvbW5qYXNMalduSWNiMmVBejJmbXBJeGk2am1Qaytxckkycjgvam5Ddz09Cg==",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched-26.1.5-1.x86_64.rpm"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczJjaVQ4am1LV25OSlgzOVpjUzFZUDNIMXVCb0tKWU9oK3djeVY4NGlFM3lETGxVVFEzRG5hUmRNNHUwSEFteFV2S053S0Z5bmxLZGgxY3RFUlBSL0FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzMzUwCWZpbGU6TGF1bmNoZWRfMjYuMS40X3g2NF9lbi1VUy5tc2kJdmVyc2lvbjoyNi4xLjQKeDY3cGpERDdRMWxrY0JzcFNxcHdIN3JramFYc3ozVzhqT2tMdWR1YWJQcWYzUWY4V3RNbFF5cm9rSTFYYStsZWpkWUpXZ2pRTkVVandiWndxcnlQRFE9PQo=",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_26.1.4_x64_en-US.msi"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplc3hJdTBPZ3M0OGphVTFGNURUS3RYUm9OK0c2UVI3NlFObkJpYVdsSzU0WVZ2WVlkUEJWaHRXTXRmMXYvZG43c1dZZHU4UDcwRitRUWdMbDQ0a0F1V1FvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNTI4CWZpbGU6TGF1bmNoZWRfMjYuMS41X3g2NF9lbi1VUy5tc2kJdmVyc2lvbjoyNi4xLjUKOHlsSkxPUDBzbFpzdm0ya2hYR2tyNkxmdHRpNEQxd2xDVGlnVXZYKzdWUzZVOFhwVVFzZTRURE5YUmhTQmFVTUJKYmptbkFMbk45WFJ2bXA5SWtoQlE9PQo=",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_26.1.5_x64_en-US.msi"
     },
     "windows-x86_64-msi": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczJjaVQ4am1LV25OSlgzOVpjUzFZUDNIMXVCb0tKWU9oK3djeVY4NGlFM3lETGxVVFEzRG5hUmRNNHUwSEFteFV2S053S0Z5bmxLZGgxY3RFUlBSL0FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzMzUwCWZpbGU6TGF1bmNoZWRfMjYuMS40X3g2NF9lbi1VUy5tc2kJdmVyc2lvbjoyNi4xLjQKeDY3cGpERDdRMWxrY0JzcFNxcHdIN3JramFYc3ozVzhqT2tMdWR1YWJQcWYzUWY4V3RNbFF5cm9rSTFYYStsZWpkWUpXZ2pRTkVVandiWndxcnlQRFE9PQo=",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_26.1.4_x64_en-US.msi"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplc3hJdTBPZ3M0OGphVTFGNURUS3RYUm9OK0c2UVI3NlFObkJpYVdsSzU0WVZ2WVlkUEJWaHRXTXRmMXYvZG43c1dZZHU4UDcwRitRUWdMbDQ0a0F1V1FvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNTI4CWZpbGU6TGF1bmNoZWRfMjYuMS41X3g2NF9lbi1VUy5tc2kJdmVyc2lvbjoyNi4xLjUKOHlsSkxPUDBzbFpzdm0ya2hYR2tyNkxmdHRpNEQxd2xDVGlnVXZYKzdWUzZVOFhwVVFzZTRURE5YUmhTQmFVTUJKYmptbkFMbk45WFJ2bXA5SWtoQlE9PQo=",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_26.1.5_x64_en-US.msi"
     },
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczBBM2lXRFpaMjJyai9RVTJTaU1hMUpTclJ1aElZSWJkSkNsTlZpSUFRVm90c1o2bTVkL3NEOGhkaWF1T1JUU0NBWms1UWh4K0F4ZzZlWllMN3M2SEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzNDkzCWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNApOVDJ4RGFabVBLMEZGUGpqZ1REZWNBTzBBQ3pmSjNVbW5XeElVSDVIeUR6Z3BHWkdkVXlVR0x3TXhKMWt0WVh5SDM5N3dGYXhXOFU1SklxaU1Jd0VEZz09Cg==",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_universal.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczM5b2FCcHQ4RHJsVHFWTU9XSDVQUndpTVVvOW5PTTQzd0xydUlENDJRalNuM1F4WU0zaXBKU3g2LzhCOEh6b2I3Sm16c0UyLzI3ZjY2dWtsdHpJZGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNjY0CWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNQpLSmtGUS8ySU9LR09FQ1ZKcCtoSUtCRHlNbWNTS3hTWVlKSEkxdksrVlNvTnhCZUQ3VW84SGJyOXU5ZFBXUnB5VTFicTg3UjhwNW9SYUVqVHhEMkVBdz09Cg==",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_universal.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczBBM2lXRFpaMjJyai9RVTJTaU1hMUpTclJ1aElZSWJkSkNsTlZpSUFRVm90c1o2bTVkL3NEOGhkaWF1T1JUU0NBWms1UWh4K0F4ZzZlWllMN3M2SEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzNDkzCWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNApOVDJ4RGFabVBLMEZGUGpqZ1REZWNBTzBBQ3pmSjNVbW5XeElVSDVIeUR6Z3BHWkdkVXlVR0x3TXhKMWt0WVh5SDM5N3dGYXhXOFU1SklxaU1Jd0VEZz09Cg==",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_universal.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczM5b2FCcHQ4RHJsVHFWTU9XSDVQUndpTVVvOW5PTTQzd0xydUlENDJRalNuM1F4WU0zaXBKU3g2LzhCOEh6b2I3Sm16c0UyLzI3ZjY2dWtsdHpJZGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNjY0CWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNQpLSmtGUS8ySU9LR09FQ1ZKcCtoSUtCRHlNbWNTS3hTWVlKSEkxdksrVlNvTnhCZUQ3VW84SGJyOXU5ZFBXUnB5VTFicTg3UjhwNW9SYUVqVHhEMkVBdz09Cg==",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_universal.app.tar.gz"
     },
     "darwin-aarch64-app": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczBBM2lXRFpaMjJyai9RVTJTaU1hMUpTclJ1aElZSWJkSkNsTlZpSUFRVm90c1o2bTVkL3NEOGhkaWF1T1JUU0NBWms1UWh4K0F4ZzZlWllMN3M2SEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzNDkzCWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNApOVDJ4RGFabVBLMEZGUGpqZ1REZWNBTzBBQ3pmSjNVbW5XeElVSDVIeUR6Z3BHWkdkVXlVR0x3TXhKMWt0WVh5SDM5N3dGYXhXOFU1SklxaU1Jd0VEZz09Cg==",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_universal.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczM5b2FCcHQ4RHJsVHFWTU9XSDVQUndpTVVvOW5PTTQzd0xydUlENDJRalNuM1F4WU0zaXBKU3g2LzhCOEh6b2I3Sm16c0UyLzI3ZjY2dWtsdHpJZGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNjY0CWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNQpLSmtGUS8ySU9LR09FQ1ZKcCtoSUtCRHlNbWNTS3hTWVlKSEkxdksrVlNvTnhCZUQ3VW84SGJyOXU5ZFBXUnB5VTFicTg3UjhwNW9SYUVqVHhEMkVBdz09Cg==",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_universal.app.tar.gz"
     },
     "darwin-x86_64-app": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczBBM2lXRFpaMjJyai9RVTJTaU1hMUpTclJ1aElZSWJkSkNsTlZpSUFRVm90c1o2bTVkL3NEOGhkaWF1T1JUU0NBWms1UWh4K0F4ZzZlWllMN3M2SEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTUzNDkzCWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNApOVDJ4RGFabVBLMEZGUGpqZ1REZWNBTzBBQ3pmSjNVbW5XeElVSDVIeUR6Z3BHWkdkVXlVR0x3TXhKMWt0WVh5SDM5N3dGYXhXOFU1SklxaU1Jd0VEZz09Cg==",
-      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.4/Launched_universal.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdmNSdTFubFplczM5b2FCcHQ4RHJsVHFWTU9XSDVQUndpTVVvOW5PTTQzd0xydUlENDJRalNuM1F4WU0zaXBKU3g2LzhCOEh6b2I3Sm16c0UyLzI3ZjY2dWtsdHpJZGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1ODkxNjY0CWZpbGU6TGF1bmNoZWQuYXBwLnRhci5negl2ZXJzaW9uOjI2LjEuNQpLSmtGUS8ySU9LR09FQ1ZKcCtoSUtCRHlNbWNTS3hTWVlKSEkxdksrVlNvTnhCZUQ3VW84SGJyOXU5ZFBXUnB5VTFicTg3UjhwNW9SYUVqVHhEMkVBdz09Cg==",
+      "url": "https://github.com/Infuseting/launched/releases/download/v26.1.5/Launched_universal.app.tar.gz"
     }
   }
 }
